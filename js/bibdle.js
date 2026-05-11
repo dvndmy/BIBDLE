@@ -33,7 +33,14 @@ const state = {
     guesses: [],
     status: 'playing',
     selectedSuggestionIndex: -1,
-    currentSuggestions: []
+    currentSuggestions: [],
+    preferences: {
+        theme: 'dark',
+        difficulty: 'normal',
+        preferredMode: 'daily',
+        sound: false,
+        reducedAnimation: false
+    }
 };
 
 const elements = {
@@ -50,32 +57,13 @@ const elements = {
     shareBtn: document.getElementById('shareBtn'),
     newPuzzleBtn: document.getElementById('newPuzzleBtn'),
     helpModal: document.getElementById('helpModal'),
-    closeHelpBtn: document.getElementById('closeHelpBtn')
+    closeHelpBtn: document.getElementById('closeHelpBtn'),
+    difficultySelect: document.getElementById('difficultySelect'),
+    themeToggle: document.querySelector('[data-theme-toggle]')
 };
 
-function setThemeToggle() {
-    const toggle = document.querySelector('[data-theme-toggle]');
-    if (!toggle) return;
-
-    const root = document.documentElement;
-    let theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-    root.setAttribute('data-theme', theme);
-
-    const renderIcon = () => {
-        toggle.innerHTML = theme === 'dark'
-            ? '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="5"></circle><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"></path></svg>'
-            : '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>';
-
-        toggle.setAttribute('aria-label', 'Switch to ' + (theme === 'dark' ? 'light' : 'dark') + ' mode');
-    };
-
-    renderIcon();
-
-    toggle.addEventListener('click', () => {
-        theme = theme === 'dark' ? 'light' : 'dark';
-        root.setAttribute('data-theme', theme);
-        renderIcon();
-    });
+function getSystemTheme() {
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 }
 
 function normalizeBookName(value) {
@@ -96,7 +84,6 @@ function getBookDistance(a, b) {
     const bookB = typeof b === 'string' ? getBookByName(b) : b;
 
     if (!bookA || !bookB) return null;
-
     return Math.abs(bookA.order - bookB.order);
 }
 
@@ -105,7 +92,6 @@ function isSameSection(a, b) {
     const bookB = typeof b === 'string' ? getBookByName(b) : b;
 
     if (!bookA || !bookB) return false;
-
     return bookA.sectionKey === bookB.sectionKey;
 }
 
@@ -219,7 +205,7 @@ function loadProgress() {
             return false;
         }
 
-        state.mode = saved.mode && CONFIG.modes[saved.mode] ? saved.mode : 'normal';
+        state.mode = saved.mode && CONFIG.modes[saved.mode] ? saved.mode : state.preferences.difficulty;
         state.currentPuzzle = {
             id: savedPuzzle.id,
             date: saved.currentPuzzle.date,
@@ -234,6 +220,90 @@ function loadProgress() {
         clearSavedProgress();
         return false;
     }
+}
+
+function savePreferences() {
+    const payload = {
+        theme: state.preferences.theme,
+        difficulty: state.preferences.difficulty,
+        preferredMode: state.preferences.preferredMode,
+        sound: state.preferences.sound,
+        reducedAnimation: state.preferences.reducedAnimation
+    };
+
+    try {
+        localStorage.setItem(CONFIG.storageKeys.preferences, JSON.stringify(payload));
+    } catch {
+        // Ignore storage failures.
+    }
+}
+
+function loadPreferences() {
+    const defaults = {
+        theme: getSystemTheme(),
+        difficulty: 'normal',
+        preferredMode: 'daily',
+        sound: false,
+        reducedAnimation: false
+    };
+
+    try {
+        const raw = localStorage.getItem(CONFIG.storageKeys.preferences);
+        if (!raw) {
+            state.preferences = defaults;
+            return;
+        }
+
+        const saved = JSON.parse(raw);
+
+        state.preferences = {
+            theme: saved?.theme === 'light' || saved?.theme === 'dark' ? saved.theme : defaults.theme,
+            difficulty: saved?.difficulty && CONFIG.modes[saved.difficulty] ? saved.difficulty : defaults.difficulty,
+            preferredMode: saved?.preferredMode === 'random' ? 'random' : defaults.preferredMode,
+            sound: typeof saved?.sound === 'boolean' ? saved.sound : defaults.sound,
+            reducedAnimation: typeof saved?.reducedAnimation === 'boolean' ? saved.reducedAnimation : defaults.reducedAnimation
+        };
+    } catch {
+        state.preferences = defaults;
+    }
+
+    state.mode = state.preferences.difficulty;
+}
+
+function applyTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    state.preferences.theme = theme;
+}
+
+function renderThemeToggle() {
+    const toggle = elements.themeToggle;
+    if (!toggle) return;
+
+    toggle.innerHTML = state.preferences.theme === 'dark'
+        ? '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="5"></circle><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"></path></svg>'
+        : '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>';
+
+    toggle.setAttribute('aria-label', 'Switch to ' + (state.preferences.theme === 'dark' ? 'light' : 'dark') + ' mode');
+}
+
+function canChangeDifficulty() {
+    return state.guesses.length === 0 && state.status === 'playing';
+}
+
+function syncPreferenceControls() {
+    if (elements.difficultySelect) {
+        elements.difficultySelect.value = state.preferences.difficulty;
+        elements.difficultySelect.disabled = !canChangeDifficulty();
+        elements.difficultySelect.setAttribute('aria-disabled', String(!canChangeDifficulty()));
+        elements.difficultySelect.title = canChangeDifficulty()
+            ? 'Choose difficulty before your first guess.'
+            : 'Difficulty can only be changed before starting a puzzle.';
+    }
+}
+
+function initTheme() {
+    applyTheme(state.preferences.theme);
+    renderThemeToggle();
 }
 
 function formatDate() {
@@ -391,6 +461,7 @@ function renderPuzzleView() {
     renderPuzzleCard();
     renderHintBlock();
     renderGuessRows();
+    syncPreferenceControls();
 
     if (state.status === 'won') {
         renderStatus(`Correct — ${state.currentPuzzle.verse.book} (${state.currentPuzzle.verse.reference}).`);
@@ -424,6 +495,7 @@ function startPuzzle(mode = 'daily') {
     state.currentPuzzle = buildCurrentPuzzle(mode);
     state.guesses = [];
     state.status = 'playing';
+    state.mode = state.preferences.difficulty;
     resetInput();
     resetSuggestionsState();
     closeSuggestions();
@@ -483,6 +555,7 @@ function handleSolvedGuess() {
     state.status = 'won';
     renderHintBlock();
     renderGuessRows();
+    syncPreferenceControls();
     renderStatus(`Correct — ${state.currentPuzzle.verse.book} (${state.currentPuzzle.verse.reference}).`);
     saveProgress();
 }
@@ -491,6 +564,7 @@ function handleLostGuess() {
     state.status = 'lost';
     renderHintBlock();
     renderGuessRows();
+    syncPreferenceControls();
     renderStatus(`Out of guesses — the answer was ${state.currentPuzzle.verse.book} (${state.currentPuzzle.verse.reference}).`);
     saveProgress();
 }
@@ -505,6 +579,7 @@ function handleIncorrectGuess(bookName, proximity) {
 
     renderHintBlock();
     renderGuessRows();
+    syncPreferenceControls();
     renderStatus(`${bookName} added. Use the colors and clues for your next guess.${proximityText[proximity] ?? ''}`);
     saveProgress();
 }
@@ -646,6 +721,30 @@ function handleDocumentClick(event) {
     }
 }
 
+function handleThemeToggle() {
+    const nextTheme = state.preferences.theme === 'dark' ? 'light' : 'dark';
+    applyTheme(nextTheme);
+    renderThemeToggle();
+    savePreferences();
+}
+
+function handleDifficultyChange(event) {
+    if (!canChangeDifficulty()) {
+        syncPreferenceControls();
+        renderStatus('Difficulty can only be changed before starting the puzzle.');
+        return;
+    }
+
+    const value = event.target.value;
+    if (!CONFIG.modes[value]) return;
+
+    state.preferences.difficulty = value;
+    state.mode = value;
+    savePreferences();
+    saveProgress();
+    syncPreferenceControls();
+}
+
 function bindEvents() {
     elements.guessForm.addEventListener('submit', handleGuessSubmit);
     elements.guessInput.addEventListener('input', handleGuessInput);
@@ -663,13 +762,21 @@ function bindEvents() {
 
     elements.shareBtn.addEventListener('click', copyResult);
     elements.newPuzzleBtn.addEventListener('click', () => resetPuzzle('random'));
+
+    if (elements.themeToggle) {
+        elements.themeToggle.addEventListener('click', handleThemeToggle);
+    }
+
+    if (elements.difficultySelect) {
+        elements.difficultySelect.addEventListener('change', handleDifficultyChange);
+    }
 }
 
 function initGame() {
     const restored = loadProgress();
 
     if (!restored) {
-        startPuzzle('daily');
+        startPuzzle(state.preferences.preferredMode);
         saveProgress();
     }
 
@@ -677,7 +784,9 @@ function initGame() {
 }
 
 function init() {
-    setThemeToggle();
+    loadPreferences();
+    initTheme();
+    syncPreferenceControls();
     bindEvents();
     initGame();
 }

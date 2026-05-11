@@ -15,15 +15,27 @@
 
 <body>
   <a class="sr-only" href="#game">Skip to game</a>
+
   <main class="app-shell" id="game">
     <section class="panel" aria-label="Bibdle game">
       <div class="topbar">
-        <button class="theme-toggle" type="button" data-theme-toggle aria-label="Switch theme">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-            aria-hidden="true">
-            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
-          </svg>
-        </button>
+        <div class="topbar-controls">
+          <div class="control-group">
+            <label for="difficultySelect" class="subtle-label">Difficulty</label>
+            <select id="difficultySelect" class="control-select" aria-label="Select difficulty">
+              <option value="normal">Normal</option>
+              <option value="easy">Easy</option>
+              <option value="hard">Hard</option>
+            </select>
+          </div>
+
+          <button class="theme-toggle" type="button" data-theme-toggle aria-label="Switch theme">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              aria-hidden="true">
+              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+            </svg>
+          </button>
+        </div>
       </div>
 
       <header class="title-wrap">
