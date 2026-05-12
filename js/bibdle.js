@@ -428,7 +428,7 @@ function formatDate() {
 }
 
 function getMaxGuesses() {
-    return CONFIG.modes[state.mode]?.maxGuesses ?? CONFIG.modes.normal.maxGuesses;
+    return CONFIG.modes[state.preferences.difficulty]?.maxGuesses ?? CONFIG.modes.normal.maxGuesses;
 }
 
 function isGameOver() {
