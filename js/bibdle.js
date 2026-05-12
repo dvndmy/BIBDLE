@@ -28,7 +28,7 @@ const CONFIG = {
 };
 
 const state = {
-    mode: 'normal',
+    mode: 'daily',
     currentPuzzle: null,
     guesses: [],
     status: 'playing',
@@ -64,10 +64,11 @@ const elements = {
     statusLine: document.getElementById('statusLine'),
     helpBtn: document.getElementById('helpBtn'),
     shareBtn: document.getElementById('shareBtn'),
-    newPuzzleBtn: document.getElementById('newPuzzleBtn'),
+    nextPracticeBtn: document.getElementById('nextPracticeBtn'),
     helpModal: document.getElementById('helpModal'),
     closeHelpBtn: document.getElementById('closeHelpBtn'),
     difficultySelect: document.getElementById('difficultySelect'),
+    modeSelect: document.getElementById('modeSelect'),
     themeToggle: document.querySelector('[data-theme-toggle]')
 };
 
@@ -139,15 +140,15 @@ function getDailyIndex() {
     );
 
     const current = Date.UTC(y, m, d);
-    return Math.floor((current - epoch) / 86400000) % verses.length;
+    return ((Math.floor((current - epoch) / 86400000) % verses.length) + verses.length) % verses.length;
 }
 
 function pickPuzzle(mode = 'daily') {
-    if (mode === 'random') {
+    if (mode === 'practice') {
         return verses[Math.floor(Math.random() * verses.length)];
     }
 
-    return verses[((getDailyIndex() % verses.length) + verses.length) % verses.length];
+    return verses[getDailyIndex()];
 }
 
 function buildCurrentPuzzle(mode = 'daily') {
@@ -171,6 +172,11 @@ function clearSavedProgress() {
 
 function saveProgress() {
     if (!state.currentPuzzle) return;
+
+    if (state.mode !== 'daily') {
+        clearSavedProgress();
+        return;
+    }
 
     const payload = {
         mode: state.mode,
@@ -220,7 +226,7 @@ function loadProgress() {
             return false;
         }
 
-        state.mode = saved.mode && CONFIG.modes[saved.mode] ? saved.mode : state.preferences.difficulty;
+        state.mode = 'daily';
         state.currentPuzzle = {
             id: savedPuzzle.id,
             date: saved.currentPuzzle.date,
@@ -266,6 +272,7 @@ function loadPreferences() {
         const raw = localStorage.getItem(CONFIG.storageKeys.preferences);
         if (!raw) {
             state.preferences = defaults;
+            state.mode = defaults.preferredMode;
             return;
         }
 
@@ -274,7 +281,7 @@ function loadPreferences() {
         state.preferences = {
             theme: saved?.theme === 'light' || saved?.theme === 'dark' ? saved.theme : defaults.theme,
             difficulty: saved?.difficulty && CONFIG.modes[saved.difficulty] ? saved.difficulty : defaults.difficulty,
-            preferredMode: saved?.preferredMode === 'random' ? 'random' : defaults.preferredMode,
+            preferredMode: saved?.preferredMode === 'practice' ? 'practice' : defaults.preferredMode,
             sound: typeof saved?.sound === 'boolean' ? saved.sound : defaults.sound,
             reducedAnimation: typeof saved?.reducedAnimation === 'boolean' ? saved.reducedAnimation : defaults.reducedAnimation
         };
@@ -282,7 +289,7 @@ function loadPreferences() {
         state.preferences = defaults;
     }
 
-    state.mode = state.preferences.difficulty;
+    state.mode = state.preferences.preferredMode;
 }
 
 function saveStats() {
@@ -346,12 +353,11 @@ function hasRecordedDailyResult(date) {
 }
 
 function recordPuzzleCompletion(outcome) {
-    if (!state.currentPuzzle) return;
+    if (!state.currentPuzzle || state.currentPuzzle.mode !== 'daily') return;
 
-    const isDaily = state.currentPuzzle.mode === 'daily';
     const completionDate = state.currentPuzzle.date;
 
-    if (isDaily && completionDate && hasRecordedDailyResult(completionDate)) {
+    if (completionDate && hasRecordedDailyResult(completionDate)) {
         return;
     }
 
@@ -362,7 +368,7 @@ function recordPuzzleCompletion(outcome) {
         const guessCount = state.guesses.length;
         state.stats.guessDistribution[guessCount] = (state.stats.guessDistribution[guessCount] ?? 0) + 1;
 
-        if (isDaily && completionDate) {
+        if (completionDate) {
             const previousDate = getPreviousDate(completionDate);
             state.stats.currentStreak =
                 state.stats.lastDailySolvedDate === previousDate
@@ -374,8 +380,9 @@ function recordPuzzleCompletion(outcome) {
     } else if (outcome === 'lost') {
         state.stats.lost += 1;
 
-        if (isDaily && completionDate) {
+        if (completionDate) {
             state.stats.currentStreak = 0;
+            state.stats.lastDailySolvedDate = completionDate;
         }
     }
 
@@ -411,6 +418,20 @@ function syncPreferenceControls() {
             ? 'Choose difficulty before your first guess.'
             : 'Difficulty can only be changed before starting a puzzle.';
     }
+
+    if (elements.modeSelect) {
+        elements.modeSelect.value = state.mode;
+        elements.modeSelect.disabled = false;
+        elements.modeSelect.setAttribute('aria-disabled', 'false');
+        elements.modeSelect.title = 'Switch between Daily and Practice mode.';
+    }
+}
+
+function syncActionButtons() {
+    if (!elements.nextPracticeBtn) return;
+
+    const showNextPractice = state.mode === 'practice' && isGameOver();
+    elements.nextPracticeBtn.hidden = !showNextPractice;
 }
 
 function initTheme() {
@@ -523,7 +544,12 @@ function getAttemptLabel() {
 
 function renderPuzzleCard() {
     elements.verseText.textContent = state.currentPuzzle?.verse.text ?? '';
-    elements.dateLabel.textContent = formatDate();
+
+    if (state.mode === 'daily') {
+        elements.dateLabel.textContent = `Daily puzzle · ${formatDate()}`;
+    } else {
+        elements.dateLabel.textContent = 'Practice puzzle';
+    }
 }
 
 function renderHintBlock() {
@@ -574,6 +600,7 @@ function renderPuzzleView() {
     renderHintBlock();
     renderGuessRows();
     syncPreferenceControls();
+    syncActionButtons();
 
     if (state.status === 'won') {
         renderStatus(`Correct — ${state.currentPuzzle.verse.book} (${state.currentPuzzle.verse.reference}).`);
@@ -603,17 +630,17 @@ function closeSuggestions() {
     elements.autocomplete.innerHTML = '';
 }
 
-function startPuzzle(mode = 'daily') {
+function startPuzzle(mode = state.mode) {
+    state.mode = mode;
     state.currentPuzzle = buildCurrentPuzzle(mode);
     state.guesses = [];
     state.status = 'playing';
-    state.mode = state.preferences.difficulty;
     resetInput();
     resetSuggestionsState();
     closeSuggestions();
 }
 
-function resetPuzzle(mode = 'daily') {
+function resetPuzzle(mode = state.mode) {
     startPuzzle(mode);
     saveProgress();
     renderPuzzleView();
@@ -669,6 +696,7 @@ function handleSolvedGuess() {
     renderHintBlock();
     renderGuessRows();
     syncPreferenceControls();
+    syncActionButtons();
     renderStatus(`Correct — ${state.currentPuzzle.verse.book} (${state.currentPuzzle.verse.reference}).`);
     saveProgress();
 }
@@ -679,6 +707,7 @@ function handleLostGuess() {
     renderHintBlock();
     renderGuessRows();
     syncPreferenceControls();
+    syncActionButtons();
     renderStatus(`Out of guesses — the answer was ${state.currentPuzzle.verse.book} (${state.currentPuzzle.verse.reference}).`);
     saveProgress();
 }
@@ -694,6 +723,7 @@ function handleIncorrectGuess(bookName, proximity) {
     renderHintBlock();
     renderGuessRows();
     syncPreferenceControls();
+    syncActionButtons();
     renderStatus(`${bookName} added. Use the colors and clues for your next guess.${proximityText[proximity] ?? ''}`);
     saveProgress();
 }
@@ -752,8 +782,9 @@ function buildShareSummary() {
 function buildShareText() {
     const solved = state.status === 'won';
     const guessWord = state.guesses.length === 1 ? 'guess' : 'guesses';
+    const modeLabel = state.mode === 'daily' ? 'Daily' : 'Practice';
 
-    return `Bibdle ${formatDate()}\n${solved ? 'Solved' : state.status === 'lost' ? 'Lost' : 'In progress'} in ${state.guesses.length} ${guessWord}\n${buildShareSummary()}`;
+    return `Bibdle ${modeLabel} ${formatDate()}\n${solved ? 'Solved' : state.status === 'lost' ? 'Lost' : 'In progress'} in ${state.guesses.length} ${guessWord}\n${buildShareSummary()}`;
 }
 
 async function copyResult() {
@@ -853,10 +884,24 @@ function handleDifficultyChange(event) {
     if (!CONFIG.modes[value]) return;
 
     state.preferences.difficulty = value;
-    state.mode = value;
     savePreferences();
     saveProgress();
     syncPreferenceControls();
+}
+
+function handleModeChange(event) {
+    const value = event.target.value;
+    if (value !== 'daily' && value !== 'practice') return;
+
+    state.mode = value;
+    state.preferences.preferredMode = value;
+    savePreferences();
+    resetPuzzle(value);
+}
+
+function handleNextPracticePuzzle() {
+    if (state.mode !== 'practice') return;
+    resetPuzzle('practice');
 }
 
 function bindEvents() {
@@ -875,7 +920,10 @@ function bindEvents() {
     });
 
     elements.shareBtn.addEventListener('click', copyResult);
-    elements.newPuzzleBtn.addEventListener('click', () => resetPuzzle('random'));
+
+    if (elements.nextPracticeBtn) {
+        elements.nextPracticeBtn.addEventListener('click', handleNextPracticePuzzle);
+    }
 
     if (elements.themeToggle) {
         elements.themeToggle.addEventListener('click', handleThemeToggle);
@@ -884,13 +932,17 @@ function bindEvents() {
     if (elements.difficultySelect) {
         elements.difficultySelect.addEventListener('change', handleDifficultyChange);
     }
+
+    if (elements.modeSelect) {
+        elements.modeSelect.addEventListener('change', handleModeChange);
+    }
 }
 
 function initGame() {
     const restored = loadProgress();
 
     if (!restored) {
-        startPuzzle(state.preferences.preferredMode);
+        startPuzzle(state.mode);
         saveProgress();
     }
 

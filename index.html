@@ -21,6 +21,14 @@
       <div class="topbar">
         <div class="topbar-controls">
           <div class="control-group">
+            <label for="modeSelect" class="subtle-label">Mode</label>
+            <select id="modeSelect" class="control-select" aria-label="Select puzzle mode">
+              <option value="daily">Daily</option>
+              <option value="practice">Practice</option>
+            </select>
+          </div>
+
+          <div class="control-group">
             <label for="difficultySelect" class="subtle-label">Difficulty</label>
             <select id="difficultySelect" class="control-select" aria-label="Select difficulty">
               <option value="normal">Normal</option>
@@ -86,7 +94,7 @@
         <div class="pill-actions">
           <button type="button" class="pill-btn" id="helpBtn">How to play</button>
           <button type="button" class="pill-btn" id="shareBtn">Copy result</button>
-          <button type="button" class="pill-btn primary" id="newPuzzleBtn">New random verse</button>
+          <button type="button" class="pill-btn primary" id="nextPracticeBtn" hidden>Next practice puzzle</button>
         </div>
 
         <p class="footer-note">A Wordle-style game that asks you to identify the Bible book from its verse, testament,
@@ -119,7 +127,9 @@
         <li>You can type part of a book name and choose from the suggestion list.</li>
         <li>Green means exact match, gold means you are near the right book in canonical order, and red means that clue
           is wrong.</li>
-        <li>The daily mode changes by date, while the random button gives a fresh puzzle for practice.</li>
+        <li>Daily gives one deterministic puzzle based on the date, while Practice gives random verses from the pool.
+        </li>
+        <li>Only Daily mode counts toward daily streaks and recorded stats.</li>
       </ul>
       <div class="pill-actions" style="justify-content:flex-end;">
         <button type="button" class="pill-btn primary" id="closeHelpBtn">Close</button>
