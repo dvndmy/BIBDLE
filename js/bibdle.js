@@ -40,6 +40,15 @@ const state = {
         preferredMode: 'daily',
         sound: false,
         reducedAnimation: false
+    },
+    stats: {
+        played: 0,
+        won: 0,
+        lost: 0,
+        currentStreak: 0,
+        bestStreak: 0,
+        guessDistribution: {},
+        lastDailySolvedDate: null
     }
 };
 
@@ -109,6 +118,12 @@ function getTodayPuzzleDate() {
     const month = String(now.getUTCMonth() + 1).padStart(2, '0');
     const day = String(now.getUTCDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
+}
+
+function getPreviousDate(dateString) {
+    const date = new Date(`${dateString}T00:00:00Z`);
+    date.setUTCDate(date.getUTCDate() - 1);
+    return date.toISOString().slice(0, 10);
 }
 
 function getDailyIndex() {
@@ -268,6 +283,103 @@ function loadPreferences() {
     }
 
     state.mode = state.preferences.difficulty;
+}
+
+function saveStats() {
+    const payload = {
+        played: state.stats.played,
+        won: state.stats.won,
+        lost: state.stats.lost,
+        currentStreak: state.stats.currentStreak,
+        bestStreak: state.stats.bestStreak,
+        guessDistribution: state.stats.guessDistribution,
+        lastDailySolvedDate: state.stats.lastDailySolvedDate
+    };
+
+    try {
+        localStorage.setItem(CONFIG.storageKeys.stats, JSON.stringify(payload));
+    } catch {
+        // Ignore storage failures.
+    }
+}
+
+function loadStats() {
+    const defaults = {
+        played: 0,
+        won: 0,
+        lost: 0,
+        currentStreak: 0,
+        bestStreak: 0,
+        guessDistribution: {},
+        lastDailySolvedDate: null
+    };
+
+    try {
+        const raw = localStorage.getItem(CONFIG.storageKeys.stats);
+        if (!raw) {
+            state.stats = defaults;
+            return;
+        }
+
+        const saved = JSON.parse(raw);
+
+        state.stats = {
+            played: Number.isInteger(saved?.played) && saved.played >= 0 ? saved.played : defaults.played,
+            won: Number.isInteger(saved?.won) && saved.won >= 0 ? saved.won : defaults.won,
+            lost: Number.isInteger(saved?.lost) && saved.lost >= 0 ? saved.lost : defaults.lost,
+            currentStreak: Number.isInteger(saved?.currentStreak) && saved.currentStreak >= 0 ? saved.currentStreak : defaults.currentStreak,
+            bestStreak: Number.isInteger(saved?.bestStreak) && saved.bestStreak >= 0 ? saved.bestStreak : defaults.bestStreak,
+            guessDistribution: saved?.guessDistribution && typeof saved.guessDistribution === 'object' && !Array.isArray(saved.guessDistribution)
+                ? saved.guessDistribution
+                : defaults.guessDistribution,
+            lastDailySolvedDate: typeof saved?.lastDailySolvedDate === 'string' || saved?.lastDailySolvedDate === null
+                ? saved.lastDailySolvedDate
+                : defaults.lastDailySolvedDate
+        };
+    } catch {
+        state.stats = defaults;
+    }
+}
+
+function hasRecordedDailyResult(date) {
+    return state.stats.lastDailySolvedDate === date;
+}
+
+function recordPuzzleCompletion(outcome) {
+    if (!state.currentPuzzle) return;
+
+    const isDaily = state.currentPuzzle.mode === 'daily';
+    const completionDate = state.currentPuzzle.date;
+
+    if (isDaily && completionDate && hasRecordedDailyResult(completionDate)) {
+        return;
+    }
+
+    state.stats.played += 1;
+
+    if (outcome === 'won') {
+        state.stats.won += 1;
+        const guessCount = state.guesses.length;
+        state.stats.guessDistribution[guessCount] = (state.stats.guessDistribution[guessCount] ?? 0) + 1;
+
+        if (isDaily && completionDate) {
+            const previousDate = getPreviousDate(completionDate);
+            state.stats.currentStreak =
+                state.stats.lastDailySolvedDate === previousDate
+                    ? state.stats.currentStreak + 1
+                    : 1;
+            state.stats.bestStreak = Math.max(state.stats.bestStreak, state.stats.currentStreak);
+            state.stats.lastDailySolvedDate = completionDate;
+        }
+    } else if (outcome === 'lost') {
+        state.stats.lost += 1;
+
+        if (isDaily && completionDate) {
+            state.stats.currentStreak = 0;
+        }
+    }
+
+    saveStats();
 }
 
 function applyTheme(theme) {
@@ -553,6 +665,7 @@ function handleDuplicateGuess(bookName) {
 
 function handleSolvedGuess() {
     state.status = 'won';
+    recordPuzzleCompletion('won');
     renderHintBlock();
     renderGuessRows();
     syncPreferenceControls();
@@ -562,6 +675,7 @@ function handleSolvedGuess() {
 
 function handleLostGuess() {
     state.status = 'lost';
+    recordPuzzleCompletion('lost');
     renderHintBlock();
     renderGuessRows();
     syncPreferenceControls();
@@ -785,6 +899,7 @@ function initGame() {
 
 function init() {
     loadPreferences();
+    loadStats();
     initTheme();
     syncPreferenceControls();
     bindEvents();
