@@ -9,8 +9,8 @@ const CONFIG = {
     },
     proximityBands: {
         exact: 0,
-        almost: 2,
-        close: 4
+        veryClose: 2,
+        near: 4
     },
     ui: {
         maxSuggestions: 8
@@ -61,6 +61,7 @@ const elements = {
     guessInput: document.getElementById('guessInput'),
     autocomplete: document.getElementById('autocomplete'),
     guessRows: document.getElementById('guessRows'),
+    proximityLine: document.getElementById('proximityLine'),
     statusLine: document.getElementById('statusLine'),
     helpBtn: document.getElementById('helpBtn'),
     shareBtn: document.getElementById('shareBtn'),
@@ -105,12 +106,27 @@ function isSameSection(a, b) {
     return bookA.sectionKey === bookB.sectionKey;
 }
 
-function getProximityLabel(distance) {
-    if (distance === null) return 'unknown';
+function getProximityLabel(distance, sameTestament = true) {
+    if (!sameTestament) return 'wrong testament';
+    if (distance === null) return 'far';
     if (distance <= CONFIG.proximityBands.exact) return 'exact';
-    if (distance <= CONFIG.proximityBands.almost) return 'almost';
-    if (distance <= CONFIG.proximityBands.close) return 'close';
+    if (distance <= CONFIG.proximityBands.veryClose) return 'very close';
+    if (distance <= CONFIG.proximityBands.near) return 'near';
     return 'far';
+}
+
+function getProximityDescription(guess) {
+    if (!guess) return '';
+
+    const descriptions = {
+        exact: `${guess.book} is exactly the right book in canon order.`,
+        'very close': `${guess.book} is very close to the target in canon order.`,
+        near: `${guess.book} is near the target in canon order.`,
+        far: `${guess.book} is still far from the target in canon order.`,
+        'wrong testament': `${guess.book} is in the wrong testament, so the target is on the other side of the Bible.`
+    };
+
+    return descriptions[guess.proximity] ?? '';
 }
 
 function getTodayPuzzleDate() {
@@ -501,7 +517,8 @@ function compareGuess(guessName) {
     if (!target || !guess) return null;
 
     const distance = getBookDistance(target, guess);
-    const proximity = getProximityLabel(distance);
+    const sameTestament = guess.testament === target.testament;
+    const proximity = getProximityLabel(distance, sameTestament);
 
     return {
         book: guess.name,
@@ -509,13 +526,13 @@ function compareGuess(guessName) {
         proximity,
         testament: {
             value: guess.testament,
-            state: guess.testament === target.testament ? 'correct' : 'wrong'
+            state: sameTestament ? 'correct' : 'wrong'
         },
         section: {
             value: guess.section,
             state: isSameSection(guess, target)
                 ? 'correct'
-                : guess.testament === target.testament
+                : sameTestament
                     ? 'partial'
                     : 'wrong'
         },
@@ -527,7 +544,7 @@ function compareGuess(guessName) {
             value: guess.name,
             state: proximity === 'exact'
                 ? 'correct'
-                : proximity === 'almost' || proximity === 'close'
+                : proximity === 'very close' || proximity === 'near'
                     ? 'partial'
                     : 'wrong'
         },
@@ -591,6 +608,13 @@ function renderGuessRows() {
     elements.guessRows.innerHTML = state.guesses.map(renderGuessRow).join('');
 }
 
+function renderProximityLine() {
+    if (!elements.proximityLine) return;
+
+    const lastGuess = state.guesses[state.guesses.length - 1];
+    elements.proximityLine.textContent = getProximityDescription(lastGuess);
+}
+
 function renderStatus(message = 'Guess the book from the verse above.') {
     elements.statusLine.textContent = message;
 }
@@ -599,6 +623,7 @@ function renderPuzzleView() {
     renderPuzzleCard();
     renderHintBlock();
     renderGuessRows();
+    renderProximityLine();
     syncPreferenceControls();
     syncActionButtons();
 
@@ -695,6 +720,7 @@ function handleSolvedGuess() {
     recordPuzzleCompletion('won');
     renderHintBlock();
     renderGuessRows();
+    renderProximityLine();
     syncPreferenceControls();
     syncActionButtons();
     renderStatus(`Correct — ${state.currentPuzzle.verse.book} (${state.currentPuzzle.verse.reference}).`);
@@ -706,25 +732,20 @@ function handleLostGuess() {
     recordPuzzleCompletion('lost');
     renderHintBlock();
     renderGuessRows();
+    renderProximityLine();
     syncPreferenceControls();
     syncActionButtons();
     renderStatus(`Out of guesses — the answer was ${state.currentPuzzle.verse.book} (${state.currentPuzzle.verse.reference}).`);
     saveProgress();
 }
 
-function handleIncorrectGuess(bookName, proximity) {
-    const proximityText = {
-        almost: ' Your guess is almost the target in canon order.',
-        close: ' Your guess is fairly close in canon order.',
-        far: '',
-        unknown: ''
-    };
-
+function handleIncorrectGuess(bookName) {
     renderHintBlock();
     renderGuessRows();
+    renderProximityLine();
     syncPreferenceControls();
     syncActionButtons();
-    renderStatus(`${bookName} added. Use the colors and clues for your next guess.${proximityText[proximity] ?? ''}`);
+    renderStatus(`${bookName} added. Use the colors and clues for your next guess.`);
     saveProgress();
 }
 
@@ -764,7 +785,7 @@ function applyGuess(rawGuess) {
         return;
     }
 
-    handleIncorrectGuess(match.name, result.proximity);
+    handleIncorrectGuess(match.name);
 }
 
 function buildShareSummary() {
