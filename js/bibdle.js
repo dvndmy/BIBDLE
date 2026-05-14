@@ -575,11 +575,10 @@ function getAttemptLabel() {
 
 function renderPuzzleCard() {
   elements.verseText.textContent = state.currentPuzzle?.verse.text ?? "";
-  if (state.mode === "daily") {
-    elements.dateLabel.textContent = `Daily puzzle · ${formatDate()}`;
-  } else {
-    elements.dateLabel.textContent = "Practice puzzle";
-  }
+  elements.dateLabel.textContent =
+    state.mode === "daily"
+      ? `Daily puzzle · ${formatDate()}`
+      : "Practice puzzle";
 }
 
 function renderHintBlock() {
@@ -635,7 +634,6 @@ function getPostGameContent() {
   if (!puzzle) return null;
   const book = getBookByName(puzzle.book);
   return {
-    statusText: state.status === "won" ? "Solved" : "Failed",
     title: state.status === "won" ? "Well done" : "Puzzle complete",
     badge: state.status === "won" ? "Solved" : "Failed",
     reference: puzzle.reference,
@@ -644,6 +642,7 @@ function getPostGameContent() {
     explanation: puzzle.explanation ?? "",
     introTitle: book?.bookIntroTitle ?? "",
     introText: book?.bookIntroText ?? "",
+    devotionalText: puzzle.devotional ?? book?.devotionalText ?? "",
   };
 }
 
@@ -665,7 +664,6 @@ function renderPostGamePanel() {
     content.explanation || "No explanation available for this verse.";
   elements.postGameIntroTitle.textContent = content.introTitle;
   elements.postGameIntroText.textContent = content.introText;
-  
   elements.postGameNextBtn.hidden = !(state.mode === "practice");
   elements.postGameModal.dataset.open = "true";
   elements.postGameModal.setAttribute("aria-hidden", "false");
@@ -704,34 +702,40 @@ function renderPuzzleView() {
 
 function resetInput() {
   elements.guessInput.value = "";
+  updateComboboxA11y(false);
 }
 
 function resetSuggestionsState() {
   state.selectedSuggestionIndex = -1;
   state.currentSuggestions = [];
+  updateComboboxA11y(false);
 }
 
 function closeSuggestions() {
   state.selectedSuggestionIndex = -1;
   elements.autocomplete.dataset.open = "false";
   elements.autocomplete.innerHTML = "";
+  updateComboboxA11y(false);
 }
 
-function startPuzzle(mode = state.mode) {
-  state.mode = mode;
-  state.currentPuzzle = buildCurrentPuzzle(mode);
-  state.guesses = [];
-  state.status = "playing";
-  closePostGamePanel();
-  resetInput();
-  resetSuggestionsState();
-  closeSuggestions();
+function updateComboboxA11y(isOpen) {
+  if (!elements.guessInput) return;
+  elements.guessInput.setAttribute("aria-expanded", String(isOpen));
+  const active =
+    isOpen && state.selectedSuggestionIndex >= 0
+      ? `suggestion-${state.selectedSuggestionIndex}`
+      : "";
+  elements.guessInput.setAttribute("aria-activedescendant", active);
 }
 
-function resetPuzzle(mode = state.mode) {
-  startPuzzle(mode);
-  saveProgress();
-  renderPuzzleView();
+function openSuggestions() {
+  elements.autocomplete.dataset.open = "true";
+  updateComboboxA11y(true);
+}
+
+function scrollActiveSuggestionIntoView() {
+  const active = elements.autocomplete.querySelector('[aria-selected="true"]');
+  active?.scrollIntoView({ block: "nearest" });
 }
 
 function renderSuggestions() {
@@ -740,15 +744,25 @@ function renderSuggestions() {
     return;
   }
   elements.autocomplete.innerHTML = state.currentSuggestions
-    .map(
-      (book, index) => `
-    <button type="button" class="suggestion" role="option" aria-selected="${index === state.selectedSuggestionIndex}" data-index="${index}">
-      ${book.name}
-    </button>
-  `,
-    )
+    .map((book, index) => {
+      const active = index === state.selectedSuggestionIndex;
+      return `
+        <button
+          id="suggestion-${index}"
+          type="button"
+          class="suggestion${active ? " is-active" : ""}"
+          role="option"
+          aria-selected="${active}"
+          data-index="${index}"
+        >
+          ${book.name}
+        </button>
+      `;
+    })
     .join("");
-  elements.autocomplete.dataset.open = "true";
+  openSuggestions();
+  updateComboboxA11y(state.selectedSuggestionIndex >= 0);
+  scrollActiveSuggestionIntoView();
 }
 
 function updateSuggestions(query) {
@@ -761,6 +775,7 @@ function updateSuggestions(query) {
   state.currentSuggestions = books
     .filter((book) => book.name.toLowerCase().includes(value))
     .slice(0, CONFIG.ui.maxSuggestions);
+  state.selectedSuggestionIndex = -1;
   renderSuggestions();
 }
 
@@ -900,37 +915,66 @@ function handleGuessInput(event) {
   updateSuggestions(event.target.value);
 }
 
+function moveSuggestion(nextIndex) {
+  if (!state.currentSuggestions.length) return;
+  state.selectedSuggestionIndex = nextIndex;
+  renderSuggestions();
+}
+
 function handleGuessKeydown(event) {
   if (isGameOver()) return;
-  if (elements.autocomplete.dataset.open !== "true") {
+
+  const isOpen = elements.autocomplete.dataset.open === "true";
+  const hasSuggestions = state.currentSuggestions.length > 0;
+
+  if (!isOpen || !hasSuggestions) {
     if (event.key === "Enter") {
       event.preventDefault();
       applyGuess(elements.guessInput.value);
     }
+    if (event.key === "ArrowDown" && hasSuggestions) {
+      event.preventDefault();
+      state.selectedSuggestionIndex = 0;
+      renderSuggestions();
+    }
     return;
   }
+
   if (event.key === "ArrowDown") {
     event.preventDefault();
-    state.selectedSuggestionIndex =
-      (state.selectedSuggestionIndex + 1) % state.currentSuggestions.length;
-    renderSuggestions();
+    const next =
+      state.selectedSuggestionIndex < 0
+        ? 0
+        : Math.min(
+            state.selectedSuggestionIndex + 1,
+            state.currentSuggestions.length - 1,
+          );
+    moveSuggestion(next);
+    return;
   }
+
   if (event.key === "ArrowUp") {
     event.preventDefault();
-    state.selectedSuggestionIndex =
-      (state.selectedSuggestionIndex - 1 + state.currentSuggestions.length) %
-      state.currentSuggestions.length;
-    renderSuggestions();
+    const next =
+      state.selectedSuggestionIndex < 0
+        ? state.currentSuggestions.length - 1
+        : Math.max(state.selectedSuggestionIndex - 1, 0);
+    moveSuggestion(next);
+    return;
   }
-  if (event.key === "Enter") {
-    event.preventDefault();
-    const picked =
-      state.currentSuggestions[state.selectedSuggestionIndex] ||
-      state.currentSuggestions[0];
-    if (picked) applyGuess(picked.name);
-  }
+
   if (event.key === "Escape") {
     closeSuggestions();
+    return;
+  }
+
+  if (event.key === "Enter") {
+    if (state.selectedSuggestionIndex >= 0) {
+      event.preventDefault();
+      const picked = state.currentSuggestions[state.selectedSuggestionIndex];
+      if (picked) applyGuess(picked.name);
+    }
+    return;
   }
 }
 
@@ -1026,6 +1070,23 @@ function initGame() {
     startPuzzle(state.mode);
     saveProgress();
   }
+  renderPuzzleView();
+}
+
+function startPuzzle(mode = state.mode) {
+  state.mode = mode;
+  state.currentPuzzle = buildCurrentPuzzle(mode);
+  state.guesses = [];
+  state.status = "playing";
+  closePostGamePanel();
+  resetInput();
+  resetSuggestionsState();
+  closeSuggestions();
+}
+
+function resetPuzzle(mode = state.mode) {
+  startPuzzle(mode);
+  saveProgress();
   renderPuzzleView();
 }
 

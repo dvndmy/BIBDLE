@@ -77,7 +77,9 @@
           </svg>
           <label for="guessInput" class="sr-only">Guess a Bible book</label>
           <input id="guessInput" class="guess-input" type="text"
-            placeholder="Type to guess a Catholic Bible book (e.g. 'Tobit', 'John')..." aria-describedby="statusLine" />
+            placeholder="Type to guess a Bible book (e.g. 'Tobit', 'John')..." aria-describedby="statusLine"
+            role="combobox" aria-autocomplete="list" aria-haspopup="listbox" aria-controls="autocomplete"
+            aria-expanded="false" aria-activedescendant="" />
           <div class="autocomplete-list" id="autocomplete" role="listbox" aria-label="Book suggestions"></div>
         </form>
 
