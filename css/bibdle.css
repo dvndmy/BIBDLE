@@ -9,7 +9,6 @@
     --text-lg: clamp(1.125rem, 1rem + 0.75vw, 1.5rem);
     --text-xl: clamp(1.5rem, 1.2rem + 1.25vw, 2.25rem);
     --text-2xl: clamp(2rem, 1.2rem + 2.5vw, 3.5rem);
-
     --space-1: 0.25rem;
     --space-2: 0.5rem;
     --space-3: 0.75rem;
@@ -20,15 +19,12 @@
     --space-10: 2.5rem;
     --space-12: 3rem;
     --space-16: 4rem;
-
     --radius-sm: 0.5rem;
     --radius-md: 0.75rem;
     --radius-lg: 1rem;
     --radius-xl: 1.25rem;
     --radius-full: 9999px;
-
     --transition-interactive: 180ms cubic-bezier(0.16, 1, 0.3, 1);
-
     --color-bg: #f5f5f0;
     --color-surface: rgba(255, 255, 255, 0.84);
     --color-surface-2: rgba(246, 246, 240, 0.95);
@@ -45,18 +41,14 @@
     --color-success: #0ecb57;
     --color-warning: #ffb547;
     --color-error: #ff4d5d;
-
     --content-default: 980px;
-
     --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
     --shadow-md: 0 10px 30px rgba(15, 23, 42, 0.12);
     --shadow-lg: 0 24px 60px rgba(15, 23, 42, 0.18);
-
     --body-grad-1: rgba(12, 138, 67, 0.10);
     --body-grad-2: rgba(120, 154, 255, 0.10);
     --body-grad-3: rgba(255, 204, 128, 0.10);
     --body-base: linear-gradient(180deg, #f8f7f2 0%, #f1efe8 50%, #ece8dd 100%);
-
     --glass-surface: rgba(255, 255, 255, 0.58);
     --glass-surface-strong: rgba(255, 255, 255, 0.72);
     --input-border: rgba(23, 27, 39, 0.14);
@@ -85,16 +77,13 @@
     --color-success: #15d062;
     --color-warning: #f6c453;
     --color-error: #ff4258;
-
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.25);
     --shadow-md: 0 18px 40px rgba(0, 0, 0, 0.3);
     --shadow-lg: 0 30px 80px rgba(0, 0, 0, 0.45);
-
     --body-grad-1: rgba(25, 72, 180, 0.16);
     --body-grad-2: rgba(50, 110, 255, 0.08);
     --body-grad-3: rgba(24, 63, 168, 0.12);
     --body-base: linear-gradient(180deg, #031134 0%, #020b24 45%, #01091c 100%);
-
     --glass-surface: rgba(255, 255, 255, 0.03);
     --glass-surface-strong: rgba(255, 255, 255, 0.05);
     --input-border: rgba(164, 184, 255, 0.18);
@@ -124,16 +113,13 @@
         --color-success: #15d062;
         --color-warning: #f6c453;
         --color-error: #ff4258;
-
         --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.25);
         --shadow-md: 0 18px 40px rgba(0, 0, 0, 0.3);
         --shadow-lg: 0 30px 80px rgba(0, 0, 0, 0.45);
-
         --body-grad-1: rgba(25, 72, 180, 0.16);
         --body-grad-2: rgba(50, 110, 255, 0.08);
         --body-grad-3: rgba(24, 63, 168, 0.12);
         --body-base: linear-gradient(180deg, #031134 0%, #020b24 45%, #01091c 100%);
-
         --glass-surface: rgba(255, 255, 255, 0.03);
         --glass-surface-strong: rgba(255, 255, 255, 0.05);
         --input-border: rgba(164, 184, 255, 0.18);
@@ -171,9 +157,7 @@ body {
         radial-gradient(circle at 80% 80%, var(--body-grad-3), transparent 26%),
         var(--body-base);
     line-height: 1.6;
-    transition:
-        background var(--transition-interactive),
-        color var(--transition-interactive);
+    transition: background var(--transition-interactive), color var(--transition-interactive);
 }
 
 img,
@@ -264,12 +248,7 @@ input::placeholder {
 .modal,
 .autocomplete-list,
 .guess-card {
-    transition:
-        background-color var(--transition-interactive),
-        border-color var(--transition-interactive),
-        color var(--transition-interactive),
-        box-shadow var(--transition-interactive),
-        opacity var(--transition-interactive);
+    transition: background-color var(--transition-interactive), border-color var(--transition-interactive), color var(--transition-interactive), box-shadow var(--transition-interactive), opacity var(--transition-interactive);
 }
 
 .theme-toggle {
@@ -637,6 +616,75 @@ input::placeholder {
     padding-left: 1rem;
 }
 
+.postgame-backdrop {
+    z-index: 100;
+}
+
+.postgame-modal {
+    width: min(100%, 720px);
+    max-height: min(88dvh, 900px);
+    overflow: auto;
+}
+
+.postgame-badge {
+    display: inline-flex;
+    width: fit-content;
+    align-items: center;
+    padding: 0.35rem 0.75rem;
+    border-radius: var(--radius-full);
+    background: var(--color-primary-highlight);
+    color: var(--color-primary);
+    font-family: var(--font-ui);
+    font-size: 0.78rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.postgame-body {
+    display: grid;
+    gap: var(--space-4);
+}
+
+.postgame-section {
+    display: grid;
+    gap: 0.35rem;
+    padding-top: var(--space-3);
+    border-top: 1px solid var(--color-divider);
+}
+
+.postgame-section:first-child {
+    border-top: 0;
+    padding-top: 0;
+}
+
+.postgame-reference {
+    font-family: var(--font-ui);
+    font-size: 0.9rem;
+    color: var(--color-text-faint);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.postgame-book,
+.postgame-intro-title {
+    font-family: var(--font-ui);
+    font-size: 1.25rem;
+    font-weight: 800;
+    color: var(--color-text);
+}
+
+.postgame-text {
+    font-family: var(--font-ui);
+    color: var(--color-text-muted);
+    font-size: 0.98rem;
+    line-height: 1.7;
+}
+
+.postgame-actions {
+    justify-content: flex-end;
+}
+
 @media (max-width: 720px) {
     .app-shell {
         padding-inline: 0.9rem;
@@ -669,9 +717,14 @@ input::placeholder {
     .control-group {
         justify-content: center;
     }
+
+    .postgame-modal {
+        width: min(100%, 620px);
+    }
 }
 
 @media (prefers-reduced-motion: reduce) {
+
     *,
     *::before,
     *::after {

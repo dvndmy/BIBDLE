@@ -138,6 +138,42 @@
     </div>
   </div>
 
+  <div class="modal-backdrop postgame-backdrop" id="postGameModal" data-open="false" aria-hidden="true">
+    <div class="modal postgame-modal" role="dialog" aria-modal="true" aria-labelledby="postGameTitle"
+      aria-describedby="postGameBody">
+      <div class="postgame-badge" id="postGameBadge">Puzzle complete</div>
+      <h2 id="postGameTitle">Result</h2>
+      <div class="postgame-body" id="postGameBody">
+        <section class="postgame-section">
+          <p class="subtle-label">Answer</p>
+          <p class="postgame-reference" id="postGameReference"></p>
+          <p class="postgame-book" id="postGameBook"></p>
+        </section>
+
+        <section class="postgame-section">
+          <p class="subtle-label">Verse</p>
+          <p class="postgame-text" id="postGameVerse"></p>
+        </section>
+
+        <section class="postgame-section">
+          <p class="subtle-label">Explanation</p>
+          <p class="postgame-text" id="postGameExplanation"></p>
+        </section>
+
+        <section class="postgame-section">
+          <p class="subtle-label">Book intro</p>
+          <p class="postgame-intro-title" id="postGameIntroTitle"></p>
+          <p class="postgame-text" id="postGameIntroText"></p>
+        </section>
+      </div>
+
+      <div class="pill-actions postgame-actions">
+        <button type="button" class="pill-btn" id="postGameCloseBtn">Close</button>
+        <button type="button" class="pill-btn primary" id="postGameNextBtn" hidden>Next practice puzzle</button>
+      </div>
+    </div>
+  </div>
+
   <script type="module" src="./js/bibdle.js"></script>
 </body>
 
