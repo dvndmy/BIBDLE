@@ -601,7 +601,7 @@ function renderEmptyGuessRows() {
 }
 
 function renderGuessRow(guess, rowIndex, animate = false) {
-  const baseDelay = animate ? rowIndex * 2000 : 0;
+  const baseDelay = animate ? rowIndex * 200 : 0;
   return `
     <div class="guess-grid" aria-label="Guess ${guess.book}">
       <div class="guess-card ${guess.testament.state}${animate ? " reveal-animate" : ""}" style="--reveal-delay: ${baseDelay + 0}ms">${guess.testament.value}</div>
