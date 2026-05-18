@@ -83,6 +83,13 @@ const elements = {
   postGameIntroText: document.getElementById("postGameIntroText"),
   postGameCloseBtn: document.getElementById("postGameCloseBtn"),
   postGameNextBtn: document.getElementById("postGameNextBtn"),
+  postGameStatsPlayed: document.getElementById("postGameStatsPlayed"),
+  postGameStatsWon: document.getElementById("postGameStatsWon"),
+  postGameStatsLost: document.getElementById("postGameStatsLost"),
+  postGameStatsCurrentStreak: document.getElementById("postGameStatsCurrentStreak"),
+  postGameStatsBestStreak: document.getElementById("postGameStatsBestStreak"),
+  postGameGuessDistribution: document.getElementById("postGameGuessDistribution"),
+  postGameStreakChips: document.getElementById("postGameStreakChips"),
 };
 
 function getSystemTheme() {
@@ -190,7 +197,7 @@ function buildCurrentPuzzle(mode = "daily") {
 function clearSavedProgress() {
   try {
     localStorage.removeItem(CONFIG.storageKeys.progress);
-  } catch {}
+  } catch { }
 }
 
 function saveProgress() {
@@ -211,7 +218,7 @@ function saveProgress() {
   };
   try {
     localStorage.setItem(CONFIG.storageKeys.progress, JSON.stringify(payload));
-  } catch {}
+  } catch { }
 }
 
 function loadProgress() {
@@ -269,7 +276,7 @@ function savePreferences() {
       CONFIG.storageKeys.preferences,
       JSON.stringify(payload),
     );
-  } catch {}
+  } catch { }
 }
 
 function loadPreferences() {
@@ -325,7 +332,7 @@ function saveStats() {
   };
   try {
     localStorage.setItem(CONFIG.storageKeys.stats, JSON.stringify(payload));
-  } catch {}
+  } catch { }
 }
 
 function loadStats() {
@@ -368,13 +375,13 @@ function loadStats() {
           : defaults.bestStreak,
       guessDistribution:
         saved?.guessDistribution &&
-        typeof saved.guessDistribution === "object" &&
-        !Array.isArray(saved.guessDistribution)
+          typeof saved.guessDistribution === "object" &&
+          !Array.isArray(saved.guessDistribution)
           ? saved.guessDistribution
           : defaults.guessDistribution,
       lastDailySolvedDate:
         typeof saved?.lastDailySolvedDate === "string" ||
-        saved?.lastDailySolvedDate === null
+          saved?.lastDailySolvedDate === null
           ? saved.lastDailySolvedDate
           : defaults.lastDailySolvedDate,
     };
@@ -434,8 +441,8 @@ function renderThemeToggle() {
   toggle.setAttribute(
     "aria-label",
     "Switch to " +
-      (state.preferences.theme === "dark" ? "light" : "dark") +
-      " mode",
+    (state.preferences.theme === "dark" ? "light" : "dark") +
+    " mode",
   );
 }
 
@@ -635,6 +642,88 @@ function renderStatus(message = "Guess the book from the verse above.") {
   elements.statusLine.textContent = message;
 }
 
+function computeStatsSummary() {
+  const stats = state.stats ?? {};
+  const played = Number.isInteger(stats.played) && stats.played >= 0 ? stats.played : 0;
+  const won = Number.isInteger(stats.won) && stats.won >= 0 ? stats.won : 0;
+  const lost = Number.isInteger(stats.lost) && stats.lost >= 0 ? stats.lost : 0;
+  const currentStreak = Number.isInteger(stats.currentStreak) && stats.currentStreak >= 0 ? stats.currentStreak : 0;
+  const bestStreak = Number.isInteger(stats.bestStreak) && stats.bestStreak >= 0 ? stats.bestStreak : 0;
+  const guessDistribution = {};
+  const source = stats.guessDistribution && typeof stats.guessDistribution === "object" && !Array.isArray(stats.guessDistribution)
+    ? stats.guessDistribution
+    : {};
+
+  for (let i = 1; i <= 8; i += 1) {
+    const value = source[i] ?? source[String(i)] ?? 0;
+    guessDistribution[i] = Number.isInteger(value) && value >= 0 ? value : 0;
+  }
+
+  return {
+    played,
+    won,
+    lost,
+    currentStreak,
+    bestStreak,
+    guessDistribution,
+  };
+}
+
+function renderStatsSection(statsObj, container) {
+  if (!container) return;
+
+  const safeStats = statsObj ?? computeStatsSummary();
+  const totalWins = safeStats.won;
+  const guessKeys = Object.keys(safeStats.guessDistribution || {}).map(Number).sort((a, b) => a - b);
+  const maxCount = guessKeys.reduce((max, key) => Math.max(max, safeStats.guessDistribution[key] || 0), 0);
+
+  if (elements.postGameStatsPlayed) elements.postGameStatsPlayed.textContent = String(safeStats.played);
+  if (elements.postGameStatsWon) elements.postGameStatsWon.textContent = String(safeStats.won);
+  if (elements.postGameStatsLost) elements.postGameStatsLost.textContent = String(safeStats.lost);
+  if (elements.postGameStatsCurrentStreak) elements.postGameStatsCurrentStreak.textContent = String(safeStats.currentStreak);
+  if (elements.postGameStatsBestStreak) elements.postGameStatsBestStreak.textContent = String(safeStats.bestStreak);
+
+  container.innerHTML = "";
+
+  if (safeStats.played <= 0 && totalWins <= 0 && safeStats.lost <= 0) {
+    const empty = document.createElement("p");
+    empty.className = "dist-empty";
+    empty.textContent = "No stats yet";
+    container.appendChild(empty);
+    return;
+  }
+
+  guessKeys.forEach((attempt) => {
+    const count = safeStats.guessDistribution[attempt] || 0;
+    const row = document.createElement("div");
+    row.className = "dist-row";
+
+    const label = document.createElement("div");
+    label.className = "dist-label";
+    label.textContent = `${attempt}`;
+    label.setAttribute("aria-label", `Guess distribution, ${attempt} attempts`);
+
+    const track = document.createElement("div");
+    track.className = "dist-track";
+
+    const bar = document.createElement("div");
+    bar.className = "dist-bar";
+    const width = maxCount > 0 ? Math.max((count / maxCount) * 100, count > 0 ? 8 : 0) : 0;
+    bar.style.width = `${width}%`;
+    bar.setAttribute("aria-hidden", "true");
+    track.appendChild(bar);
+
+    const value = document.createElement("div");
+    value.className = "dist-count";
+    value.textContent = String(count);
+
+    row.appendChild(label);
+    row.appendChild(track);
+    row.appendChild(value);
+    container.appendChild(row);
+  });
+}
+
 function getPostGameContent() {
   const puzzle = state.currentPuzzle?.verse;
   if (!puzzle) return null;
@@ -671,6 +760,37 @@ function renderPostGamePanel() {
   elements.postGameIntroTitle.textContent = content.introTitle;
   elements.postGameIntroText.textContent = content.introText;
   elements.postGameNextBtn.hidden = !(state.mode === "practice");
+
+  if (state.mode === "daily") {
+    const statsContainer = elements.postGameGuessDistribution;
+    if (statsContainer) {
+      const statsObj = computeStatsSummary();
+      renderStatsSection(statsObj, statsContainer);
+    }
+    if (elements.postGameStatsPlayed && elements.postGameStatsWon && elements.postGameStatsLost) {
+      const hasStats = (state.stats?.won ?? 0) + (state.stats?.lost ?? 0) > 0;
+      if (!hasStats) {
+        const values = [
+          elements.postGameStatsPlayed,
+          elements.postGameStatsWon,
+          elements.postGameStatsLost,
+          elements.postGameStatsCurrentStreak,
+          elements.postGameStatsBestStreak,
+        ];
+        values.forEach((el) => {
+          if (el) el.textContent = "0";
+        });
+      }
+    }
+    if (elements.postGameStreakChips) {
+      elements.postGameStreakChips.hidden = false;
+    }
+  } else {
+    const statsContainer = elements.postGameGuessDistribution;
+    if (statsContainer) statsContainer.innerHTML = "";
+    if (elements.postGameStreakChips) elements.postGameStreakChips.hidden = true;
+  }
+
   elements.postGameModal.dataset.open = "true";
   elements.postGameModal.setAttribute("aria-hidden", "false");
   state.postGameOpen = true;
@@ -954,9 +1074,9 @@ function handleGuessKeydown(event) {
       state.selectedSuggestionIndex < 0
         ? 0
         : Math.min(
-            state.selectedSuggestionIndex + 1,
-            state.currentSuggestions.length - 1,
-          );
+          state.selectedSuggestionIndex + 1,
+          state.currentSuggestions.length - 1,
+        );
     moveSuggestion(next);
     return;
   }

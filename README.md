@@ -60,7 +60,7 @@ Includes keyboard- and screen-reader-friendly autocomplete and status messages v
 ## File Structure
 
 bibdle/
-├── Bibdle.html        # Main HTML shell
+├── index.html        # Main HTML shell
 ├── css/
 │   └── bibdle.css     # Styles for layout, themes, and animations
 ├── js/
