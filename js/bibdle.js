@@ -56,6 +56,7 @@ const state = {
 const elements = {
   verseText: document.getElementById("verseText"),
   dateLabel: document.getElementById("dateLabel"),
+  countdownTimer: document.getElementById("countdownTimer"),
   attemptLabel: document.getElementById("attemptLabel"),
   hintBlock: document.getElementById("hintBlock"),
   guessForm: document.getElementById("guessForm"),
@@ -176,6 +177,96 @@ function getDailyIndex() {
       verses.length) %
     verses.length
   );
+}
+
+function getNextUTCMidnight() {
+  const now = new Date();
+  return new Date(
+    Date.UTC(
+      now.getUTCFullYear(),
+      now.getUTCMonth(),
+      now.getUTCDate() + 1,
+      0,
+      0,
+      0,
+      0,
+    ),
+  );
+}
+
+function formatTime(leftMs) {
+  const safeMs = Math.max(0, Math.floor(leftMs));
+  const totalSeconds = Math.floor(safeMs / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  if (hours > 0) {
+    return `${hours}h ${minutes}m ${seconds}s`;
+  }
+  if (minutes > 0) {
+    return `${minutes}m ${seconds}s`;
+  }
+  return `${Math.max(seconds, 0)}s`;
+}
+
+function stopCountdownTimer() {
+  if (state.countdownIntervalId) {
+    clearInterval(state.countdownIntervalId);
+    state.countdownIntervalId = null;
+  }
+  if (state.countdownTimeoutId) {
+    clearTimeout(state.countdownTimeoutId);
+    state.countdownTimeoutId = null;
+  }
+}
+
+function scheduleDailyReset() {
+  if (state.countdownTimeoutId) return;
+  state.countdownTimeoutId = window.setTimeout(() => {
+    state.countdownTimeoutId = null;
+    resetPuzzle("daily");
+  }, 1500);
+}
+
+function updateCountdownLabel() {
+  const label = elements.countdownTimer?.parentElement;
+  const target = elements.countdownTimer;
+  if (!label || !target) return;
+
+  if (state.mode !== "daily") {
+    label.classList.add("hidden");
+    label.classList.add("is-muted");
+    target.textContent = "";
+    return;
+  }
+
+  label.classList.remove("hidden");
+  label.classList.remove("is-muted");
+
+  const diff = getNextUTCMidnight().getTime() - Date.now();
+  if (diff <= 1000) {
+    target.textContent = "Next puzzle is ready";
+    scheduleDailyReset();
+    stopCountdownTimer();
+    return;
+  }
+
+  target.textContent = `Next puzzle in ${formatTime(diff)}`;
+}
+
+function startCountdownTimer() {
+  if (!elements.countdownTimer) return;
+
+  stopCountdownTimer();
+  updateCountdownLabel();
+
+  if (state.mode !== "daily") return;
+
+  state.countdownIntervalId = window.setInterval(() => {
+    if (document.hidden) return;
+    updateCountdownLabel();
+  }, 1000);
 }
 
 function pickPuzzle(mode = "daily") {
@@ -586,6 +677,16 @@ function renderPuzzleCard() {
     state.mode === "daily"
       ? `Daily puzzle · ${formatDate()}`
       : "Practice puzzle";
+
+  if (state.mode === "daily") {
+    startCountdownTimer();
+  } else {
+    stopCountdownTimer();
+    if (elements.countdownTimer?.parentElement) {
+      elements.countdownTimer.parentElement.classList.add("hidden");
+      elements.countdownTimer.parentElement.classList.add("is-muted");
+    }
+  }
 }
 
 function renderHintBlock() {
@@ -1199,6 +1300,11 @@ function initGame() {
     saveProgress();
   }
   renderPuzzleView();
+  if (state.mode === "daily") {
+    startCountdownTimer();
+  } else {
+    stopCountdownTimer();
+  }
 }
 
 function startPuzzle(mode = state.mode) {
@@ -1224,6 +1330,17 @@ function init() {
   initTheme();
   syncPreferenceControls();
   bindEvents();
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) {
+      stopCountdownTimer();
+      return;
+    }
+    if (state.mode === "daily" && !isGameOver()) {
+      startCountdownTimer();
+    } else {
+      updateCountdownLabel();
+    }
+  });
   initGame();
 }
 

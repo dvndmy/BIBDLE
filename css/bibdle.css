@@ -296,6 +296,45 @@ input::placeholder {
     font-weight: 700;
 }
 
+.countdown-label {
+    font-family: var(--font-ui);
+    font-size: var(--text-xs);
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+    font-weight: 700;
+    line-height: 1.4;
+    max-width: 100%;
+}
+
+.countdown-label.hidden {
+    display: none;
+}
+
+#countdownTimer {
+    display: inline-block;
+    color: var(--color-text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 100%;
+}
+
+.countdown-label.is-muted {
+    opacity: 0.55;
+    pointer-events: none;
+}
+
+@media (max-width: 720px) {
+    .countdown-label {
+        letter-spacing: 0.16em;
+    }
+
+    #countdownTimer {
+        max-width: 100%;
+    }
+}
+
 .verse-card {
     width: 100%;
     padding: clamp(1.5rem, 4vw, 2.75rem);
