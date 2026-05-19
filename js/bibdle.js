@@ -327,13 +327,10 @@ function clearSavedProgress() {
   } catch { }
 }
 
-function saveProgress() {
-  if (!state.currentPuzzle) return;
-  if (state.mode !== "daily") {
-    clearSavedProgress();
-    return;
-  }
-  const payload = {
+function buildProgressPayload() {
+  if (!state.currentPuzzle) return null;
+
+  return {
     mode: state.mode,
     currentPuzzle: {
       id: state.currentPuzzle.id,
@@ -342,7 +339,26 @@ function saveProgress() {
     },
     guesses: state.guesses,
     status: state.status,
+    inputDraft: elements.guessInput?.value ?? "",
   };
+}
+
+function canRestoreSavedPracticePuzzle(saved) {
+  if (!saved || saved.currentPuzzle?.mode !== "practice") return false;
+  if (!saved.currentPuzzle?.id) return false;
+  return !!getPuzzleById(saved.currentPuzzle.id);
+}
+
+function restoreDraftInput(saved) {
+  const draft = typeof saved?.inputDraft === "string" ? saved.inputDraft : "";
+  if (!elements.guessInput) return;
+  elements.guessInput.value = draft;
+}
+
+function saveProgress() {
+  const payload = buildProgressPayload();
+  if (!payload) return;
+
   try {
     localStorage.setItem(CONFIG.storageKeys.progress, JSON.stringify(payload));
   } catch { }
@@ -352,37 +368,60 @@ function loadProgress() {
   try {
     const raw = localStorage.getItem(CONFIG.storageKeys.progress);
     if (!raw) return false;
+
     const saved = JSON.parse(raw);
     if (!saved || !saved.currentPuzzle?.id) {
       clearSavedProgress();
       return false;
     }
+
     const savedPuzzle = getPuzzleById(saved.currentPuzzle.id);
     if (!savedPuzzle) {
       clearSavedProgress();
       return false;
     }
-    const todayPuzzle = pickPuzzle("daily");
-    const todayDate = getTodayPuzzleDate();
-    const isMatchingDailyPuzzle =
-      saved.currentPuzzle.mode === "daily" &&
-      saved.currentPuzzle.date === todayDate &&
-      saved.currentPuzzle.id === todayPuzzle.id;
-    if (!isMatchingDailyPuzzle) {
+
+    const savedStatus = ["playing", "won", "lost"].includes(saved.status)
+      ? saved.status
+      : "playing";
+
+    if (saved.currentPuzzle.mode === "daily") {
+      const todayPuzzle = pickPuzzle("daily");
+      const todayDate = getTodayPuzzleDate();
+      const isMatchingDailyPuzzle =
+        saved.currentPuzzle.date === todayDate &&
+        saved.currentPuzzle.id === todayPuzzle.id;
+
+      if (!isMatchingDailyPuzzle) {
+        clearSavedProgress();
+        return false;
+      }
+
+      state.mode = "daily";
+      state.currentPuzzle = {
+        id: savedPuzzle.id,
+        date: saved.currentPuzzle.date,
+        mode: "daily",
+        verse: savedPuzzle,
+      };
+    } else if (canRestoreSavedPracticePuzzle(saved)) {
+      state.mode = "practice";
+      state.currentPuzzle = {
+        id: savedPuzzle.id,
+        date: null,
+        mode: "practice",
+        verse: savedPuzzle,
+      };
+    } else {
       clearSavedProgress();
       return false;
     }
-    state.mode = "daily";
-    state.currentPuzzle = {
-      id: savedPuzzle.id,
-      date: saved.currentPuzzle.date,
-      mode: "daily",
-      verse: savedPuzzle,
-    };
+
     state.guesses = Array.isArray(saved.guesses) ? saved.guesses : [];
-    state.status = ["playing", "won", "lost"].includes(saved.status)
-      ? saved.status
-      : "playing";
+    state.status = savedStatus;
+    restoreDraftInput(saved);
+    resetSuggestionsState();
+    closeSuggestions();
     return true;
   } catch {
     clearSavedProgress();
@@ -1020,6 +1059,7 @@ function renderPuzzleView() {
 function resetInput() {
   elements.guessInput.value = "";
   updateComboboxA11y(false);
+  saveProgress();
 }
 
 function resetSuggestionsState() {
@@ -1294,6 +1334,7 @@ function handleGuessSubmit(event) {
 function handleGuessInput(event) {
   if (isGameOver()) return;
   updateSuggestions(event.target.value);
+  saveProgress();
 }
 
 function moveSuggestion(nextIndex) {
@@ -1502,10 +1543,8 @@ function initGame() {
     saveProgress();
   }
   renderPuzzleView();
-  if (state.mode === "daily") {
-    startCountdownTimer();
-  } else {
-    stopCountdownTimer();
+  if (restored) {
+    renderStatus("Progress restored.");
   }
 }
 
@@ -1518,6 +1557,7 @@ function startPuzzle(mode = state.mode) {
   resetInput();
   resetSuggestionsState();
   closeSuggestions();
+  saveProgress();
 }
 
 function resetPuzzle(mode = state.mode) {
