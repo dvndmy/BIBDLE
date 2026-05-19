@@ -563,7 +563,76 @@ input::placeholder {
     color: var(--color-text);
     backdrop-filter: blur(14px);
 }
+.settings-list {
+    display: grid;
+    gap: var(--space-3);
+}
 
+.settings-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
+    padding: var(--space-4);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--color-border);
+    background: var(--glass-surface);
+    font-family: var(--font-ui);
+    font-size: var(--text-sm);
+    color: var(--color-text);
+    backdrop-filter: blur(14px);
+}
+
+.settings-row span {
+    color: var(--color-text);
+    font-weight: 600;
+}
+
+.settings-row input[type="checkbox"] {
+    width: 1.15rem;
+    height: 1.15rem;
+    accent-color: var(--color-primary);
+    flex: 0 0 auto;
+}
+
+.high-contrast {
+    --color-border: rgba(255, 255, 255, 0.34);
+    --color-divider: rgba(255, 255, 255, 0.34);
+    --color-text-muted: var(--color-text);
+    --color-text-faint: var(--color-text-muted);
+    --input-border: rgba(255, 255, 255, 0.42);
+    --glass-surface: rgba(255, 255, 255, 0.08);
+    --glass-surface-strong: rgba(255, 255, 255, 0.12);
+}
+
+:root:not([data-theme="dark"]).high-contrast,
+[data-theme="light"].high-contrast {
+    --color-border: rgba(16, 22, 37, 0.34);
+    --color-divider: rgba(16, 22, 37, 0.34);
+    --color-text-muted: var(--color-text);
+    --color-text-faint: #3d465d;
+    --input-border: rgba(16, 22, 37, 0.42);
+    --glass-surface: rgba(255, 255, 255, 0.88);
+    --glass-surface-strong: rgba(255, 255, 255, 0.94);
+}
+
+.large-text {
+    --text-xs: clamp(0.82rem, 0.76rem + 0.25vw, 0.95rem);
+    --text-sm: clamp(0.96rem, 0.88rem + 0.35vw, 1.08rem);
+    --text-base: clamp(1.08rem, 1rem + 0.25vw, 1.22rem);
+    --text-lg: clamp(1.2rem, 1.05rem + 0.75vw, 1.65rem);
+    --text-xl: clamp(1.6rem, 1.28rem + 1.25vw, 2.4rem);
+    --text-2xl: clamp(2.1rem, 1.35rem + 2.5vw, 3.8rem);
+}
+
+html.reduced-motion *,
+html.reduced-motion *::before,
+html.reduced-motion *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+}
 .control-select {
     appearance: none;
 }

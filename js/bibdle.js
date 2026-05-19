@@ -41,6 +41,8 @@ const state = {
     preferredMode: "daily",
     sound: false,
     reducedAnimation: false,
+    highContrast: false,
+    largeText: false,
   },
   stats: {
     played: 0,
@@ -91,6 +93,13 @@ const elements = {
   postGameStatsBestStreak: document.getElementById("postGameStatsBestStreak"),
   postGameGuessDistribution: document.getElementById("postGameGuessDistribution"),
   postGameStreakChips: document.getElementById("postGameStreakChips"),
+  settingsBtn: document.getElementById("settingsBtn"),
+  settingsModal: document.getElementById("settingsModal"),
+  closeSettingsBtn: document.getElementById("closeSettingsBtn"),
+  reducedMotionToggle: document.getElementById("reducedMotionToggle"),
+  highContrastToggle: document.getElementById("highContrastToggle"),
+  largeTextToggle: document.getElementById("largeTextToggle"),
+  soundToggle: document.getElementById("soundToggle"),
 };
 
 function getSystemTheme() {
@@ -361,6 +370,8 @@ function savePreferences() {
     preferredMode: state.preferences.preferredMode,
     sound: state.preferences.sound,
     reducedAnimation: state.preferences.reducedAnimation,
+    highContrast: state.preferences.highContrast,
+    largeText: state.preferences.largeText,
   };
   try {
     localStorage.setItem(
@@ -377,6 +388,8 @@ function loadPreferences() {
     preferredMode: "daily",
     sound: false,
     reducedAnimation: false,
+    highContrast: false,
+    largeText: false,
   };
   try {
     const raw = localStorage.getItem(CONFIG.storageKeys.preferences);
@@ -404,6 +417,14 @@ function loadPreferences() {
         typeof saved?.reducedAnimation === "boolean"
           ? saved.reducedAnimation
           : defaults.reducedAnimation,
+      highContrast:
+        typeof saved?.highContrast === "boolean"
+          ? saved.highContrast
+          : defaults.highContrast,
+      largeText:
+        typeof saved?.largeText === "boolean"
+          ? saved.largeText
+          : defaults.largeText,
     };
   } catch {
     state.preferences = defaults;
@@ -1123,7 +1144,48 @@ async function copyResult() {
     renderStatus("Clipboard access is unavailable in this browser.");
   }
 }
+function openSettingsModal() {
+  if (!elements.settingsModal) return;
+  syncSettingsControls();
+  elements.settingsModal.dataset.open = "true";
+  elements.settingsModal.setAttribute("aria-hidden", "false");
+}
 
+function closeSettingsModal() {
+  if (!elements.settingsModal) return;
+  elements.settingsModal.dataset.open = "false";
+  elements.settingsModal.setAttribute("aria-hidden", "true");
+}
+
+function syncSettingsControls() {
+  if (elements.reducedMotionToggle) {
+    elements.reducedMotionToggle.checked = !!state.preferences.reducedAnimation;
+  }
+  if (elements.highContrastToggle) {
+    elements.highContrastToggle.checked = !!state.preferences.highContrast;
+  }
+  if (elements.largeTextToggle) {
+    elements.largeTextToggle.checked = !!state.preferences.largeText;
+  }
+  if (elements.soundToggle) {
+    elements.soundToggle.checked = !!state.preferences.sound;
+  }
+}
+
+function applyAccessibilityPreferences() {
+  document.documentElement.classList.toggle(
+    "reduced-motion",
+    !!state.preferences.reducedAnimation,
+  );
+  document.documentElement.classList.toggle(
+    "high-contrast",
+    !!state.preferences.highContrast,
+  );
+  document.documentElement.classList.toggle(
+    "large-text",
+    !!state.preferences.largeText,
+  );
+}
 function openHelpModal() {
   elements.helpModal.dataset.open = "true";
   elements.helpModal.setAttribute("aria-hidden", "false");
@@ -1133,7 +1195,28 @@ function closeHelpModal() {
   elements.helpModal.dataset.open = "false";
   elements.helpModal.setAttribute("aria-hidden", "true");
 }
+function handleReducedMotionToggle(event) {
+  state.preferences.reducedAnimation = event.target.checked;
+  applyAccessibilityPreferences();
+  savePreferences();
+}
 
+function handleHighContrastToggle(event) {
+  state.preferences.highContrast = event.target.checked;
+  applyAccessibilityPreferences();
+  savePreferences();
+}
+
+function handleLargeTextToggle(event) {
+  state.preferences.largeText = event.target.checked;
+  applyAccessibilityPreferences();
+  savePreferences();
+}
+
+function handleSoundToggle(event) {
+  state.preferences.sound = event.target.checked;
+  savePreferences();
+}
 function handleGuessSubmit(event) {
   event.preventDefault();
   applyGuess(elements.guessInput.value);
@@ -1291,6 +1374,54 @@ function bindEvents() {
     );
   if (elements.modeSelect)
     elements.modeSelect.addEventListener("change", handleModeChange);
+  if (elements.settingsBtn) {
+    elements.settingsBtn.addEventListener("click", openSettingsModal);
+  }
+
+  if (elements.closeSettingsBtn) {
+    elements.closeSettingsBtn.addEventListener("click", closeSettingsModal);
+  }
+
+  if (elements.settingsModal) {
+    elements.settingsModal.addEventListener("click", (event) => {
+      if (event.target === elements.settingsModal) closeSettingsModal();
+    });
+  }
+
+  if (elements.reducedMotionToggle) {
+    elements.reducedMotionToggle.addEventListener(
+      "change",
+      handleReducedMotionToggle,
+    );
+  }
+
+  if (elements.highContrastToggle) {
+    elements.highContrastToggle.addEventListener(
+      "change",
+      handleHighContrastToggle,
+    );
+  }
+
+  if (elements.largeTextToggle) {
+    elements.largeTextToggle.addEventListener(
+      "change",
+      handleLargeTextToggle,
+    );
+  }
+
+  if (elements.soundToggle) {
+    elements.soundToggle.addEventListener("change", handleSoundToggle);
+  }
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape") return;
+    if (elements.settingsModal?.dataset.open === "true") {
+      closeSettingsModal();
+    } else if (elements.helpModal?.dataset.open === "true") {
+      closeHelpModal();
+    } else if (elements.postGameModal?.dataset.open === "true") {
+      closePostGamePanel();
+    }
+  });
 }
 
 function initGame() {
@@ -1326,6 +1457,7 @@ function resetPuzzle(mode = state.mode) {
 
 function init() {
   loadPreferences();
+  applyAccessibilityPreferences();
   loadStats();
   initTheme();
   syncPreferenceControls();

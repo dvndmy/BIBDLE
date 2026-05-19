@@ -20,6 +20,7 @@
     <section class="panel" aria-label="Bibdle game">
       <div class="topbar">
         <div class="topbar-controls">
+          <button class="pill-btn" type="button" id="settingsBtn">Settings</button>
           <div class="control-group">
             <label for="modeSelect" class="subtle-label">Mode</label>
             <select id="modeSelect" class="control-select" aria-label="Select puzzle mode">
@@ -128,7 +129,37 @@
       </div>
     </div>
   </div>
+  <div class="modal-backdrop" id="settingsModal" data-open="false" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+      <h2 id="settingsTitle">Accessibility settings</h2>
 
+      <div class="settings-list">
+        <label class="settings-row" for="reducedMotionToggle">
+          <span>Reduced motion</span>
+          <input type="checkbox" id="reducedMotionToggle" />
+        </label>
+
+        <label class="settings-row" for="highContrastToggle">
+          <span>High contrast</span>
+          <input type="checkbox" id="highContrastToggle" />
+        </label>
+
+        <label class="settings-row" for="largeTextToggle">
+          <span>Larger text</span>
+          <input type="checkbox" id="largeTextToggle" />
+        </label>
+
+        <label class="settings-row" for="soundToggle">
+          <span>Sound</span>
+          <input type="checkbox" id="soundToggle" />
+        </label>
+      </div>
+
+      <div class="pill-actions" style="justify-content:flex-end;">
+        <button type="button" class="pill-btn primary" id="closeSettingsBtn">Close</button>
+      </div>
+    </div>
+  </div>
   <div class="modal-backdrop postgame-backdrop" id="postGameModal" data-open="false" aria-hidden="true">
     <div class="modal postgame-modal" role="dialog" aria-modal="true" aria-labelledby="postGameTitle"
       aria-describedby="postGameBody">
