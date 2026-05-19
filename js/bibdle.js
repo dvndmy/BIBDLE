@@ -127,6 +127,16 @@ const elements = {
   highContrastToggle: document.getElementById("highContrastToggle"),
   largeTextToggle: document.getElementById("largeTextToggle"),
   soundToggle: document.getElementById("soundToggle"),
+  statsBtn: document.getElementById("statsBtn"),
+  statsModal: document.getElementById("statsModal"),
+  closeStatsBtn: document.getElementById("closeStatsBtn"),
+  statsPlayed: document.getElementById("statsPlayed"),
+  statsWon: document.getElementById("statsWon"),
+  statsLost: document.getElementById("statsLost"),
+  statsCurrentStreak: document.getElementById("statsCurrentStreak"),
+  statsBestStreak: document.getElementById("statsBestStreak"),
+  statsGuessDistribution: document.getElementById("statsGuessDistribution"),
+  statsStreakChips: document.getElementById("statsStreakChips"),
 };
 
 function getSystemTheme() {
@@ -649,9 +659,14 @@ function syncPreferenceControls() {
 }
 
 function syncActionButtons() {
-  if (!elements.nextPracticeBtn) return;
-  const showNextPractice = state.mode === "practice" && isGameOver();
-  elements.nextPracticeBtn.hidden = !showNextPractice;
+  if (elements.nextPracticeBtn) {
+    const showNextPractice = state.mode === "practice" && isGameOver();
+    elements.nextPracticeBtn.hidden = !showNextPractice;
+  }
+
+  if (elements.statsBtn) {
+    elements.statsBtn.hidden = state.mode !== "daily";
+  }
 }
 
 function initTheme() {
@@ -854,11 +869,16 @@ function renderGuessRows(animateLatest = false) {
     renderEmptyGuessRows();
     return;
   }
-  const lastIndex = state.guesses.length - 1;
-  elements.guessRows.innerHTML = state.guesses
-    .map((guess, index) =>
-      renderGuessRow(guess, index, animateLatest && index === lastIndex),
-    )
+
+  const guessesToRender = [...state.guesses].reverse();
+  const latestGuess = state.guesses[state.guesses.length - 1];
+
+  elements.guessRows.innerHTML = guessesToRender
+    .map((guess, index) => {
+      const originalIndex = state.guesses.length - 1 - index;
+      const shouldAnimate = animateLatest && guess === latestGuess;
+      return renderGuessRow(guess, originalIndex, shouldAnimate);
+    })
     .join("");
 }
 
@@ -974,12 +994,14 @@ function getPostGameContent() {
 function renderPostGamePanel() {
   if (!elements.postGameModal) return;
   const content = getPostGameContent();
+
   if (!content || !isGameOver()) {
     elements.postGameModal.dataset.open = "false";
     elements.postGameModal.setAttribute("aria-hidden", "true");
     state.postGameOpen = false;
     return;
   }
+
   elements.postGameTitle.textContent = content.title;
   elements.postGameBadge.textContent = content.badge;
   elements.postGameReference.textContent = content.reference;
@@ -990,36 +1012,6 @@ function renderPostGamePanel() {
   elements.postGameIntroTitle.textContent = content.introTitle;
   elements.postGameIntroText.textContent = content.introText;
   elements.postGameNextBtn.hidden = !(state.mode === "practice");
-
-  if (state.mode === "daily") {
-    const statsContainer = elements.postGameGuessDistribution;
-    if (statsContainer) {
-      const statsObj = computeStatsSummary();
-      renderStatsSection(statsObj, statsContainer);
-    }
-    if (elements.postGameStatsPlayed && elements.postGameStatsWon && elements.postGameStatsLost) {
-      const hasStats = (state.stats?.won ?? 0) + (state.stats?.lost ?? 0) > 0;
-      if (!hasStats) {
-        const values = [
-          elements.postGameStatsPlayed,
-          elements.postGameStatsWon,
-          elements.postGameStatsLost,
-          elements.postGameStatsCurrentStreak,
-          elements.postGameStatsBestStreak,
-        ];
-        values.forEach((el) => {
-          if (el) el.textContent = "0";
-        });
-      }
-    }
-    if (elements.postGameStreakChips) {
-      elements.postGameStreakChips.hidden = false;
-    }
-  } else {
-    const statsContainer = elements.postGameGuessDistribution;
-    if (statsContainer) statsContainer.innerHTML = "";
-    if (elements.postGameStreakChips) elements.postGameStreakChips.hidden = true;
-  }
 
   elements.postGameModal.dataset.open = "true";
   elements.postGameModal.setAttribute("aria-hidden", "false");
@@ -1264,6 +1256,45 @@ function closeSettingsModal() {
   if (!elements.settingsModal) return;
   elements.settingsModal.dataset.open = "false";
   elements.settingsModal.setAttribute("aria-hidden", "true");
+}
+
+function renderStatsModal() {
+  const statsObj = computeStatsSummary();
+
+  if (elements.statsPlayed) {
+    elements.statsPlayed.textContent = String(statsObj.played);
+  }
+  if (elements.statsWon) {
+    elements.statsWon.textContent = String(statsObj.won);
+  }
+  if (elements.statsLost) {
+    elements.statsLost.textContent = String(statsObj.lost);
+  }
+  if (elements.statsCurrentStreak) {
+    elements.statsCurrentStreak.textContent = String(statsObj.currentStreak);
+  }
+  if (elements.statsBestStreak) {
+    elements.statsBestStreak.textContent = String(statsObj.bestStreak);
+  }
+  if (elements.statsGuessDistribution) {
+    renderStatsSection(statsObj, elements.statsGuessDistribution);
+  }
+  if (elements.statsStreakChips) {
+    elements.statsStreakChips.hidden = false;
+  }
+}
+
+function openStatsModal() {
+  if (!elements.statsModal) return;
+  renderStatsModal();
+  elements.statsModal.dataset.open = "true";
+  elements.statsModal.setAttribute("aria-hidden", "false");
+}
+
+function closeStatsModal() {
+  if (!elements.statsModal) return;
+  elements.statsModal.dataset.open = "false";
+  elements.statsModal.setAttribute("aria-hidden", "true");
 }
 
 function syncSettingsControls() {
@@ -1534,6 +1565,19 @@ function bindEvents() {
       closePostGamePanel();
     }
   });
+  if (elements.statsBtn) {
+    elements.statsBtn.addEventListener("click", openStatsModal);
+  }
+
+  if (elements.closeStatsBtn) {
+    elements.closeStatsBtn.addEventListener("click", closeStatsModal);
+  }
+
+  if (elements.statsModal) {
+    elements.statsModal.addEventListener("click", (event) => {
+      if (event.target === elements.statsModal) closeStatsModal();
+    });
+  }
 }
 
 function initGame() {

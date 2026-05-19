@@ -99,6 +99,7 @@
         <p class="status-line" id="statusLine" role="status" aria-live="polite"></p>
 
         <div class="pill-actions">
+          <button type="button" class="pill-btn" id="statsBtn">See stats</button>
           <button type="button" class="pill-btn" id="helpBtn">How to play</button>
           <button type="button" class="pill-btn" id="shareBtn">Copy result</button>
           <button type="button" class="pill-btn primary" id="nextPracticeBtn" hidden>Next practice puzzle</button>
@@ -160,6 +161,57 @@
       </div>
     </div>
   </div>
+  <div class="modal-backdrop" id="statsModal" data-open="false" aria-hidden="true">
+  <div class="modal postgame-modal" role="dialog" aria-modal="true" aria-labelledby="statsTitle"
+    aria-describedby="statsBody">
+    <h2 id="statsTitle">Historical stats</h2>
+
+    <div class="postgame-body" id="statsBody">
+      <section class="postgame-section stats-section" role="region" aria-label="Historical stats">
+        <p class="subtle-label">Daily mode</p>
+
+        <div class="stats-grid">
+          <div class="stat-item">
+            <span class="stat-value" id="statsPlayed">0</span>
+            <span class="stat-label">Played</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-value" id="statsWon">0</span>
+            <span class="stat-label">Won</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-value" id="statsLost">0</span>
+            <span class="stat-label">Lost</span>
+          </div>
+        </div>
+
+        <div class="stats-grid stats-grid-secondary">
+          <div class="stat-item">
+            <span class="stat-value" id="statsCurrentStreak">0</span>
+            <span class="stat-label">Current streak</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-value" id="statsBestStreak">0</span>
+            <span class="stat-label">Best streak</span>
+          </div>
+        </div>
+
+        <div class="guess-distribution" id="statsGuessDistribution" aria-label="Guess distribution"></div>
+
+        <div class="streak-chips" id="statsStreakChips" aria-label="Streak milestone badges">
+          <span class="badge">3-day</span>
+          <span class="badge">7-day</span>
+          <span class="badge">14-day</span>
+          <span class="badge">30-day</span>
+        </div>
+      </section>
+    </div>
+
+    <div class="pill-actions postgame-actions">
+      <button type="button" class="pill-btn primary" id="closeStatsBtn">Close</button>
+    </div>
+  </div>
+</div>
   <div class="modal-backdrop postgame-backdrop" id="postGameModal" data-open="false" aria-hidden="true">
     <div class="modal postgame-modal" role="dialog" aria-modal="true" aria-labelledby="postGameTitle"
       aria-describedby="postGameBody">
@@ -188,45 +240,6 @@
           <p class="postgame-text" id="postGameIntroText"></p>
         </section>
       </div>
-
-      <section class="postgame-section stats-section" role="region" aria-label="Historical stats">
-        <p class="subtle-label">Historical stats (Daily mode)</p>
-
-        <div class="stats-grid" id="postGameStatsGrid">
-          <div class="stat-item">
-            <span class="stat-value" id="postGameStatsPlayed">0</span>
-            <span class="stat-label">Played</span>
-          </div>
-          <div class="stat-item">
-            <span class="stat-value" id="postGameStatsWon">0</span>
-            <span class="stat-label">Won</span>
-          </div>
-          <div class="stat-item">
-            <span class="stat-value" id="postGameStatsLost">0</span>
-            <span class="stat-label">Lost</span>
-          </div>
-        </div>
-
-        <div class="stats-grid stats-grid-secondary" id="postGameStreakGrid">
-          <div class="stat-item">
-            <span class="stat-value" id="postGameStatsCurrentStreak">0</span>
-            <span class="stat-label">Current streak</span>
-          </div>
-          <div class="stat-item">
-            <span class="stat-value" id="postGameStatsBestStreak">0</span>
-            <span class="stat-label">Best streak</span>
-          </div>
-        </div>
-
-        <div class="guess-distribution" id="postGameGuessDistribution" aria-label="Guess distribution"></div>
-
-        <div class="streak-chips" id="postGameStreakChips" aria-label="Streak milestone badges">
-          <span class="badge">3-day</span>
-          <span class="badge">7-day</span>
-          <span class="badge">14-day</span>
-          <span class="badge">30-day</span>
-        </div>
-      </section>
 
       <div class="pill-actions postgame-actions">
         <button type="button" class="pill-btn" id="postGameCloseBtn">Close</button>
