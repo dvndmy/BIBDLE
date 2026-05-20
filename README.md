@@ -1,6 +1,6 @@
-# Bibdle
+# Catholic Bibdle
 
-Bibdle is a browser-based Bible book guessing game inspired by Wordle, built around the Catholic canon. Each puzzle shows a verse, and the player must identify the correct Bible book using feedback on testament, section, first letter, and canonical proximity.
+Catholic Bibdle is a browser-based Bible book guessing game inspired by Wordle, built around the Catholic canon. Each puzzle shows a verse, and the player must identify the correct Bible book using feedback on testament, section, first letter, and canonical proximity.
 
 ## Features
 
