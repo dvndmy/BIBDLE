@@ -53,7 +53,12 @@ const CONFIG = {
     stats: "bibdle-stats",
   },
 };
-
+const STREAK_BADGES = [
+  { id: "streak-3", threshold: 3, label: "3-Day Streak" },
+  { id: "streak-7", threshold: 7, label: "7-Day Streak" },
+  { id: "streak-14", threshold: 14, label: "14-Day Streak" },
+  { id: "streak-30", threshold: 30, label: "30-Day Streak" },
+];
 const state = {
   mode: "daily",
   currentPuzzle: null,
@@ -79,6 +84,7 @@ const state = {
     bestStreak: 0,
     guessDistribution: {},
     lastDailySolvedDate: null,
+    earnedBadges: [],
   },
 };
 
@@ -141,6 +147,8 @@ const elements = {
   postGameTriviaTitle: document.getElementById("postGameTriviaTitle"),
   postGameTriviaText: document.getElementById("postGameTriviaText"),
   postGameTriviaChips: document.getElementById("postGameTriviaChips"),
+  streakBadges: document.getElementById("streakBadges"),
+  statsModalBadges: document.getElementById("statsModalBadges"),
 };
 
 function getSystemTheme() {
@@ -521,6 +529,9 @@ function saveStats() {
     bestStreak: state.stats.bestStreak,
     guessDistribution: state.stats.guessDistribution,
     lastDailySolvedDate: state.stats.lastDailySolvedDate,
+    earnedBadges: Array.isArray(state.stats.earnedBadges)
+      ? state.stats.earnedBadges
+      : [],
   };
   try {
     localStorage.setItem(CONFIG.storageKeys.stats, JSON.stringify(payload));
@@ -536,6 +547,7 @@ function loadStats() {
     bestStreak: 0,
     guessDistribution: {},
     lastDailySolvedDate: null,
+    earnedBadges: [],
   };
   try {
     const raw = localStorage.getItem(CONFIG.storageKeys.stats);
@@ -576,6 +588,12 @@ function loadStats() {
           saved?.lastDailySolvedDate === null
           ? saved.lastDailySolvedDate
           : defaults.lastDailySolvedDate,
+      earnedBadges:
+        Array.isArray(saved?.earnedBadges)
+          ? saved.earnedBadges.filter((badgeId) =>
+            STREAK_BADGES.some((badge) => badge.id === badgeId),
+          )
+          : defaults.earnedBadges,
     };
   } catch {
     state.stats = defaults;
@@ -590,24 +608,30 @@ function recordPuzzleCompletion(outcome) {
   if (!state.currentPuzzle || state.currentPuzzle.mode !== "daily") return;
   const completionDate = state.currentPuzzle.date;
   if (completionDate && hasRecordedDailyResult(completionDate)) return;
+
   state.stats.played += 1;
+
   if (outcome === "won") {
     state.stats.won += 1;
     const guessCount = state.guesses.length;
     state.stats.guessDistribution[guessCount] =
       (state.stats.guessDistribution[guessCount] ?? 0) + 1;
+
     if (completionDate) {
       const previousDate = getPreviousDate(completionDate);
       state.stats.currentStreak =
         state.stats.lastDailySolvedDate === previousDate
           ? state.stats.currentStreak + 1
           : 1;
+
       state.stats.bestStreak = Math.max(
         state.stats.bestStreak,
         state.stats.currentStreak,
       );
       state.stats.lastDailySolvedDate = completionDate;
     }
+
+    awardStreakBadges();
   } else if (outcome === "lost") {
     state.stats.lost += 1;
     if (completionDate) {
@@ -615,6 +639,7 @@ function recordPuzzleCompletion(outcome) {
       state.stats.lastDailySolvedDate = completionDate;
     }
   }
+
   saveStats();
 }
 
@@ -895,7 +920,69 @@ function renderProximityLine() {
 function renderStatus(message = "Guess the book from the verse above.") {
   elements.statusLine.textContent = message;
 }
+function getEarnedBadgeIds() {
+  return Array.isArray(state.stats?.earnedBadges) ? state.stats.earnedBadges : [];
+}
 
+function computeNewlyEarnedBadges() {
+  const earnedBadgeIds = new Set(getEarnedBadgeIds());
+  const currentStreak =
+    Number.isInteger(state.stats?.currentStreak) && state.stats.currentStreak >= 0
+      ? state.stats.currentStreak
+      : 0;
+
+  return STREAK_BADGES.filter(
+    (badge) => currentStreak >= badge.threshold && !earnedBadgeIds.has(badge.id),
+  );
+}
+
+function awardStreakBadges() {
+  const existing = getEarnedBadgeIds();
+  const existingSet = new Set(existing);
+  const newlyEarned = computeNewlyEarnedBadges();
+
+  if (!newlyEarned.length) return [];
+
+  newlyEarned.forEach((badge) => {
+    if (!existingSet.has(badge.id)) {
+      existing.push(badge.id);
+      existingSet.add(badge.id);
+    }
+  });
+
+  state.stats.earnedBadges = existing;
+  return newlyEarned;
+}
+
+function renderEarnedBadges(container) {
+  if (!container) return;
+
+  const earnedIds = new Set(getEarnedBadgeIds());
+
+  container.innerHTML = STREAK_BADGES.map((badge) => {
+    const isEarned = earnedIds.has(badge.id);
+    const badgeClass = isEarned
+      ? "streak-badge is-earned"
+      : "streak-badge is-locked";
+    const badgeLabel = isEarned
+      ? `Earned badge: ${badge.label}`
+      : `Locked badge: ${badge.label}`;
+
+    return `
+      <span class="${badgeClass}" aria-label="${badgeLabel}">
+        <span class="streak-badge-text">${badge.label}</span>
+        <span class="streak-badge-state">${isEarned ? "Earned" : "Locked"}</span>
+      </span>
+    `;
+  }).join("");
+
+  if (!getEarnedBadgeIds().length) {
+    container.insertAdjacentHTML(
+      "beforeend",
+      `<p class="streak-badges-empty">\nNo streak badges yet — keep your Daily Win streak going.</p>`,
+    );
+  }
+}
 function computeStatsSummary() {
   const stats = state.stats ?? {};
   const played = Number.isInteger(stats.played) && stats.played >= 0 ? stats.played : 0;
@@ -1133,6 +1220,10 @@ function renderPostGamePanel() {
   elements.postGameNextBtn.hidden = !(state.mode === "practice");
 
   renderTriviaSection(content.trivia);
+
+  if (elements.streakBadges) {
+    renderEarnedBadges(elements.streakBadges);
+  }
 
   elements.postGameModal.dataset.open = "true";
   elements.postGameModal.setAttribute("aria-hidden", "false");
@@ -1402,6 +1493,9 @@ function renderStatsModal() {
   }
   if (elements.statsStreakChips) {
     elements.statsStreakChips.hidden = false;
+  }
+  if (elements.statsModalBadges) {
+    renderEarnedBadges(elements.statsModalBadges);
   }
 }
 
