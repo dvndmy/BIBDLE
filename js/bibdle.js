@@ -97,6 +97,7 @@ const state = {
       lost: 0,
       guessDistribution: {},
     },
+    bookStats: {},
   },
 };
 
@@ -171,6 +172,13 @@ const elements = {
   postGameTriviaTitle: document.getElementById("postGameTriviaTitle"),
   postGameTriviaText: document.getElementById("postGameTriviaText"),
   postGameTriviaChips: document.getElementById("postGameTriviaChips"),
+
+  archiveBtn: document.getElementById("archiveBtn"),
+  archiveModal: document.getElementById("archiveModal"),
+  closeArchiveBtn: document.getElementById("closeArchiveBtn"),
+  archiveSummary: document.getElementById("archiveSummary"),
+  archiveGrid: document.getElementById("archiveGrid"),
+  archiveDetails: document.getElementById("archiveDetails"),
 };
 
 function getSystemTheme() {
@@ -186,6 +194,77 @@ function normalizeBookName(value) {
 function getBookByName(name) {
   const normalized = normalizeBookName(name);
   return books.find((book) => book.normalizedName === normalized);
+}
+
+function getBookStatsKey(book) {
+  if (!book) return "";
+  return book.id || book.bookId || book.slug || normalizeBookName(book.name);
+}
+
+function ensureBookStatsEntry(book) {
+  const key = getBookStatsKey(book);
+  if (!key) return null;
+
+  if (!state.stats.bookStats[key]) {
+    state.stats.bookStats[key] = {
+      plays: 0,
+      solves: 0,
+      bestAttempts: null,
+      totalAttempts: 0,
+      lastSolvedDate: null,
+    };
+  }
+
+  return state.stats.bookStats[key];
+}
+
+function getBookStats(book) {
+  const key = getBookStatsKey(book);
+  return state.stats.bookStats[key] ?? null;
+}
+
+function getAverageAttemptsForBook(book) {
+  const entry = getBookStats(book);
+  if (!entry || entry.solves <= 0) return null;
+  return entry.totalAttempts / entry.solves;
+}
+
+function getArchiveCellState(book) {
+  const entry = getBookStats(book);
+
+  if (!entry || entry.plays <= 0) return "is-unplayed";
+  if (entry.solves <= 0) return "is-played-unsolved";
+  if (entry.bestAttempts !== null && entry.bestAttempts <= 2) return "is-solved-low";
+  if (entry.bestAttempts !== null && entry.bestAttempts <= 4) return "is-solved-mid";
+  return "is-solved-high";
+}
+
+function getArchiveCellStateLabel(book) {
+  const entry = getBookStats(book);
+
+  if (!entry || entry.plays <= 0) return "Unplayed";
+  if (entry.solves <= 0) return "Played, unsolved";
+  if (entry.bestAttempts !== null && entry.bestAttempts <= 2) return "Very efficient";
+  if (entry.bestAttempts !== null && entry.bestAttempts <= 4) return "Efficient";
+  return "Solved slowly";
+}
+
+function getArchiveCellAriaLabel(book) {
+  const entry = getBookStats(book);
+  const stateLabel = getArchiveCellStateLabel(book);
+
+  if (!entry || entry.plays <= 0) {
+    return `${book.name}, ${book.testament} Testament, ${book.section}, not yet solved`;
+  }
+
+  if (entry.solves <= 0) {
+    return `${book.name}, ${book.testament} Testament, ${book.section}, played but not yet solved`;
+  }
+
+  const bestText =
+    entry.bestAttempts === null ? "no best solve recorded" : `best ${entry.bestAttempts} guesses`;
+
+  return `${book.name}, ${book.testament} Testament, ${book.section}, ${stateLabel.toLowerCase()}, solved ${entry.solves} times, ${bestText}`;
 }
 
 function getPuzzleById(id) {
@@ -582,11 +661,17 @@ function saveStats() {
       lost: state.stats.practice.lost,
       guessDistribution: state.stats.practice.guessDistribution,
     },
+    bookStats:
+      state.stats.bookStats &&
+      typeof state.stats.bookStats === "object" &&
+      !Array.isArray(state.stats.bookStats)
+        ? state.stats.bookStats
+        : {},
   };
 
   try {
     localStorage.setItem(CONFIG.storageKeys.stats, JSON.stringify(payload));
-  } catch { }
+  } catch {}
 }
 
 function loadStats() {
@@ -614,6 +699,32 @@ function loadStats() {
   const sanitizeNonNegativeInt = (value, fallback = 0) =>
     Number.isInteger(value) && value >= 0 ? value : fallback;
 
+  const sanitizeBookStats = (value) => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+
+    const output = {};
+
+    Object.entries(value).forEach(([key, entry]) => {
+      if (!entry || typeof entry !== "object" || Array.isArray(entry)) return;
+
+      output[key] = {
+        plays: sanitizeNonNegativeInt(entry.plays),
+        solves: sanitizeNonNegativeInt(entry.solves),
+        bestAttempts:
+          Number.isInteger(entry.bestAttempts) && entry.bestAttempts > 0
+            ? entry.bestAttempts
+            : null,
+        totalAttempts: sanitizeNonNegativeInt(entry.totalAttempts),
+        lastSolvedDate:
+          typeof entry.lastSolvedDate === "string" || entry.lastSolvedDate === null
+            ? entry.lastSolvedDate
+            : null,
+      };
+    });
+
+    return output;
+  };
+
   try {
     const raw = localStorage.getItem(CONFIG.storageKeys.stats);
 
@@ -621,6 +732,7 @@ function loadStats() {
       state.stats = {
         daily: defaultDaily,
         practice: defaultPractice,
+        bookStats: {},
       };
       return;
     }
@@ -644,13 +756,13 @@ function loadStats() {
           guessDistribution: sanitizeGuessDistribution(saved.daily.guessDistribution),
           lastDailySolvedDate:
             typeof saved.daily.lastDailySolvedDate === "string" ||
-              saved.daily.lastDailySolvedDate === null
+            saved.daily.lastDailySolvedDate === null
               ? saved.daily.lastDailySolvedDate
               : null,
           earnedBadges: Array.isArray(saved.daily.earnedBadges)
             ? saved.daily.earnedBadges.filter((badgeId) =>
-              STREAK_BADGES.some((badge) => badge.id === badgeId),
-            )
+                STREAK_BADGES.some((badge) => badge.id === badgeId),
+              )
             : [],
         },
         practice: {
@@ -659,6 +771,7 @@ function loadStats() {
           lost: sanitizeNonNegativeInt(saved.practice.lost),
           guessDistribution: sanitizeGuessDistribution(saved.practice.guessDistribution),
         },
+        bookStats: sanitizeBookStats(saved.bookStats),
       };
       return;
     }
@@ -673,21 +786,23 @@ function loadStats() {
         guessDistribution: sanitizeGuessDistribution(saved?.guessDistribution),
         lastDailySolvedDate:
           typeof saved?.lastDailySolvedDate === "string" ||
-            saved?.lastDailySolvedDate === null
+          saved?.lastDailySolvedDate === null
             ? saved.lastDailySolvedDate
             : null,
         earnedBadges: Array.isArray(saved?.earnedBadges)
           ? saved.earnedBadges.filter((badgeId) =>
-            STREAK_BADGES.some((badge) => badge.id === badgeId),
-          )
+              STREAK_BADGES.some((badge) => badge.id === badgeId),
+            )
           : [],
       },
       practice: defaultPractice,
+      bookStats: sanitizeBookStats(saved?.bookStats),
     };
   } catch {
     state.stats = {
       daily: defaultDaily,
       practice: defaultPractice,
+      bookStats: {},
     };
   }
 }
@@ -733,6 +848,27 @@ function awardStreakBadges() {
   return newlyEarned;
 }
 
+function updateBookStats(outcome) {
+  if (!state.currentPuzzle || state.currentPuzzle.mode !== "daily") return;
+
+  const book = getBookByName(state.currentPuzzle.verse.book);
+  if (!book) return;
+
+  const entry = ensureBookStatsEntry(book);
+  if (!entry) return;
+
+  entry.plays += 1;
+
+  if (outcome === "won") {
+    const attempts = state.guesses.length;
+    entry.solves += 1;
+    entry.totalAttempts += attempts;
+    entry.bestAttempts =
+      entry.bestAttempts === null ? attempts : Math.min(entry.bestAttempts, attempts);
+    entry.lastSolvedDate = state.currentPuzzle.date ?? getTodayPuzzleDate();
+  }
+}
+
 function recordPuzzleCompletion(outcome) {
   if (!state.currentPuzzle) return;
 
@@ -775,6 +911,7 @@ function recordPuzzleCompletion(outcome) {
       }
     }
 
+    updateBookStats(outcome);
     saveStats();
     return;
   }
@@ -1407,6 +1544,235 @@ function getPostGameContent() {
   };
 }
 
+function computeArchiveSummary() {
+  const totalBooks = books.length;
+  const solvedBooks = books.filter((book) => {
+    const entry = getBookStats(book);
+    return entry && entry.solves > 0;
+  }).length;
+
+  const completionPercentage =
+    totalBooks > 0 ? Math.round((solvedBooks / totalBooks) * 100) : 0;
+
+  const testamentSummary = books.reduce((acc, book) => {
+    const key = book.testament;
+    if (!acc[key]) {
+      acc[key] = { total: 0, solved: 0, totalAttempts: 0, solveCount: 0 };
+    }
+
+    acc[key].total += 1;
+
+    const entry = getBookStats(book);
+    if (entry && entry.solves > 0) {
+      acc[key].solved += 1;
+      acc[key].totalAttempts += entry.totalAttempts;
+      acc[key].solveCount += entry.solves;
+    }
+
+    return acc;
+  }, {});
+
+  const sectionSummary = books.reduce((acc, book) => {
+    const key = book.section;
+    if (!acc[key]) {
+      acc[key] = { total: 0, solved: 0, totalAttempts: 0, solveCount: 0 };
+    }
+
+    acc[key].total += 1;
+
+    const entry = getBookStats(book);
+    if (entry && entry.solves > 0) {
+      acc[key].solved += 1;
+      acc[key].totalAttempts += entry.totalAttempts;
+      acc[key].solveCount += entry.solves;
+    }
+
+    return acc;
+  }, {});
+
+  return {
+    totalBooks,
+    solvedBooks,
+    completionPercentage,
+    testamentSummary,
+    sectionSummary,
+  };
+}
+
+function formatArchiveAverage(totalAttempts, solveCount) {
+  if (!solveCount) return "—";
+  return (totalAttempts / solveCount).toFixed(1);
+}
+
+function renderArchiveBars(summaryObj) {
+  return Object.entries(summaryObj)
+    .map(([label, value]) => {
+      const percentage = value.total > 0 ? (value.solved / value.total) * 100 : 0;
+
+      return `
+        <div class="archive-bar-row">
+          <div class="archive-bar-topline">
+            <span class="archive-bar-label">${label}</span>
+            <span>${value.solved}/${value.total} · Avg ${formatArchiveAverage(value.totalAttempts, value.solveCount)}</span>
+          </div>
+          <div class="archive-bar-track" aria-hidden="true">
+            <div class="archive-bar-fill" style="width: ${percentage}%"></div>
+          </div>
+        </div>
+      `;
+    })
+    .join("");
+}
+
+function renderArchiveSummary() {
+  if (!elements.archiveSummary) return;
+
+  const summary = computeArchiveSummary();
+
+  elements.archiveSummary.innerHTML = `
+    <div class="archive-summary-blocks">
+      <section class="archive-summary-group" aria-label="Overall archive progress">
+        <p class="archive-summary-title">Overall</p>
+        <div class="archive-kpis">
+          <div class="archive-kpi">
+            <span class="archive-kpi-value">${summary.solvedBooks}/${summary.totalBooks}</span>
+            <span class="archive-kpi-label">Books solved</span>
+          </div>
+          <div class="archive-kpi">
+            <span class="archive-kpi-value">${summary.completionPercentage}%</span>
+            <span class="archive-kpi-label">Canon complete</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="archive-stat-group" aria-label="Solved books by testament">
+        <h3>By testament</h3>
+        <div class="archive-bars">
+          ${renderArchiveBars(summary.testamentSummary)}
+        </div>
+      </section>
+
+      <section class="archive-stat-group" aria-label="Solved books by section">
+        <h3>By section</h3>
+        <div class="archive-bars">
+          ${renderArchiveBars(summary.sectionSummary)}
+        </div>
+      </section>
+    </div>
+  `;
+}
+
+function renderArchiveGrid(selectedBookKey = "") {
+  if (!elements.archiveGrid) return;
+
+  elements.archiveGrid.innerHTML = books
+    .map((book) => {
+      const entry = getBookStats(book);
+      const key = getBookStatsKey(book);
+      const stateClass = getArchiveCellState(book);
+      const stateLabel = getArchiveCellStateLabel(book);
+      const average = getAverageAttemptsForBook(book);
+
+      const metaLine =
+        entry && entry.solves > 0
+          ? `Best ${entry.bestAttempts ?? "—"} · Avg ${average ? average.toFixed(1) : "—"}`
+          : entry && entry.plays > 0
+            ? `Played ${entry.plays} · Unsolved`
+            : `${book.testament} · ${book.section}`;
+
+      return `
+        <button
+          type="button"
+          class="archive-cell ${stateClass}${selectedBookKey === key ? " is-selected" : ""}"
+          data-book-key="${key}"
+          aria-label="${getArchiveCellAriaLabel(book)}"
+          aria-pressed="${selectedBookKey === key ? "true" : "false"}"
+        >
+          <div class="archive-cell-top">
+            <span class="archive-cell-order">#${book.order}</span>
+            <span class="archive-cell-state">${stateLabel}</span>
+          </div>
+          <div class="archive-cell-book">${book.name}</div>
+          <div class="archive-cell-meta">${metaLine}</div>
+        </button>
+      `;
+    })
+    .join("");
+}
+
+function renderArchiveDetails(bookKey = "") {
+  if (!elements.archiveDetails) return;
+
+  const fallbackBook = books[0];
+  const book =
+    books.find((item) => getBookStatsKey(item) === bookKey) || fallbackBook;
+
+  if (!book) {
+    elements.archiveDetails.innerHTML =
+      '<p class="archive-details-empty">Select a book to view archive details.</p>';
+    return;
+  }
+
+  const entry = getBookStats(book);
+  const average = getAverageAttemptsForBook(book);
+  const solved = entry?.solves ?? 0;
+  const plays = entry?.plays ?? 0;
+  const bestAttempts = entry?.bestAttempts ?? "—";
+  const lastSolvedDate = entry?.lastSolvedDate ?? "Not yet solved";
+  const stateLabel = getArchiveCellStateLabel(book);
+
+  elements.archiveDetails.innerHTML = `
+    <div class="archive-details-header">
+      <div class="archive-details-title">${book.name}</div>
+      <div class="archive-details-subtitle">${book.testament} Testament · ${book.section} · Canon #${book.order}</div>
+    </div>
+
+    <div class="archive-details-grid">
+      <div class="archive-detail-stat">
+        <span class="archive-detail-stat-value">${plays}</span>
+        <span class="archive-detail-stat-label">Daily plays</span>
+      </div>
+      <div class="archive-detail-stat">
+        <span class="archive-detail-stat-value">${solved}</span>
+        <span class="archive-detail-stat-label">Daily solves</span>
+      </div>
+      <div class="archive-detail-stat">
+        <span class="archive-detail-stat-value">${bestAttempts}</span>
+        <span class="archive-detail-stat-label">Best attempts</span>
+      </div>
+      <div class="archive-detail-stat">
+        <span class="archive-detail-stat-value">${average ? average.toFixed(1) : "—"}</span>
+        <span class="archive-detail-stat-label">Average attempts</span>
+      </div>
+    </div>
+
+    <p class="archive-details-copy">
+      Status: ${stateLabel}. Last solved date: ${lastSolvedDate}. This archive tracks Daily mode progress only, so books still appear here even if they have never been played.
+    </p>
+  `;
+}
+
+function openArchiveModal() {
+  if (!elements.archiveModal) return;
+
+  const selectedBook =
+    books.find((book) => {
+      const entry = getBookStats(book);
+      return entry && entry.plays > 0;
+    }) || books[0];
+
+  const selectedKey = selectedBook ? getBookStatsKey(selectedBook) : "";
+
+  renderArchiveSummary();
+  renderArchiveGrid(selectedKey);
+  renderArchiveDetails(selectedKey);
+  setModalOpen(elements.archiveModal, true);
+}
+
+function closeArchiveModal() {
+  setModalOpen(elements.archiveModal, false);
+}
+
 function renderStatsModal() {
   const dailyStats = computeModeStatsSummary("daily");
   const practiceStats = computeModeStatsSummary("practice");
@@ -1906,6 +2272,15 @@ function handleDocumentClick(event) {
   }
 }
 
+function handleArchiveGridClick(event) {
+  const button = event.target.closest(".archive-cell");
+  if (!button) return;
+
+  const bookKey = button.dataset.bookKey || "";
+  renderArchiveGrid(bookKey);
+  renderArchiveDetails(bookKey);
+}
+
 function handleThemeToggle() {
   const nextTheme = state.preferences.theme === "dark" ? "light" : "dark";
   applyTheme(nextTheme);
@@ -2046,8 +2421,24 @@ function bindEvents() {
       closeStatsModal();
     } else if (elements.postGameModal?.dataset.open === "true") {
       closePostGamePanel();
+    } else if (elements.archiveModal?.dataset.open === "true") {
+      closeArchiveModal();
     }
   });
+
+  if (elements.archiveBtn) {
+    elements.archiveBtn.addEventListener("click", openArchiveModal);
+  }
+
+  if (elements.closeArchiveBtn) {
+    elements.closeArchiveBtn.addEventListener("click", closeArchiveModal);
+  }
+
+  if (elements.archiveGrid) {
+    elements.archiveGrid.addEventListener("click", handleArchiveGridClick);
+  }
+
+  bindBackdropClose(elements.archiveModal, closeArchiveModal);
 }
 
 function initGame() {
