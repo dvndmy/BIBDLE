@@ -137,6 +137,10 @@ const elements = {
   statsBestStreak: document.getElementById("statsBestStreak"),
   statsGuessDistribution: document.getElementById("statsGuessDistribution"),
   statsStreakChips: document.getElementById("statsStreakChips"),
+  postGameTriviaSection: document.getElementById("postGameTriviaSection"),
+  postGameTriviaTitle: document.getElementById("postGameTriviaTitle"),
+  postGameTriviaText: document.getElementById("postGameTriviaText"),
+  postGameTriviaChips: document.getElementById("postGameTriviaChips"),
 };
 
 function getSystemTheme() {
@@ -973,13 +977,127 @@ function renderStatsSection(statsObj, container) {
     container.appendChild(row);
   });
 }
+function formatTriviaLabel(value) {
+  if (!value) return "";
+  return String(value)
+    .split("-")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
 
+function buildTriviaContent(puzzle, book) {
+  if (!puzzle && !book) {
+    return {
+      title: "",
+      text: "",
+      chips: [],
+    };
+  }
+
+  const verseThemes = Array.isArray(puzzle?.themes) ? puzzle.themes : [];
+  const bookThemes = Array.isArray(book?.bookThemes) ? book.bookThemes : [];
+  const combinedThemes = [...new Set([...verseThemes, ...bookThemes])].slice(0, 3);
+  const chips = [];
+
+  if (book?.testament) {
+    chips.push(`${book.testament} Testament`);
+  }
+
+  if (book?.section) {
+    chips.push(book.section);
+  }
+
+  if (combinedThemes.length) {
+    chips.push(`Themes: ${combinedThemes.map(formatTriviaLabel).join(", ")}`);
+  }
+
+  if (puzzle?.difficulty) {
+    chips.push(`Difficulty: ${formatTriviaLabel(puzzle.difficulty)}`);
+  }
+
+  const title =
+    puzzle?.clue ||
+    book?.bookIntroTitle ||
+    `Learn more about ${puzzle?.book ?? book?.name ?? "this book"}`;
+
+  const textParts = [];
+
+  if (puzzle?.explanation) {
+    textParts.push(puzzle.explanation);
+  } else if (puzzle?.clue) {
+    textParts.push(puzzle.clue);
+  }
+
+  if (book?.bookThemes?.length) {
+    const themeText = book.bookThemes
+      .slice(0, 3)
+      .map(formatTriviaLabel)
+      .join(", ");
+    textParts.push(`${book.name} often emphasizes themes such as ${themeText}.`);
+  } else if (verseThemes.length) {
+    const verseThemeText = verseThemes
+      .slice(0, 3)
+      .map(formatTriviaLabel)
+      .join(", ");
+    textParts.push(`This verse highlights themes such as ${verseThemeText}.`);
+  }
+
+  if (puzzle?.devotional) {
+    textParts.push(puzzle.devotional);
+  }
+
+  const uniqueParts = [];
+  textParts.forEach((part) => {
+    const trimmed = String(part || "").trim();
+    if (!trimmed) return;
+    if (uniqueParts.includes(trimmed)) return;
+    uniqueParts.push(trimmed);
+  });
+
+  return {
+    title,
+    text: uniqueParts.slice(0, 2).join(" "),
+    chips,
+  };
+}
+
+function renderTriviaSection(content) {
+  if (
+    !elements.postGameTriviaSection ||
+    !elements.postGameTriviaTitle ||
+    !elements.postGameTriviaText ||
+    !elements.postGameTriviaChips
+  ) {
+    return;
+  }
+
+  const hasTitle = !!content?.title;
+  const hasText = !!content?.text;
+  const hasChips = Array.isArray(content?.chips) && content.chips.length > 0;
+
+  if (!hasTitle && !hasText && !hasChips) {
+    elements.postGameTriviaSection.hidden = true;
+    elements.postGameTriviaTitle.textContent = "";
+    elements.postGameTriviaText.textContent = "";
+    elements.postGameTriviaChips.innerHTML = "";
+    return;
+  }
+
+  elements.postGameTriviaSection.hidden = false;
+  elements.postGameTriviaTitle.textContent = content.title || "Learn more";
+  elements.postGameTriviaText.textContent = content.text || "";
+
+  elements.postGameTriviaChips.innerHTML = (content.chips || [])
+    .map((chip) => `<span class="postgame-chip">${chip}</span>`)
+    .join("");
+}
 function getPostGameContent() {
   const puzzle = state.currentPuzzle?.verse;
   if (!puzzle) return null;
   const book = getBookByName(puzzle.book);
+
   return {
-    title: state.status === "won" ? "Well done" : "Puzzle complete",
+    title: state.status === "won" ? "Well done" : "Game over",
     badge: state.status === "won" ? "Solved" : "Failed",
     reference: puzzle.reference,
     bookName: puzzle.book,
@@ -988,6 +1106,7 @@ function getPostGameContent() {
     introTitle: book?.bookIntroTitle ?? "",
     introText: book?.bookIntroText ?? "",
     devotionalText: puzzle.devotional ?? book?.devotionalText ?? "",
+    trivia: buildTriviaContent(puzzle, book),
   };
 }
 
@@ -1012,6 +1131,8 @@ function renderPostGamePanel() {
   elements.postGameIntroTitle.textContent = content.introTitle;
   elements.postGameIntroText.textContent = content.introText;
   elements.postGameNextBtn.hidden = !(state.mode === "practice");
+
+  renderTriviaSection(content.trivia);
 
   elements.postGameModal.dataset.open = "true";
   elements.postGameModal.setAttribute("aria-hidden", "false");
