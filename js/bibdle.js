@@ -12,6 +12,14 @@ import {
   getDoc,
   setDoc,
   serverTimestamp,
+  collection,
+  query,
+  where,
+  orderBy,
+  limit,
+  getDocs,
+  runTransaction,
+  increment,
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 import { books } from "./data/books.js";
 import { verses } from "./data/verses.js";
@@ -144,6 +152,12 @@ const state = {
     user: null,
     syncing: false,
   },
+  leaderboard: {
+    loading: false,
+    stats: null,
+    entries: [],
+    userRank: null,
+  },
 };
 
 const elements = {
@@ -228,12 +242,75 @@ const elements = {
   archiveSummary: document.getElementById("archiveSummary"),
   archiveGrid: document.getElementById("archiveGrid"),
   archiveDetails: document.getElementById("archiveDetails"),
+
+  leaderboardBtn: document.getElementById("leaderboardBtn"),
+  leaderboardModal: document.getElementById("leaderboardModal"),
+  closeLeaderboardBtn: document.getElementById("closeLeaderboardBtn"),
+  leaderboardSummary: document.getElementById("leaderboardSummary"),
+  leaderboardList: document.getElementById("leaderboardList"),
+  leaderboardUserRank: document.getElementById("leaderboardUserRank"),
 };
 
 function getSystemTheme() {
   return window.matchMedia("(prefers-color-scheme: dark)").matches
     ? "dark"
     : "light";
+}
+
+const LEADERBOARD_LIMIT = 10;
+
+function getDailyDateKey() {
+  if (state.currentPuzzle?.mode === "daily" && state.currentPuzzle?.date) {
+    return state.currentPuzzle.date;
+  }
+
+  return getTodayPuzzleDate();
+}
+
+function getDailyPuzzleId() {
+  return (
+    state.currentPuzzle?.verse?.id ||
+    state.currentPuzzle?.id ||
+    state.currentPuzzle?.verse?.reference ||
+    state.currentPuzzle?.verse?.book ||
+    getDailyDateKey()
+  );
+}
+
+function getDailyStatsDocRef(dateKey) {
+  if (!firebaseDb || !dateKey) return null;
+  return doc(firebaseDb, "dailyStats", dateKey);
+}
+
+function getDailyScoresCollectionRef(dateKey) {
+  if (!firebaseDb || !dateKey) return null;
+  return collection(firebaseDb, "dailyStats", dateKey, "scores");
+}
+
+function sanitizeLeaderboardName(name) {
+  const raw = typeof name === "string" ? name.trim() : "";
+  if (!raw) return "Anonymous Disciple";
+  const cleaned = raw.replace(/\s+/g, " ").replace(/[<>]/g, "");
+  return cleaned.length > 24 ? `${cleaned.slice(0, 24)}…` : cleaned;
+}
+
+function formatLeaderboardTime(value) {
+  if (!value) return "—";
+  try {
+    const date =
+      typeof value?.toDate === "function" ? value.toDate() : new Date(value);
+    return date.toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return "—";
+  }
+}
+
+function getLeaderboardEntryDocRef(dateKey, uid) {
+  if (!firebaseDb || !dateKey || !uid) return null;
+  return doc(firebaseDb, "dailyStats", dateKey, "scores", uid);
 }
 
 function getUserProfileRef(uid) {
@@ -672,6 +749,293 @@ async function syncCurrentStateToCloudIfSignedIn() {
   } catch (error) {
     console.error("Background cloud sync failed:", error);
   }
+}
+
+async function fetchDailyGlobalStats(dateKey) {
+  console.log("Fetching daily stats for", dateKey);
+  const statsRef = getDailyStatsDocRef(dateKey);
+  if (!statsRef) return null;
+
+  const snapshot = await getDoc(statsRef);
+  console.log("Daily stats exists:", snapshot.exists());
+  return snapshot.exists() ? snapshot.data() : null;
+}
+
+async function fetchLeaderboardTopEntries(dateKey) {
+  console.log("Fetching leaderboard top entries for", dateKey);
+  const scoresRef = getDailyScoresCollectionRef(dateKey);
+  if (!scoresRef) return [];
+
+  const q = query(
+    scoresRef,
+    where("result", "==", "won"),
+    orderBy("guesses", "asc"),
+    orderBy("completedAt", "asc"),
+    limit(10),
+  );
+
+  const snapshot = await getDocs(q);
+  console.log("Top entries count:", snapshot.size);
+
+  return snapshot.docs.map((docSnap, index) => ({
+    id: docSnap.id,
+    rank: index + 1,
+    ...docSnap.data(),
+  }));
+}
+
+async function fetchCurrentUserRank(dateKey, uid) {
+  console.log("Fetching user rank for", dateKey, uid);
+  if (!uid) return null;
+
+  const entryRef = getLeaderboardEntryDocRef(dateKey, uid);
+  if (!entryRef) return null;
+
+  const entrySnap = await getDoc(entryRef);
+  if (!entrySnap.exists()) return null;
+
+  const entry = entrySnap.data();
+
+  if (entry.result !== "won") {
+    return {
+      rank: null,
+      ...entry,
+    };
+  }
+
+  const scoresRef = getDailyScoresCollectionRef(dateKey);
+  if (!scoresRef) return { rank: null, ...entry };
+
+  const betterQuery = query(
+    scoresRef,
+    where("result", "==", "won"),
+    where("guesses", "<", entry.guesses),
+  );
+
+  const sameGuessEarlierQuery = query(
+    scoresRef,
+    where("result", "==", "won"),
+    where("guesses", "==", entry.guesses),
+    where("completedAt", "<", entry.completedAt),
+  );
+
+  let betterCount = 0;
+  let earlierCount = 0;
+
+  try {
+    const [betterSnap, earlierSnap] = await Promise.all([
+      getDocs(betterQuery),
+      getDocs(sameGuessEarlierQuery),
+    ]);
+    betterCount = betterSnap.size;
+    earlierCount = earlierSnap.size;
+  } catch {
+    return { rank: null, ...entry };
+  }
+
+  return {
+    rank: betterCount + earlierCount + 1,
+    ...entry,
+  };
+}
+
+function renderLeaderboardSummary(stats) {
+  if (!elements.leaderboardSummary) return;
+
+  const players = stats?.players || 0;
+  const solvers = stats?.solvers || 0;
+  const averageWinningGuesses =
+    typeof stats?.averageWinningGuesses === "number"
+      ? stats.averageWinningGuesses
+      : 0;
+  const solveRate = players > 0 ? Math.round((solvers / players) * 100) : 0;
+
+  elements.leaderboardSummary.innerHTML = `
+    <div class="leaderboard-kpis">
+      <div class="leaderboard-kpi">
+        <span class="leaderboard-kpi-value">${players}</span>
+        <span class="leaderboard-kpi-label">Players today</span>
+      </div>
+      <div class="leaderboard-kpi">
+        <span class="leaderboard-kpi-value">${solvers}</span>
+        <span class="leaderboard-kpi-label">Solved today</span>
+      </div>
+      <div class="leaderboard-kpi">
+        <span class="leaderboard-kpi-value">${solveRate}%</span>
+        <span class="leaderboard-kpi-label">Solve rate</span>
+      </div>
+      <div class="leaderboard-kpi">
+        <span class="leaderboard-kpi-value">${solvers > 0 ? averageWinningGuesses.toFixed(2) : "—"
+    }</span>
+        <span class="leaderboard-kpi-label">Avg. winning guesses</span>
+      </div>
+    </div>
+    <p class="leaderboard-meta-note">
+      Global daily metrics for the current puzzle.
+    </p>
+  `;
+}
+
+async function submitDailyResultToLeaderboard(outcome) {
+  if (
+    !state.auth.enabled ||
+    !firebaseDb ||
+    !state.auth.user?.uid ||
+    state.mode !== "daily"
+  ) {
+    return;
+  }
+
+  const dateKey = getDailyDateKey();
+  const uid = state.auth.user.uid;
+  const statsRef = getDailyStatsDocRef(dateKey);
+  const entryRef = getLeaderboardEntryDocRef(dateKey, uid);
+
+  if (!statsRef || !entryRef) return;
+
+  const displayName = sanitizeLeaderboardName(
+    state.auth.user.displayName || "",
+  );
+
+  const puzzleId = getDailyPuzzleId();
+  const isWin = outcome?.result === "won";
+  const guesses = Number.isInteger(outcome?.guesses) ? outcome.guesses : null;
+
+  try {
+    await runTransaction(firebaseDb, async (transaction) => {
+      const existingEntrySnap = await transaction.get(entryRef);
+
+      if (existingEntrySnap.exists()) {
+        return;
+      }
+
+      const statsSnap = await transaction.get(statsRef);
+
+      const nextStats = statsSnap.exists()
+        ? statsSnap.data()
+        : {
+          date: dateKey,
+          puzzleId,
+          players: 0,
+          solvers: 0,
+          totalWinningGuesses: 0,
+          averageWinningGuesses: 0,
+        };
+
+      transaction.set(entryRef, {
+        uid,
+        displayName,
+        result: isWin ? "won" : "lost",
+        guesses: isWin ? guesses : null,
+        completedAt: serverTimestamp(),
+        puzzleId,
+      });
+
+      const players = (nextStats.players || 0) + 1;
+      const solvers = (nextStats.solvers || 0) + (isWin ? 1 : 0);
+      const totalWinningGuesses =
+        (nextStats.totalWinningGuesses || 0) + (isWin && guesses ? guesses : 0);
+
+      transaction.set(
+        statsRef,
+        {
+          date: dateKey,
+          puzzleId,
+          players,
+          solvers,
+          totalWinningGuesses,
+          averageWinningGuesses:
+            solvers > 0 ? totalWinningGuesses / solvers : 0,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true },
+      );
+    });
+  } catch (error) {
+    console.error("Leaderboard submission failed:", error);
+  }
+}
+
+function renderLeaderboardList(entries) {
+  if (!elements.leaderboardList) return;
+
+  if (!entries || entries.length === 0) {
+    elements.leaderboardList.innerHTML = `
+      <div class="leaderboard-empty">
+        No winning scores have been submitted yet for today.
+      </div>
+    `;
+    return;
+  }
+
+  const currentUid = state.auth.user?.uid || null;
+
+  elements.leaderboardList.innerHTML = `
+    <div class="leaderboard-list-shell">
+      ${entries
+      .map((entry, index) => {
+        const isCurrentUser = currentUid && entry.uid === currentUid;
+        const name = sanitizeLeaderboardName(entry.displayName);
+        return `
+            <div class="leaderboard-row${isCurrentUser ? " is-current-user" : ""}">
+              <div class="leaderboard-rank">#${index + 1}</div>
+              <div class="leaderboard-name">${name}</div>
+              <div class="leaderboard-guesses">${entry.guesses} guesses</div>
+              <div class="leaderboard-time">${formatLeaderboardTime(entry.completedAt)}</div>
+            </div>
+          `;
+      })
+      .join("")}
+    </div>
+  `;
+}
+
+function renderCurrentUserRank(rankEntry) {
+  if (!elements.leaderboardUserRank) return;
+
+  if (!state.auth.user) {
+    elements.leaderboardUserRank.innerHTML = `
+      <div class="leaderboard-empty">
+        Sign in to submit your Daily result and see your personal placement.
+      </div>
+    `;
+    return;
+  }
+
+  if (!rankEntry) {
+    elements.leaderboardUserRank.innerHTML = `
+      <div class="leaderboard-empty">
+        You have not submitted a Daily result for this puzzle yet.
+      </div>
+    `;
+    return;
+  }
+
+  const rankLabel =
+    rankEntry.result === "won" && rankEntry.rank
+      ? `#${rankEntry.rank}`
+      : "Recorded";
+
+  elements.leaderboardUserRank.innerHTML = `
+    <div class="leaderboard-user-rank-card">
+      <div>
+        <div class="label">Your place</div>
+        <div class="value">${rankLabel}</div>
+      </div>
+      <div>
+        <div class="label">Result</div>
+        <div class="value">${rankEntry.result === "won" ? "Solved" : "Played"}</div>
+      </div>
+      <div>
+        <div class="label">Guesses</div>
+        <div class="value">${rankEntry.guesses ?? "—"}</div>
+      </div>
+      <div>
+        <div class="label">Time</div>
+        <div class="value">${formatLeaderboardTime(rankEntry.completedAt)}</div>
+      </div>
+    </div>
+  `;
 }
 
 function clearSavedProgress() {
@@ -1134,6 +1498,18 @@ function recordPuzzleCompletion(outcome) {
 
     updateBookStats(outcome);
     saveStats();
+
+    submitDailyResultToLeaderboard({
+      result: outcome,
+      guesses: outcome === "won" ? state.guesses.length : null,
+      dateKey: completionDate || getTodayKey(),
+      puzzleId:
+        state.currentPuzzle.reference ||
+        state.currentPuzzle.book ||
+        completionDate ||
+        getTodayKey(),
+    });
+
     return;
   }
 
@@ -2022,6 +2398,81 @@ function renderArchiveDetails(bookKey = "") {
   `;
 }
 
+async function openLeaderboardModal() {
+  if (!elements.leaderboardModal) return;
+
+  elements.leaderboardModal.dataset.open = "true";
+  elements.leaderboardModal.setAttribute("aria-hidden", "false");
+
+  elements.leaderboardSummary.innerHTML = `
+    <div class="leaderboard-empty">Loading global daily stats…</div>
+  `;
+  elements.leaderboardList.innerHTML = "";
+  elements.leaderboardUserRank.innerHTML = "";
+
+  if (!state.auth.enabled || !firebaseDb) {
+    elements.leaderboardSummary.innerHTML = `
+      <div class="leaderboard-empty">Global stats are unavailable right now.</div>
+    `;
+    elements.leaderboardList.innerHTML = `
+      <div class="leaderboard-empty">Firebase is not available, but local gameplay still works.</div>
+    `;
+    renderCurrentUserRank(null);
+    return;
+  }
+
+  const dateKey = getDailyDateKey();
+
+  try {
+    const [stats, entries] = await Promise.all([
+      fetchDailyGlobalStats(dateKey),
+      fetchLeaderboardTopEntries(dateKey),
+    ]);
+
+    state.leaderboard.stats = stats;
+    state.leaderboard.entries = entries;
+
+    renderLeaderboardSummary(stats);
+    renderLeaderboardList(entries);
+  } catch (error) {
+    console.error("Leaderboard stats/list load failed:", error);
+    elements.leaderboardSummary.innerHTML = `
+      <div class="leaderboard-empty">Could not load today’s global stats.</div>
+    `;
+    elements.leaderboardList.innerHTML = `
+      <div class="leaderboard-empty">Please try again later.</div>
+    `;
+    renderCurrentUserRank(null);
+    return;
+  }
+
+  if (!state.auth.user?.uid) {
+    renderCurrentUserRank(null);
+    return;
+  }
+
+  elements.leaderboardUserRank.innerHTML = `
+    <div class="leaderboard-empty">Loading your placement…</div>
+  `;
+
+  try {
+    const userRank = await fetchCurrentUserRank(dateKey, state.auth.user.uid);
+    state.leaderboard.userRank = userRank;
+    renderCurrentUserRank(userRank);
+  } catch (error) {
+    console.error("Leaderboard rank load failed:", error);
+    elements.leaderboardUserRank.innerHTML = `
+      <div class="leaderboard-empty">Could not load your personal placement yet.</div>
+    `;
+  }
+}
+
+function closeLeaderboardModal() {
+  if (!elements.leaderboardModal) return;
+  elements.leaderboardModal.dataset.open = "false";
+  elements.leaderboardModal.setAttribute("aria-hidden", "true");
+}
+
 function openArchiveModal() {
   if (!elements.archiveModal) return;
 
@@ -2848,6 +3299,9 @@ function bindEvents() {
       closePostGamePanel();
     } else if (elements.archiveModal?.dataset.open === "true") {
       closeArchiveModal();
+    } else if (elements.leaderboardModal?.dataset.open === "true") {
+      closeLeaderboardModal();
+      return;
     }
   });
 
@@ -2871,6 +3325,22 @@ function bindEvents() {
 
   if (elements.signOutBtn) {
     elements.signOutBtn.addEventListener("click", handleSignOut);
+  }
+
+  if (elements.leaderboardBtn) {
+    elements.leaderboardBtn.addEventListener("click", openLeaderboardModal);
+  }
+
+  if (elements.closeLeaderboardBtn) {
+    elements.closeLeaderboardBtn.addEventListener("click", closeLeaderboardModal);
+  }
+
+  if (elements.leaderboardModal) {
+    elements.leaderboardModal.addEventListener("click", (event) => {
+      if (event.target === elements.leaderboardModal) {
+        closeLeaderboardModal();
+      }
+    });
   }
 }
 

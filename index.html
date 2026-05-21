@@ -107,6 +107,7 @@
         <div class="pill-actions">
           <button type="button" class="pill-btn" id="statsBtn">See stats</button>
           <button type="button" class="pill-btn" id="archiveBtn">Progress</button>
+          <button type="button" class="pill-btn" id="leaderboardBtn">Leaderboard</button>
           <button type="button" class="pill-btn" id="helpBtn">How to play</button>
           <button type="button" class="pill-btn" id="shareBtn">Copy result</button>
           <button type="button" class="pill-btn primary" id="nextPracticeBtn" hidden>Next practice puzzle</button>
@@ -184,6 +185,7 @@
       </div>
     </div>
   </div>
+
   <div class="modal-backdrop" id="statsModal" data-open="false" aria-hidden="true">
     <div class="modal postgame-modal" role="dialog" aria-modal="true" aria-labelledby="statsTitle"
       aria-describedby="statsBody">
@@ -250,6 +252,20 @@
 
       <div class="pill-actions postgame-actions">
         <button type="button" class="pill-btn primary" id="closeStatsBtn">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="leaderboardModal" data-open="false" aria-hidden="true">
+    <div class="modal leaderboard-modal" role="dialog" aria-modal="true" aria-labelledby="leaderboardTitle">
+      <h2 id="leaderboardTitle">Global daily stats</h2>
+
+      <div class="leaderboard-summary" id="leaderboardSummary"></div>
+      <div class="leaderboard-list" id="leaderboardList"></div>
+      <div class="leaderboard-user-rank" id="leaderboardUserRank"></div>
+
+      <div class="pill-actions modal-actions-end">
+        <button type="button" class="pill-btn primary" id="closeLeaderboardBtn">Close</button>
       </div>
     </div>
   </div>
