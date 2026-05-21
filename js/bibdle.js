@@ -1,3 +1,18 @@
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
+import {
+  getAuth,
+  GoogleAuthProvider,
+  onAuthStateChanged,
+  signInWithPopup,
+  signOut as firebaseSignOut,
+} from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
+import {
+  getFirestore,
+  doc,
+  getDoc,
+  setDoc,
+  serverTimestamp,
+} from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 import { books } from "./data/books.js";
 import { verses } from "./data/verses.js";
 
@@ -54,6 +69,30 @@ const CONFIG = {
   },
 };
 
+const FIREBASE_CONFIG = {
+  // SECURITY NOTE:
+  // Firestore Security Rules must restrict reads/writes so a signed-in user
+  // can only access their own document, e.g. users/{uid}/profile/main where
+  // request.auth.uid == uid.
+
+  // TODO: Replace these placeholder values with your real Firebase Web App config.
+  apiKey: "AIzaSyC8Mo3GyKwFLvJU5npB_ZwlApJkDqnRrMY",
+  authDomain: "bibdle-db7ae.firebaseapp.com",
+  projectId: "bibdle-db7ae",
+  storageBucket: "bibdle-db7ae.firebasestorage.app",
+  messagingSenderId: "278845724002",
+  appId: "1:278845724002:web:0842b72515b58791d0883b",
+};
+
+const FIREBASE_ENABLED =
+  FIREBASE_CONFIG.apiKey !== "REPLACE_ME" &&
+  FIREBASE_CONFIG.projectId !== "REPLACE_ME";
+
+let firebaseApp = null;
+let firebaseAuth = null;
+let firebaseDb = null;
+let firebaseGoogleProvider = null;
+
 const STREAK_BADGES = [
   { id: "streak-3", threshold: 3, label: "3-Day Streak" },
   { id: "streak-7", threshold: 7, label: "7-Day Streak" },
@@ -99,9 +138,19 @@ const state = {
     },
     bookStats: {},
   },
+  auth: {
+    ready: false,
+    enabled: false,
+    user: null,
+    syncing: false,
+  },
 };
 
 const elements = {
+  signInBtn: document.getElementById("signInBtn"),
+  signOutBtn: document.getElementById("signOutBtn"),
+  authStatus: document.getElementById("authStatus"),
+
   verseText: document.getElementById("verseText"),
   dateLabel: document.getElementById("dateLabel"),
   countdownTimer: document.getElementById("countdownTimer"),
@@ -185,6 +234,161 @@ function getSystemTheme() {
   return window.matchMedia("(prefers-color-scheme: dark)").matches
     ? "dark"
     : "light";
+}
+
+function getUserProfileRef(uid) {
+  if (!firebaseDb || !uid) return null;
+  return doc(firebaseDb, "users", uid, "profile", "main");
+}
+
+function getLocalPreferencesSnapshot() {
+  return JSON.parse(JSON.stringify(state.preferences));
+}
+
+function getLocalStatsSnapshot() {
+  return JSON.parse(JSON.stringify(state.stats));
+}
+
+function sanitizeCloudProfile(data) {
+  if (!data || typeof data !== "object") {
+    return { preferences: null, stats: null };
+  }
+
+  return {
+    preferences:
+      data.preferences && typeof data.preferences === "object"
+        ? data.preferences
+        : null,
+    stats: data.stats && typeof data.stats === "object" ? data.stats : null,
+  };
+}
+
+function mergePreferenceData(localPreferences, cloudPreferences) {
+  if (!cloudPreferences || typeof cloudPreferences !== "object") {
+    return { ...localPreferences };
+  }
+
+  return {
+    ...localPreferences,
+    ...cloudPreferences,
+  };
+}
+
+function mergeGuessDistribution(localValue, cloudValue) {
+  const output = {};
+  const keys = new Set([
+    ...Object.keys(localValue || {}),
+    ...Object.keys(cloudValue || {}),
+  ]);
+
+  keys.forEach((key) => {
+    const localCount = Number.isInteger(localValue?.[key]) ? localValue[key] : 0;
+    const cloudCount = Number.isInteger(cloudValue?.[key]) ? cloudValue[key] : 0;
+    output[key] = Math.max(localCount, cloudCount);
+  });
+
+  return output;
+}
+
+function mergeBookStatsMap(localMap, cloudMap) {
+  const output = {};
+  const keys = new Set([
+    ...Object.keys(localMap || {}),
+    ...Object.keys(cloudMap || {}),
+  ]);
+
+  keys.forEach((key) => {
+    const localEntry = localMap?.[key] || null;
+    const cloudEntry = cloudMap?.[key] || null;
+
+    const localBest =
+      Number.isInteger(localEntry?.bestAttempts) && localEntry.bestAttempts > 0
+        ? localEntry.bestAttempts
+        : null;
+
+    const cloudBest =
+      Number.isInteger(cloudEntry?.bestAttempts) && cloudEntry.bestAttempts > 0
+        ? cloudEntry.bestAttempts
+        : null;
+
+    output[key] = {
+      plays: Math.max(localEntry?.plays || 0, cloudEntry?.plays || 0),
+      solves: Math.max(localEntry?.solves || 0, cloudEntry?.solves || 0),
+      bestAttempts:
+        localBest === null
+          ? cloudBest
+          : cloudBest === null
+            ? localBest
+            : Math.min(localBest, cloudBest),
+      totalAttempts: Math.max(
+        localEntry?.totalAttempts || 0,
+        cloudEntry?.totalAttempts || 0,
+      ),
+      lastSolvedDate:
+        [localEntry?.lastSolvedDate, cloudEntry?.lastSolvedDate]
+          .filter(Boolean)
+          .sort()
+          .at(-1) || null,
+    };
+  });
+
+  return output;
+}
+
+function mergeStatsData(localStats, cloudStats) {
+  if (!cloudStats || typeof cloudStats !== "object") {
+    return JSON.parse(JSON.stringify(localStats));
+  }
+
+  const localDaily = localStats?.daily || {};
+  const cloudDaily = cloudStats?.daily || {};
+  const localPractice = localStats?.practice || {};
+  const cloudPractice = cloudStats?.practice || {};
+
+  return {
+    daily: {
+      played: Math.max(localDaily.played || 0, cloudDaily.played || 0),
+      won: Math.max(localDaily.won || 0, cloudDaily.won || 0),
+      lost: Math.max(localDaily.lost || 0, cloudDaily.lost || 0),
+      currentStreak: Math.max(
+        localDaily.currentStreak || 0,
+        cloudDaily.currentStreak || 0,
+      ),
+      bestStreak: Math.max(localDaily.bestStreak || 0, cloudDaily.bestStreak || 0),
+      guessDistribution: mergeGuessDistribution(
+        localDaily.guessDistribution,
+        cloudDaily.guessDistribution,
+      ),
+      lastDailySolvedDate:
+        [localDaily.lastDailySolvedDate, cloudDaily.lastDailySolvedDate]
+          .filter(Boolean)
+          .sort()
+          .at(-1) || null,
+      earnedBadges: Array.from(
+        new Set([
+          ...(Array.isArray(localDaily.earnedBadges) ? localDaily.earnedBadges : []),
+          ...(Array.isArray(cloudDaily.earnedBadges) ? cloudDaily.earnedBadges : []),
+        ]),
+      ),
+    },
+    practice: {
+      played: Math.max(localPractice.played || 0, cloudPractice.played || 0),
+      won: Math.max(localPractice.won || 0, cloudPractice.won || 0),
+      lost: Math.max(localPractice.lost || 0, cloudPractice.lost || 0),
+      guessDistribution: mergeGuessDistribution(
+        localPractice.guessDistribution,
+        cloudPractice.guessDistribution,
+      ),
+    },
+    bookStats: mergeBookStatsMap(localStats?.bookStats, cloudStats?.bookStats),
+  };
+}
+
+function mergeLocalAndCloudData(localData, cloudData) {
+  return {
+    preferences: mergePreferenceData(localData.preferences, cloudData.preferences),
+    stats: mergeStatsData(localData.stats, cloudData.stats),
+  };
 }
 
 function normalizeBookName(value) {
@@ -457,6 +661,19 @@ function buildCurrentPuzzle(mode = "daily") {
   };
 }
 
+async function syncCurrentStateToCloudIfSignedIn() {
+  if (!state.auth.enabled || !state.auth.user?.uid || !firebaseDb) return;
+
+  try {
+    await writeMergedDataToCloud(state.auth.user.uid, {
+      preferences: getLocalPreferencesSnapshot(),
+      stats: getLocalStatsSnapshot(),
+    });
+  } catch (error) {
+    console.error("Background cloud sync failed:", error);
+  }
+}
+
 function clearSavedProgress() {
   try {
     localStorage.removeItem(CONFIG.storageKeys.progress);
@@ -583,6 +800,8 @@ function savePreferences() {
       JSON.stringify(payload),
     );
   } catch { }
+
+  syncCurrentStateToCloudIfSignedIn();
 }
 
 function loadPreferences() {
@@ -663,15 +882,17 @@ function saveStats() {
     },
     bookStats:
       state.stats.bookStats &&
-      typeof state.stats.bookStats === "object" &&
-      !Array.isArray(state.stats.bookStats)
+        typeof state.stats.bookStats === "object" &&
+        !Array.isArray(state.stats.bookStats)
         ? state.stats.bookStats
         : {},
   };
 
   try {
     localStorage.setItem(CONFIG.storageKeys.stats, JSON.stringify(payload));
-  } catch {}
+  } catch { }
+
+  syncCurrentStateToCloudIfSignedIn();
 }
 
 function loadStats() {
@@ -756,13 +977,13 @@ function loadStats() {
           guessDistribution: sanitizeGuessDistribution(saved.daily.guessDistribution),
           lastDailySolvedDate:
             typeof saved.daily.lastDailySolvedDate === "string" ||
-            saved.daily.lastDailySolvedDate === null
+              saved.daily.lastDailySolvedDate === null
               ? saved.daily.lastDailySolvedDate
               : null,
           earnedBadges: Array.isArray(saved.daily.earnedBadges)
             ? saved.daily.earnedBadges.filter((badgeId) =>
-                STREAK_BADGES.some((badge) => badge.id === badgeId),
-              )
+              STREAK_BADGES.some((badge) => badge.id === badgeId),
+            )
             : [],
         },
         practice: {
@@ -786,13 +1007,13 @@ function loadStats() {
         guessDistribution: sanitizeGuessDistribution(saved?.guessDistribution),
         lastDailySolvedDate:
           typeof saved?.lastDailySolvedDate === "string" ||
-          saved?.lastDailySolvedDate === null
+            saved?.lastDailySolvedDate === null
             ? saved.lastDailySolvedDate
             : null,
         earnedBadges: Array.isArray(saved?.earnedBadges)
           ? saved.earnedBadges.filter((badgeId) =>
-              STREAK_BADGES.some((badge) => badge.id === badgeId),
-            )
+            STREAK_BADGES.some((badge) => badge.id === badgeId),
+          )
           : [],
       },
       practice: defaultPractice,
@@ -956,6 +1177,55 @@ function renderThemeToggle() {
 function initTheme() {
   applyTheme(state.preferences.theme);
   renderThemeToggle();
+}
+
+function setAuthStatus(message) {
+  if (elements.authStatus) {
+    elements.authStatus.textContent = message;
+  }
+}
+
+function renderAuthUI() {
+  const { enabled, ready, user, syncing } = state.auth;
+
+  if (!elements.signInBtn || !elements.signOutBtn || !elements.authStatus) return;
+
+  if (!enabled) {
+    elements.signInBtn.hidden = false;
+    elements.signInBtn.disabled = true;
+    elements.signOutBtn.hidden = true;
+    setAuthStatus(ready ? "Sign-in unavailable" : "Playing locally");
+    return;
+  }
+
+  if (!ready) {
+    elements.signInBtn.hidden = false;
+    elements.signInBtn.disabled = true;
+    elements.signOutBtn.hidden = true;
+    setAuthStatus("Checking sign-in…");
+    return;
+  }
+
+  if (syncing) {
+    elements.signInBtn.hidden = true;
+    elements.signOutBtn.hidden = false;
+    elements.signOutBtn.disabled = true;
+    setAuthStatus("Syncing…");
+    return;
+  }
+
+  if (user) {
+    elements.signInBtn.hidden = true;
+    elements.signOutBtn.hidden = false;
+    elements.signOutBtn.disabled = false;
+    setAuthStatus(`Signed in as ${user.displayName || user.email || "Google user"}`);
+    return;
+  }
+
+  elements.signInBtn.hidden = false;
+  elements.signInBtn.disabled = false;
+  elements.signOutBtn.hidden = true;
+  setAuthStatus("Playing locally");
 }
 
 function formatDate() {
@@ -2328,6 +2598,161 @@ function bindBackdropClose(modal, onClose) {
   });
 }
 
+async function writeMergedDataToCloud(uid, mergedData) {
+  const profileRef = getUserProfileRef(uid);
+  if (!profileRef) return;
+
+  await setDoc(
+    profileRef,
+    {
+      uid,
+      preferences: mergedData.preferences,
+      stats: mergedData.stats,
+      updatedAt: serverTimestamp(),
+    },
+    { merge: true },
+  );
+}
+
+async function loadCloudDataToLocal(user) {
+  if (!user?.uid) return false;
+
+  const profileRef = getUserProfileRef(user.uid);
+  if (!profileRef) return false;
+
+  const snapshot = await getDoc(profileRef);
+
+  if (!snapshot.exists()) {
+    return false;
+  }
+
+  const cloudData = sanitizeCloudProfile(snapshot.data());
+  const localData = {
+    preferences: getLocalPreferencesSnapshot(),
+    stats: getLocalStatsSnapshot(),
+  };
+
+  const mergedData = mergeLocalAndCloudData(localData, cloudData);
+
+  state.preferences = mergedData.preferences;
+  state.stats = mergedData.stats;
+
+  savePreferences();
+  saveStats();
+  await writeMergedDataToCloud(user.uid, mergedData);
+
+  applyAccessibilityPreferences();
+  initTheme();
+  syncPreferenceControls();
+  renderPuzzleView();
+  renderStatsModal();
+
+  return true;
+}
+
+async function syncLocalDataToCloud(user) {
+  if (!user?.uid) return;
+
+  const mergedData = {
+    preferences: getLocalPreferencesSnapshot(),
+    stats: getLocalStatsSnapshot(),
+  };
+
+  await writeMergedDataToCloud(user.uid, mergedData);
+}
+
+async function handleAuthStateChange(user) {
+  state.auth.user = user || null;
+  state.auth.ready = true;
+
+  if (!user) {
+    state.auth.syncing = false;
+    renderAuthUI();
+    return;
+  }
+
+  state.auth.syncing = true;
+  renderAuthUI();
+
+  try {
+    const hadCloudProfile = await loadCloudDataToLocal(user);
+
+    if (!hadCloudProfile) {
+      await syncLocalDataToCloud(user);
+    }
+
+    setAuthStatus(`Signed in as ${user.displayName || user.email || "Google user"}`);
+  } catch (error) {
+    console.error("Auth sync failed:", error);
+    setAuthStatus("Signed in, cloud sync unavailable");
+  } finally {
+    state.auth.syncing = false;
+    renderAuthUI();
+  }
+}
+
+function initFirebaseAuth() {
+  if (!FIREBASE_ENABLED) {
+    state.auth.ready = true;
+    state.auth.enabled = false;
+    renderAuthUI();
+    return;
+  }
+
+  try {
+    firebaseApp = initializeApp(FIREBASE_CONFIG);
+    firebaseAuth = getAuth(firebaseApp);
+    firebaseDb = getFirestore(firebaseApp);
+    firebaseGoogleProvider = new GoogleAuthProvider();
+
+    state.auth.enabled = true;
+    renderAuthUI();
+
+    onAuthStateChanged(firebaseAuth, (user) => {
+      handleAuthStateChange(user);
+    });
+  } catch (error) {
+    console.error("Firebase init failed:", error);
+    state.auth.ready = true;
+    state.auth.enabled = false;
+    renderAuthUI();
+  }
+}
+
+async function handleSignIn() {
+  if (!state.auth.enabled || !firebaseAuth || !firebaseGoogleProvider) {
+    setAuthStatus("Sign-in unavailable");
+    return;
+  }
+
+  try {
+    state.auth.syncing = true;
+    renderAuthUI();
+    await signInWithPopup(firebaseAuth, firebaseGoogleProvider);
+  } catch (error) {
+    console.error("Sign-in failed:", error);
+    state.auth.syncing = false;
+    renderAuthUI();
+    setAuthStatus("Google sign-in failed");
+    renderStatus("Google sign-in failed. You can keep playing locally.");
+  }
+}
+
+async function handleSignOut() {
+  if (!state.auth.enabled || !firebaseAuth) {
+    setAuthStatus("Playing locally");
+    return;
+  }
+
+  try {
+    await firebaseSignOut(firebaseAuth);
+    setAuthStatus("Playing locally");
+  } catch (error) {
+    console.error("Sign-out failed:", error);
+    setAuthStatus("Sign-out failed");
+  }
+}
+
 function bindEvents() {
   elements.guessForm.addEventListener("submit", handleGuessSubmit);
   elements.guessInput.addEventListener("input", handleGuessInput);
@@ -2439,6 +2864,14 @@ function bindEvents() {
   }
 
   bindBackdropClose(elements.archiveModal, closeArchiveModal);
+
+  if (elements.signInBtn) {
+    elements.signInBtn.addEventListener("click", handleSignIn);
+  }
+
+  if (elements.signOutBtn) {
+    elements.signOutBtn.addEventListener("click", handleSignOut);
+  }
 }
 
 function initGame() {
@@ -2481,7 +2914,9 @@ function init() {
   loadStats();
   initTheme();
   syncPreferenceControls();
+  renderAuthUI();
   bindEvents();
+  initFirebaseAuth();
 
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) {

@@ -241,6 +241,43 @@ input::placeholder {
     gap: var(--space-3);
 }
 
+.auth-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.auth-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0.55rem 0.85rem;
+  font-family: var(--font-ui);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+  background: var(--glass-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  backdrop-filter: blur(14px);
+  white-space: nowrap;
+}
+
+@media (max-width: 720px) {
+  .auth-controls {
+    justify-content: center;
+    width: 100%;
+  }
+
+  .auth-status {
+    white-space: normal;
+    text-align: center;
+  }
+}
+
 .theme-toggle,
 .control-select,
 .pill-btn,
