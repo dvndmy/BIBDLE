@@ -238,7 +238,9 @@ const elements = {
   postGameTriviaTitle: document.getElementById("postGameTriviaTitle"),
   postGameTriviaText: document.getElementById("postGameTriviaText"),
   postGameTriviaChips: document.getElementById("postGameTriviaChips"),
-
+postGameLeaderboardSection: document.getElementById("postGameLeaderboardSection"),
+postGameLeaderboardRank: document.getElementById("postGameLeaderboardRank"),
+postGameLeaderboardBtn: document.getElementById("postGameLeaderboardBtn"),
   archiveBtn: document.getElementById("archiveBtn"),
   archiveModal: document.getElementById("archiveModal"),
   closeArchiveBtn: document.getElementById("closeArchiveBtn"),
@@ -1076,6 +1078,91 @@ function renderCurrentUserRank(rankEntry) {
   `;
 }
 
+function renderPostGameLeaderboardRank(rankEntry) {
+  if (!elements.postGameLeaderboardSection || !elements.postGameLeaderboardRank) return;
+
+  const isDaily = state.mode === "daily";
+  elements.postGameLeaderboardSection.hidden = !isDaily;
+
+  if (!isDaily) {
+    elements.postGameLeaderboardRank.innerHTML = "";
+    return;
+  }
+
+  if (!state.auth.user) {
+    elements.postGameLeaderboardRank.innerHTML = `
+      <div class="leaderboard-empty">Your Daily result will appear here after submission.</div>
+    `;
+    return;
+  }
+
+  if (!rankEntry) {
+    elements.postGameLeaderboardRank.innerHTML = `
+      <div class="leaderboard-empty">Loading your placement…</div>
+    `;
+    return;
+  }
+
+  const rankLabel =
+    rankEntry.result === "won" && rankEntry.rank
+      ? `#${rankEntry.rank}`
+      : "Recorded";
+
+  elements.postGameLeaderboardRank.innerHTML = `
+    <div class="leaderboard-user-rank-card">
+      <div>
+        <div class="label">Your place</div>
+        <div class="value">${rankLabel}</div>
+      </div>
+      <div>
+        <div class="label">Result</div>
+        <div class="value">${rankEntry.result === "won" ? "Solved" : "Played"}</div>
+      </div>
+      <div>
+        <div class="label">Guesses</div>
+        <div class="value">${rankEntry.guesses ?? "—"}</div>
+      </div>
+      <div>
+        <div class="label">Time</div>
+        <div class="value">${formatLeaderboardTime(rankEntry.completedAt)}</div>
+      </div>
+    </div>
+  `;
+}
+
+async function loadPostGameLeaderboardRank() {
+  if (state.mode !== "daily" || !isGameOver()) {
+    renderPostGameLeaderboardRank(null);
+    return;
+  }
+
+  if (!elements.postGameLeaderboardSection) return;
+
+  elements.postGameLeaderboardSection.hidden = false;
+  elements.postGameLeaderboardRank.innerHTML = `
+    <div class="leaderboard-empty">Loading your placement…</div>
+  `;
+
+  const user = state.auth.user || firebaseAuth?.currentUser || null;
+  if (!user?.uid || !state.auth.enabled || !firebaseDb) {
+    elements.postGameLeaderboardRank.innerHTML = `
+      <div class="leaderboard-empty">Complete a Daily puzzle while connected to global stats to see your placement.</div>
+    `;
+    return;
+  }
+
+  try {
+    const userRank = await fetchCurrentUserRank(getDailyDateKey(), user.uid);
+    state.leaderboard.userRank = userRank;
+    renderPostGameLeaderboardRank(userRank);
+  } catch (error) {
+    console.error("Post-game rank load failed:", error);
+    elements.postGameLeaderboardRank.innerHTML = `
+      <div class="leaderboard-empty">Could not load your placement yet.</div>
+    `;
+  }
+}
+
 function clearSavedProgress() {
   try {
     localStorage.removeItem(CONFIG.storageKeys.progress);
@@ -1492,7 +1579,7 @@ function updateBookStats(outcome) {
   }
 }
 
-function recordPuzzleCompletion(outcome) {
+async function recordPuzzleCompletion(outcome) {
   if (!state.currentPuzzle) return;
 
   if (state.currentPuzzle.mode === "daily") {
@@ -1537,7 +1624,7 @@ function recordPuzzleCompletion(outcome) {
     updateBookStats(outcome);
     saveStats();
 
-    submitDailyResultToLeaderboard({
+    await submitDailyResultToLeaderboard({
       result: outcome,
       guesses: outcome === "won" ? state.guesses.length : null,
       dateKey: completionDate || getDailyDateKey(),
@@ -2443,6 +2530,10 @@ function renderArchiveDetails(bookKey = "") {
   `;
 }
 
+function handlePostGameLeaderboardOpen() {
+  openLeaderboardModal();
+}
+
 async function openLeaderboardModal() {
   if (!elements.leaderboardModal) return;
 
@@ -2602,7 +2693,11 @@ function renderPostGamePanel() {
 
   renderTriviaSection(content.trivia);
   renderPostGameStats(state.mode);
-
+if (state.mode === "daily") {
+    loadPostGameLeaderboardRank();
+  } else {
+    renderPostGameLeaderboardRank(null);
+  }
   elements.postGameModal.dataset.open = "true";
   elements.postGameModal.setAttribute("aria-hidden", "false");
   state.postGameOpen = true;
@@ -2750,17 +2845,17 @@ function refreshAfterGuess(message) {
   renderPuzzleView();
 }
 
-function handleSolvedGuess() {
+async function handleSolvedGuess() {
   state.status = "won";
-  recordPuzzleCompletion("won");
+  await recordPuzzleCompletion("won");
   refreshAfterGuess(
     `Correct — ${state.currentPuzzle.verse.book} (${state.currentPuzzle.verse.reference}).`,
   );
 }
 
-function handleLostGuess() {
+async function handleLostGuess() {
   state.status = "lost";
-  recordPuzzleCompletion("lost");
+  await recordPuzzleCompletion("lost");
   refreshAfterGuess(
     `Out of guesses — the answer was ${state.currentPuzzle.verse.book} (${state.currentPuzzle.verse.reference}).`,
   );
@@ -2776,7 +2871,7 @@ function handleIncorrectGuess(bookName) {
   saveProgress();
 }
 
-function applyGuess(rawGuess) {
+async function applyGuess(rawGuess) {
   if (isGameOver()) {
     renderPuzzleView();
     return;
@@ -2802,12 +2897,12 @@ function applyGuess(rawGuess) {
   closeSuggestions();
 
   if (result.solved) {
-    handleSolvedGuess();
+    await handleSolvedGuess();
     return;
   }
 
   if (state.guesses.length >= getMaxGuesses()) {
-    handleLostGuess();
+    await handleLostGuess();
     return;
   }
 
@@ -2943,11 +3038,11 @@ function handleSoundToggle(event) {
   savePreferences();
 }
 
-function handleGuessSubmit(event) {
+async function handleGuessSubmit(event) {
   event.preventDefault();
-  applyGuess(elements.guessInput.value);
+  await applyGuess(elements.guessInput.value);
 }
-
+  
 function handleGuessInput(event) {
   if (isGameOver()) return;
 
@@ -2962,7 +3057,7 @@ function moveSuggestion(nextIndex) {
   renderSuggestions();
 }
 
-function handleGuessKeydown(event) {
+async function handleGuessKeydown(event) {
   if (isGameOver()) return;
 
   const isOpen = elements.autocomplete.dataset.open === "true";
@@ -2971,7 +3066,7 @@ function handleGuessKeydown(event) {
   if (!isOpen || !hasSuggestions) {
     if (event.key === "Enter") {
       event.preventDefault();
-      applyGuess(elements.guessInput.value);
+      await applyGuess(elements.guessInput.value);
     }
 
     if (event.key === "ArrowDown" && hasSuggestions) {
@@ -3018,16 +3113,16 @@ function handleGuessKeydown(event) {
   if (event.key === "Enter" && state.selectedSuggestionIndex >= 0) {
     event.preventDefault();
     const picked = state.currentSuggestions[state.selectedSuggestionIndex];
-    if (picked) applyGuess(picked.name);
+    if (picked) await applyGuess(picked.name);
   }
 }
 
-function handleSuggestionClick(event) {
+async function handleSuggestionClick(event) {
   const button = event.target.closest(".suggestion");
   if (!button) return;
 
   const book = state.currentSuggestions[Number(button.dataset.index)];
-  if (book) applyGuess(book.name);
+  if (book) await applyGuess(book.name);
 }
 
 function handleDocumentClick(event) {
@@ -3406,6 +3501,10 @@ function bindEvents() {
 
   if (elements.closeLeaderboardBtn) {
     elements.closeLeaderboardBtn.addEventListener("click", closeLeaderboardModal);
+  }
+
+   if (elements.postGameLeaderboardBtn) {
+    elements.postGameLeaderboardBtn.addEventListener("click", handlePostGameLeaderboardOpen);
   }
 
   if (elements.leaderboardModal) {
