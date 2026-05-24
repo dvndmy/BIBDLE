@@ -1829,7 +1829,7 @@ function syncActionButtons() {
   }
 
   if (elements.statsBtn) {
-    elements.statsBtn.hidden = state.mode !== "daily";
+    elements.statsBtn.hidden = false;
   }
 }
 
