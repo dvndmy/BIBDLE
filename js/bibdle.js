@@ -272,6 +272,35 @@ function getDailyDateKey() {
   return getTodayPuzzleDate();
 }
 
+function hashStringToSeed(input) {
+  let hash = 2166136261;
+  for (let i = 0; i < input.length; i += 1) {
+    hash ^= input.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+function mulberry32(seed) {
+  let t = seed >>> 0;
+  return function () {
+    t += 0x6D2B79F5;
+    let r = Math.imul(t ^ (t >>> 15), 1 | t);
+    r ^= r + Math.imul(r ^ (r >>> 7), 61 | r);
+    return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function getDeterministicDailyIndex() {
+  if (!Array.isArray(verses) || verses.length === 0) return 0;
+
+  const dateKey = getTodayPuzzleDate();
+  const seed = hashStringToSeed(String(dateKey));
+  const random = mulberry32(seed);
+
+  return Math.floor(random() * verses.length);
+}
+
 function getDailyPuzzleId() {
   return (
     state.currentPuzzle?.verse?.id ||
@@ -745,7 +774,7 @@ function pickPuzzle(mode = "daily") {
     return verses[Math.floor(Math.random() * verses.length)];
   }
 
-  return verses[getDailyIndex()];
+  return verses[getDeterministicDailyIndex()];
 }
 
 function buildCurrentPuzzle(mode = "daily") {
@@ -2531,6 +2560,7 @@ function renderArchiveDetails(bookKey = "") {
 }
 
 function handlePostGameLeaderboardOpen() {
+  closePostGamePanel();
   openLeaderboardModal();
 }
 
