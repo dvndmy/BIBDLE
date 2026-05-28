@@ -140,211 +140,328 @@
 
   <div class="modal-backdrop" id="archiveModal" data-open="false" aria-hidden="true">
     <div class="modal archive-modal" role="dialog" aria-modal="true" aria-labelledby="archiveTitle">
-      <h2 id="archiveTitle">Progress map</h2>
+      <section class="section-shell modal-section">
+        <div class="section-shell__header">
+          <h2 id="archiveTitle" class="section-shell__title">Progress map</h2>
+          <p class="section-shell__meta">Review canon coverage, solved books, and Daily-mode book performance.</p>
+        </div>
 
-      <div class="archive-summary" id="archiveSummary"></div>
+        <div class="section-shell__body">
+          <section class="section-shell section-shell--nested" aria-label="Archive summary">
+            <div class="section-shell__body">
+              <div class="archive-summary" id="archiveSummary"></div>
+            </div>
+          </section>
 
-      <div class="archive-grid" id="archiveGrid" role="list" aria-label="Bible archive map by canonical order"></div>
+          <section class="section-shell section-shell--nested" aria-label="Archive map by canonical order">
+            <div class="section-shell__header">
+              <p class="subtle-label section-shell__meta">Bible archive map</p>
+            </div>
+            <div class="section-shell__body">
+              <div class="archive-grid" id="archiveGrid" role="list" aria-label="Bible archive map by canonical order">
+              </div>
+            </div>
+          </section>
 
-      <div class="archive-details" id="archiveDetails" aria-live="polite" aria-atomic="true"></div>
+          <section class="section-shell section-shell--nested" aria-label="Archive details panel">
+            <div class="section-shell__header">
+              <p class="subtle-label section-shell__meta">Book details</p>
+            </div>
+            <div class="section-shell__body">
+              <div class="archive-details" id="archiveDetails" aria-live="polite" aria-atomic="true"></div>
+            </div>
+          </section>
+        </div>
 
-      <div class="pill-actions modal-actions-end">
-        <button type="button" class="pill-btn primary" id="closeArchiveBtn">Close</button>
-      </div>
+        <div class="section-shell__footer modal-actions-end">
+          <button type="button" class="pill-btn primary" id="closeArchiveBtn">Close</button>
+        </div>
+      </section>
     </div>
   </div>
 
   <div class="modal-backdrop" id="settingsModal" data-open="false" aria-hidden="true">
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
-      <h2 id="settingsTitle">Accessibility settings</h2>
+      <section class="section-shell modal-section">
+        <div class="section-shell__header">
+          <h2 id="settingsTitle" class="section-shell__title">Accessibility settings</h2>
+          <p class="section-shell__meta">Adjust visual and motion preferences. Changes apply immediately.</p>
+        </div>
 
-      <div class="settings-list">
-        <label class="settings-row" for="reducedMotionToggle">
-          <span>Reduced motion</span>
-          <input type="checkbox" id="reducedMotionToggle" />
-        </label>
+        <div class="section-shell__body">
+          <div class="settings-list">
+            <label class="settings-row" for="reducedMotionToggle">
+              <span>Reduced motion</span>
+              <input type="checkbox" id="reducedMotionToggle" />
+            </label>
 
-        <label class="settings-row" for="highContrastToggle">
-          <span>High contrast</span>
-          <input type="checkbox" id="highContrastToggle" />
-        </label>
+            <label class="settings-row" for="highContrastToggle">
+              <span>High contrast</span>
+              <input type="checkbox" id="highContrastToggle" />
+            </label>
 
-        <label class="settings-row" for="largeTextToggle">
-          <span>Larger text</span>
-          <input type="checkbox" id="largeTextToggle" />
-        </label>
+            <label class="settings-row" for="largeTextToggle">
+              <span>Larger text</span>
+              <input type="checkbox" id="largeTextToggle" />
+            </label>
 
-        <label class="settings-row" for="soundToggle">
-          <span>Sound</span>
-          <input type="checkbox" id="soundToggle" />
-        </label>
-      </div>
+            <label class="settings-row" for="soundToggle">
+              <span>Sound</span>
+              <input type="checkbox" id="soundToggle" />
+            </label>
+          </div>
+        </div>
 
-      <div class="pill-actions modal-actions-end">
-        <button type="button" class="pill-btn primary" id="closeSettingsBtn">Close</button>
-      </div>
+        <div class="section-shell__footer modal-actions-end">
+          <button type="button" class="pill-btn primary" id="closeSettingsBtn">Close</button>
+        </div>
+      </section>
     </div>
   </div>
 
   <div class="modal-backdrop" id="statsModal" data-open="false" aria-hidden="true">
     <div class="modal postgame-modal" role="dialog" aria-modal="true" aria-labelledby="statsTitle"
       aria-describedby="statsBody">
-      <h2 id="statsTitle">Historical stats</h2>
+      <div class="section-shell modal-section">
+        <div class="section-shell__header">
+          <h2 id="statsTitle" class="section-shell__title">Historical stats</h2>
+          <p class="section-shell__meta">Track Daily and Practice performance, including streaks and guess distribution.
+          </p>
+        </div>
 
-      <div class="postgame-body" id="statsBody">
-        <section class="postgame-section stats-section" aria-label="Historical stats">
-          <p class="subtle-label">Daily mode</p>
+        <div class="section-shell__body postgame-body" id="statsBody">
+          <section class="postgame-section stats-section section-shell section-shell--nested"
+            aria-label="Historical stats">
+            <div class="section-shell__header">
+              <p class="subtle-label section-shell__meta">Daily mode</p>
+            </div>
 
-          <div class="stats-grid">
-            <div class="stat-item">
-              <span class="stat-value" id="statsPlayed">0</span>
-              <span class="stat-label">Played</span>
-            </div>
-            <div class="stat-item">
-              <span class="stat-value" id="statsWon">0</span>
-              <span class="stat-label">Won</span>
-            </div>
-            <div class="stat-item">
-              <span class="stat-value" id="statsLost">0</span>
-              <span class="stat-label">Lost</span>
-            </div>
-          </div>
+            <div class="section-shell__body">
+              <div class="stats-grid">
+                <div class="stat-item">
+                  <span class="stat-value" id="statsPlayed">0</span>
+                  <span class="stat-label">Played</span>
+                </div>
+                <div class="stat-item">
+                  <span class="stat-value" id="statsWon">0</span>
+                  <span class="stat-label">Won</span>
+                </div>
+                <div class="stat-item">
+                  <span class="stat-value" id="statsLost">0</span>
+                  <span class="stat-label">Lost</span>
+                </div>
+              </div>
 
-          <div class="stats-grid stats-grid-secondary">
-            <div class="stat-item">
-              <span class="stat-value" id="statsCurrentStreak">0</span>
-              <span class="stat-label">Current streak</span>
-            </div>
-            <div class="stat-item">
-              <span class="stat-value" id="statsBestStreak">0</span>
-              <span class="stat-label">Best streak</span>
-            </div>
-          </div>
+              <div class="stats-grid stats-grid-secondary">
+                <div class="stat-item">
+                  <span class="stat-value" id="statsCurrentStreak">0</span>
+                  <span class="stat-label">Current streak</span>
+                </div>
+                <div class="stat-item">
+                  <span class="stat-value" id="statsBestStreak">0</span>
+                  <span class="stat-label">Best streak</span>
+                </div>
+              </div>
 
-          <div class="guess-distribution" id="statsGuessDistribution" aria-label="Guess distribution"></div>
-          <div class="postgame-section stats-section">
-            <p class="subtle-label">Badges</p>
-            <div class="streak-badges" id="statsModalBadges"></div>
-          </div>
-        </section>
-        <section class="postgame-section stats-section" aria-label="Practice stats">
-          <p class="subtle-label">Practice mode</p>
-
-          <div class="stats-grid">
-            <div class="stat-item">
-              <span class="stat-value" id="practiceStatsPlayed">0</span>
-              <span class="stat-label">Played</span>
+              <div class="guess-distribution" id="statsGuessDistribution" aria-label="Guess distribution"></div>
             </div>
-            <div class="stat-item">
-              <span class="stat-value" id="practiceStatsWon">0</span>
-              <span class="stat-label">Won</span>
-            </div>
-            <div class="stat-item">
-              <span class="stat-value" id="practiceStatsLost">0</span>
-              <span class="stat-label">Lost</span>
-            </div>
-          </div>
 
-          <div class="guess-distribution" id="practiceStatsGuessDistribution" aria-label="Practice guess distribution">
-          </div>
-        </section>
-      </div>
+            <div class="section-shell__footer">
+              <section class="postgame-section stats-section section-shell section-shell--subtle"
+                aria-label="Earned badges">
+                <div class="section-shell__header">
+                  <p class="subtle-label section-shell__meta">Badges</p>
+                </div>
+                <div class="section-shell__body">
+                  <div class="streak-badges" id="statsModalBadges"></div>
+                </div>
+              </section>
+            </div>
+          </section>
 
-      <div class="pill-actions postgame-actions">
-        <button type="button" class="pill-btn primary" id="closeStatsBtn">Close</button>
+          <section class="postgame-section stats-section section-shell section-shell--nested"
+            aria-label="Practice stats">
+            <div class="section-shell__header">
+              <p class="subtle-label section-shell__meta">Practice mode</p>
+            </div>
+
+            <div class="section-shell__body">
+              <div class="stats-grid">
+                <div class="stat-item">
+                  <span class="stat-value" id="practiceStatsPlayed">0</span>
+                  <span class="stat-label">Played</span>
+                </div>
+                <div class="stat-item">
+                  <span class="stat-value" id="practiceStatsWon">0</span>
+                  <span class="stat-label">Won</span>
+                </div>
+                <div class="stat-item">
+                  <span class="stat-value" id="practiceStatsLost">0</span>
+                  <span class="stat-label">Lost</span>
+                </div>
+              </div>
+
+              <div class="guess-distribution" id="practiceStatsGuessDistribution"
+                aria-label="Practice guess distribution">
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <div class="section-shell__footer postgame-actions">
+          <button type="button" class="pill-btn primary" id="closeStatsBtn">Close</button>
+        </div>
       </div>
     </div>
   </div>
 
   <div class="modal-backdrop" id="leaderboardModal" data-open="false" aria-hidden="true">
     <div class="modal leaderboard-modal" role="dialog" aria-modal="true" aria-labelledby="leaderboardTitle">
-      <h2 id="leaderboardTitle">Global daily stats</h2>
+      <section class="section-shell modal-section">
+        <div class="section-shell__header">
+          <h2 id="leaderboardTitle" class="section-shell__title">Global daily stats</h2>
+          <p class="section-shell__meta">See today’s worldwide Daily puzzle activity and your current placement.</p>
+        </div>
 
-      <div class="leaderboard-summary" id="leaderboardSummary"></div>
-      <div class="leaderboard-list" id="leaderboardList"></div>
-      <div class="leaderboard-user-rank" id="leaderboardUserRank"></div>
+        <div class="section-shell__body">
+          <section class="section-shell section-shell--nested" aria-label="Leaderboard summary">
+            <div class="section-shell__body">
+              <div class="leaderboard-summary" id="leaderboardSummary"></div>
+            </div>
+          </section>
 
-      <div class="pill-actions modal-actions-end">
-        <button type="button" class="pill-btn primary" id="closeLeaderboardBtn">Close</button>
-      </div>
+          <section class="section-shell section-shell--nested" aria-label="Leaderboard standings">
+            <div class="section-shell__header">
+              <p class="subtle-label section-shell__meta">Top daily scores</p>
+            </div>
+            <div class="section-shell__body">
+              <div class="leaderboard-list" id="leaderboardList"></div>
+            </div>
+          </section>
+
+          <section class="section-shell section-shell--nested" aria-label="Your placement">
+            <div class="section-shell__header">
+              <p class="subtle-label section-shell__meta">Your placement</p>
+            </div>
+            <div class="section-shell__body">
+              <div class="leaderboard-user-rank" id="leaderboardUserRank"></div>
+            </div>
+          </section>
+        </div>
+
+        <div class="section-shell__footer modal-actions-end">
+          <button type="button" class="pill-btn primary" id="closeLeaderboardBtn">Close</button>
+        </div>
+      </section>
     </div>
   </div>
   <div class="modal-backdrop postgame-backdrop" id="postGameModal" data-open="false" aria-hidden="true">
     <div class="modal postgame-modal" role="dialog" aria-modal="true" aria-labelledby="postGameTitle"
       aria-describedby="postGameBody">
-      <div class="postgame-badge" id="postGameBadge">Puzzle complete</div>
-      <h2 id="postGameTitle">Result</h2>
-      <div class="postgame-body" id="postGameBody">
-        <section class="postgame-section">
-          <p class="subtle-label">Answer</p>
-          <p class="postgame-reference" id="postGameReference"></p>
-          <p class="postgame-book" id="postGameBook"></p>
-        </section>
+      <div class="section-shell modal-section">
+        <div class="section-shell__header">
+          <div class="postgame-badge" id="postGameBadge">Puzzle complete</div>
+          <h2 id="postGameTitle" class="section-shell__title">Result</h2>
+        </div>
 
-        <section class="postgame-section">
-          <p class="subtle-label">Verse</p>
-          <p class="postgame-text" id="postGameVerse"></p>
-        </section>
-
-        <section class="postgame-section stats-section" id="postGameLeaderboardSection"
-          aria-label="Leaderboard placement">
-          <p class="subtle-label">Today’s leaderboard</p>
-          <div class="leaderboard-user-rank leaderboard-user-rank-inline" id="postGameLeaderboardRank">
-            <div class="leaderboard-empty">Finish a Daily puzzle to see your placement.</div>
-          </div>
-          <div class="pill-actions modal-actions-end">
-            <button type="button" class="pill-btn" id="postGameLeaderboardBtn">Open leaderboard</button>
-          </div>
-        </section>
-
-        <section class="postgame-section">
-          <p class="subtle-label">Book intro</p>
-          <p class="postgame-intro-title" id="postGameIntroTitle"></p>
-          <p class="postgame-text" id="postGameIntroText"></p>
-        </section>
-
-        <section class="postgame-section trivia-section" id="postGameTriviaSection" hidden>
-          <p class="subtle-label">Book trivia</p>
-          <p class="postgame-intro-title" id="postGameTriviaTitle"></p>
-          <p class="postgame-text" id="postGameTriviaText"></p>
-          <div class="postgame-meta-chips" id="postGameTriviaChips"></div>
-        </section>
-
-        <section class="postgame-section stats-section" aria-label="Mode stats">
-          <p class="subtle-label" id="postGameStatsLabel">Stats</p>
-
-          <div class="stats-grid" id="postGameStatsGridPrimary">
-            <div class="stat-item">
-              <span class="stat-value" id="postGameStatsPlayed">0</span>
-              <span class="stat-label">Played</span>
+        <div class="section-shell__body postgame-body" id="postGameBody">
+          <section class="postgame-section section-shell section-shell--nested">
+            <div class="section-shell__header">
+              <p class="subtle-label section-shell__meta">Answer</p>
             </div>
-            <div class="stat-item">
-              <span class="stat-value" id="postGameStatsWon">0</span>
-              <span class="stat-label">Won</span>
+            <div class="section-shell__body">
+              <p class="postgame-reference" id="postGameReference"></p>
+              <p class="postgame-book" id="postGameBook"></p>
             </div>
-            <div class="stat-item">
-              <span class="stat-value" id="postGameStatsLost">0</span>
-              <span class="stat-label">Lost</span>
-            </div>
-          </div>
+          </section>
 
-          <div class="stats-grid stats-grid-secondary" id="postGameStatsGridSecondary">
-            <div class="stat-item" id="postGameCurrentStreakItem">
-              <span class="stat-value" id="postGameStatsCurrentStreak">0</span>
-              <span class="stat-label">Current streak</span>
+          <section class="postgame-section section-shell section-shell--nested">
+            <div class="section-shell__header">
+              <p class="subtle-label section-shell__meta">Verse</p>
             </div>
-            <div class="stat-item" id="postGameBestStreakItem">
-              <span class="stat-value" id="postGameStatsBestStreak">0</span>
-              <span class="stat-label">Best streak</span>
+            <div class="section-shell__body">
+              <p class="postgame-text" id="postGameVerse"></p>
             </div>
-          </div>
+          </section>
 
-          <div class="guess-distribution" id="postGameGuessDistribution" aria-label="Guess distribution"></div>
-        </section>
-      </div>
-      <div class="pill-actions postgame-actions">
-        <button type="button" class="pill-btn" id="postGameCloseBtn">Close</button>
-        <button type="button" class="pill-btn primary" id="postGameNextBtn" hidden>Next practice puzzle</button>
+          <section class="postgame-section stats-section section-shell section-shell--nested"
+            id="postGameLeaderboardSection" aria-label="Leaderboard placement">
+            <div class="section-shell__header">
+              <p class="subtle-label section-shell__meta">Today’s leaderboard</p>
+            </div>
+            <div class="section-shell__body">
+              <div class="leaderboard-user-rank leaderboard-user-rank-inline" id="postGameLeaderboardRank">
+                <div class="leaderboard-empty">Finish a Daily puzzle to see your placement.</div>
+              </div>
+            </div>
+            <div class="section-shell__footer modal-actions-end">
+              <button type="button" class="pill-btn" id="postGameLeaderboardBtn">Open leaderboard</button>
+            </div>
+          </section>
+
+          <section class="postgame-section section-shell section-shell--nested">
+            <div class="section-shell__header">
+              <p class="subtle-label section-shell__meta">Book intro</p>
+            </div>
+            <div class="section-shell__body">
+              <p class="postgame-intro-title" id="postGameIntroTitle"></p>
+              <p class="postgame-text" id="postGameIntroText"></p>
+            </div>
+          </section>
+
+          <section class="postgame-section trivia-section section-shell section-shell--nested"
+            id="postGameTriviaSection" hidden>
+            <div class="section-shell__header">
+              <p class="subtle-label section-shell__meta">Book trivia</p>
+              <p class="postgame-intro-title section-shell__title-sm" id="postGameTriviaTitle"></p>
+            </div>
+            <div class="section-shell__body">
+              <p class="postgame-text" id="postGameTriviaText"></p>
+              <div class="postgame-meta-chips" id="postGameTriviaChips"></div>
+            </div>
+          </section>
+
+          <section class="postgame-section stats-section section-shell section-shell--nested" aria-label="Mode stats">
+            <div class="section-shell__header">
+              <p class="subtle-label section-shell__meta" id="postGameStatsLabel">Stats</p>
+            </div>
+
+            <div class="section-shell__body">
+              <div class="stats-grid" id="postGameStatsGridPrimary">
+                <div class="stat-item">
+                  <span class="stat-value" id="postGameStatsPlayed">0</span>
+                  <span class="stat-label">Played</span>
+                </div>
+                <div class="stat-item">
+                  <span class="stat-value" id="postGameStatsWon">0</span>
+                  <span class="stat-label">Won</span>
+                </div>
+                <div class="stat-item">
+                  <span class="stat-value" id="postGameStatsLost">0</span>
+                  <span class="stat-label">Lost</span>
+                </div>
+              </div>
+
+              <div class="stats-grid stats-grid-secondary" id="postGameStatsGridSecondary">
+                <div class="stat-item" id="postGameCurrentStreakItem">
+                  <span class="stat-value" id="postGameStatsCurrentStreak">0</span>
+                  <span class="stat-label">Current streak</span>
+                </div>
+                <div class="stat-item" id="postGameBestStreakItem">
+                  <span class="stat-value" id="postGameStatsBestStreak">0</span>
+                  <span class="stat-label">Best streak</span>
+                </div>
+              </div>
+
+              <div class="guess-distribution" id="postGameGuessDistribution" aria-label="Guess distribution"></div>
+            </div>
+          </section>
+        </div>
+
+        <div class="section-shell__footer postgame-actions">
+          <button type="button" class="pill-btn" id="postGameCloseBtn">Close</button>
+          <button type="button" class="pill-btn primary" id="postGameNextBtn" hidden>Next practice puzzle</button>
+        </div>
       </div>
     </div>
   </div>

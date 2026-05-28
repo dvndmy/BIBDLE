@@ -1111,28 +1111,36 @@ function renderLeaderboardSummary(stats) {
   const solveRate = players > 0 ? Math.round((solvers / players) * 100) : 0;
 
   elements.leaderboardSummary.innerHTML = `
-    <div class="leaderboard-kpis">
-      <div class="leaderboard-kpi">
-        <span class="leaderboard-kpi-value">${players}</span>
-        <span class="leaderboard-kpi-label">Players today</span>
+    <div class="section-shell section-shell--subtle">
+      <div class="section-shell__header">
+        <p class="subtle-label section-shell__meta">Today’s activity</p>
       </div>
-      <div class="leaderboard-kpi">
-        <span class="leaderboard-kpi-value">${solvers}</span>
-        <span class="leaderboard-kpi-label">Solved today</span>
+      <div class="section-shell__body">
+        <div class="leaderboard-kpis">
+          <div class="leaderboard-kpi">
+            <span class="leaderboard-kpi-value">${players}</span>
+            <span class="leaderboard-kpi-label">Players today</span>
+          </div>
+          <div class="leaderboard-kpi">
+            <span class="leaderboard-kpi-value">${solvers}</span>
+            <span class="leaderboard-kpi-label">Solved today</span>
+          </div>
+          <div class="leaderboard-kpi">
+            <span class="leaderboard-kpi-value">${solveRate}%</span>
+            <span class="leaderboard-kpi-label">Solve rate</span>
+          </div>
+          <div class="leaderboard-kpi">
+            <span class="leaderboard-kpi-value">${solvers > 0 ? averageWinningGuesses.toFixed(2) : "—"}</span>
+            <span class="leaderboard-kpi-label">Avg. winning guesses</span>
+          </div>
+        </div>
       </div>
-      <div class="leaderboard-kpi">
-        <span class="leaderboard-kpi-value">${solveRate}%</span>
-        <span class="leaderboard-kpi-label">Solve rate</span>
-      </div>
-      <div class="leaderboard-kpi">
-        <span class="leaderboard-kpi-value">${solvers > 0 ? averageWinningGuesses.toFixed(2) : "—"
-    }</span>
-        <span class="leaderboard-kpi-label">Avg. winning guesses</span>
+      <div class="section-shell__footer">
+        <p class="leaderboard-meta-note">
+          Global daily metrics for the current puzzle.
+        </p>
       </div>
     </div>
-    <p class="leaderboard-meta-note">
-      Global daily metrics for the current puzzle.
-    </p>
   `;
 }
 
@@ -1528,7 +1536,7 @@ function savePreferences() {
       CONFIG.storageKeys.preferences,
       JSON.stringify(payload),
     );
-  } catch {}
+  } catch { }
 
   syncCurrentStateToCloudIfSignedIn();
 }
@@ -2667,31 +2675,43 @@ function renderArchiveSummary() {
 
   elements.archiveSummary.innerHTML = `
     <div class="archive-summary-blocks">
-      <section class="archive-summary-group" aria-label="Overall archive progress">
-        <p class="archive-summary-title">Overall</p>
-        <div class="archive-kpis">
-          <div class="archive-kpi">
-            <span class="archive-kpi-value">${summary.solvedBooks}/${summary.totalBooks}</span>
-            <span class="archive-kpi-label">Books solved</span>
-          </div>
-          <div class="archive-kpi">
-            <span class="archive-kpi-value">${summary.completionPercentage}%</span>
-            <span class="archive-kpi-label">Canon complete</span>
+      <section class="archive-summary-group section-shell section-shell--subtle" aria-label="Overall archive progress">
+        <div class="section-shell__header">
+          <p class="archive-summary-title">Overall</p>
+        </div>
+        <div class="section-shell__body">
+          <div class="archive-kpis">
+            <div class="archive-kpi">
+              <span class="archive-kpi-value">${summary.solvedBooks}/${summary.totalBooks}</span>
+              <span class="archive-kpi-label">Books solved</span>
+            </div>
+            <div class="archive-kpi">
+              <span class="archive-kpi-value">${summary.completionPercentage}%</span>
+              <span class="archive-kpi-label">Canon complete</span>
+            </div>
           </div>
         </div>
       </section>
 
-      <section class="archive-stat-group" aria-label="Solved books by testament">
-        <h3>By testament</h3>
-        <div class="archive-bars">
-          ${renderArchiveBars(summary.testamentSummary)}
+      <section class="archive-stat-group section-shell section-shell--subtle" aria-label="Solved books by testament">
+        <div class="section-shell__header">
+          <h3>By testament</h3>
+        </div>
+        <div class="section-shell__body">
+          <div class="archive-bars">
+            ${renderArchiveBars(summary.testamentSummary)}
+          </div>
         </div>
       </section>
 
-      <section class="archive-stat-group" aria-label="Solved books by section">
-        <h3>By section</h3>
-        <div class="archive-bars">
-          ${renderArchiveBars(summary.sectionSummary)}
+      <section class="archive-stat-group section-shell section-shell--subtle" aria-label="Solved books by section">
+        <div class="section-shell__header">
+          <h3>By section</h3>
+        </div>
+        <div class="section-shell__body">
+          <div class="archive-bars">
+            ${renderArchiveBars(summary.sectionSummary)}
+          </div>
         </div>
       </section>
     </div>

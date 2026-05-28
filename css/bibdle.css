@@ -803,6 +803,68 @@ html.reduced-motion *::after {
     box-shadow: var(--shadow-panel);
 }
 
+.section-shell {
+    display: grid;
+    gap: var(--section-gap-md);
+    min-width: 0;
+}
+
+.section-shell__header {
+    display: grid;
+    gap: var(--space-1);
+    min-width: 0;
+}
+
+.section-shell__title {
+    font-family: var(--font-ui);
+    font-size: var(--text-xl);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--color-text);
+}
+
+.section-shell__title-sm {
+    font-family: var(--font-ui);
+    font-size: 1.25rem;
+    font-weight: 800;
+    color: var(--color-text);
+}
+
+.section-shell__meta {
+    max-width: 62ch;
+    font-family: var(--font-ui);
+    font-size: 0.98rem;
+    line-height: 1.7;
+    color: var(--color-text-muted);
+}
+
+.section-shell__body {
+    display: grid;
+    gap: var(--section-gap-md);
+    min-width: 0;
+}
+
+.section-shell__footer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--section-gap-sm);
+    min-width: 0;
+}
+
+.modal-section {
+    gap: var(--section-gap-md);
+}
+
+.section-shell--nested {
+    gap: var(--section-gap-sm);
+}
+
+.section-shell--subtle {
+    gap: var(--section-gap-sm);
+}
+
 .modal h2 {
     font-family: var(--font-ui);
     font-size: var(--text-xl);
