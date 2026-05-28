@@ -1117,28 +1117,26 @@ function renderLeaderboardSummary(stats) {
       </div>
       <div class="section-shell__body">
         <div class="leaderboard-kpis">
-          <div class="leaderboard-kpi">
+          <div class="leaderboard-kpi kpi-card">
             <span class="leaderboard-kpi-value">${players}</span>
             <span class="leaderboard-kpi-label">Players today</span>
           </div>
-          <div class="leaderboard-kpi">
+          <div class="leaderboard-kpi kpi-card">
             <span class="leaderboard-kpi-value">${solvers}</span>
             <span class="leaderboard-kpi-label">Solved today</span>
           </div>
-          <div class="leaderboard-kpi">
+          <div class="leaderboard-kpi kpi-card">
             <span class="leaderboard-kpi-value">${solveRate}%</span>
             <span class="leaderboard-kpi-label">Solve rate</span>
           </div>
-          <div class="leaderboard-kpi">
+          <div class="leaderboard-kpi kpi-card">
             <span class="leaderboard-kpi-value">${solvers > 0 ? averageWinningGuesses.toFixed(2) : "—"}</span>
             <span class="leaderboard-kpi-label">Avg. winning guesses</span>
           </div>
         </div>
       </div>
       <div class="section-shell__footer">
-        <p class="leaderboard-meta-note">
-          Global daily metrics for the current puzzle.
-        </p>
+        <p class="leaderboard-meta-note">Global daily metrics for the current puzzle.</p>
       </div>
     </div>
   `;
@@ -2422,8 +2420,8 @@ function renderEarnedBadges(container) {
   container.innerHTML = STREAK_BADGES.map((badge) => {
     const isEarned = earnedIds.has(badge.id);
     const badgeClass = isEarned
-      ? "streak-badge is-earned"
-      : "streak-badge is-locked";
+      ? "streak-badge ui-badge is-earned"
+      : "streak-badge ui-badge is-locked";
     const badgeLabel = isEarned
       ? `Earned badge: ${badge.label}`
       : `Locked badge: ${badge.label}`;
@@ -2560,7 +2558,7 @@ function renderTriviaSection(content) {
   postGameTriviaTitle.textContent = content.title || "Learn more";
   postGameTriviaText.textContent = content.text || "";
   postGameTriviaChips.innerHTML = (content.chips || [])
-    .map((chip) => `<span class="postgame-chip">${chip}</span>`)
+    .map((chip) => `<span class="postgame-chip ui-chip">${chip}</span>`)
     .join("");
 }
 
@@ -2675,17 +2673,17 @@ function renderArchiveSummary() {
 
   elements.archiveSummary.innerHTML = `
     <div class="archive-summary-blocks">
-      <section class="archive-summary-group section-shell section-shell--subtle" aria-label="Overall archive progress">
+      <section class="archive-summary-group ui-card section-shell section-shell--subtle" aria-label="Overall archive progress">
         <div class="section-shell__header">
           <p class="archive-summary-title">Overall</p>
         </div>
         <div class="section-shell__body">
           <div class="archive-kpis">
-            <div class="archive-kpi">
+            <div class="archive-kpi stat-block">
               <span class="archive-kpi-value">${summary.solvedBooks}/${summary.totalBooks}</span>
               <span class="archive-kpi-label">Books solved</span>
             </div>
-            <div class="archive-kpi">
+            <div class="archive-kpi stat-block">
               <span class="archive-kpi-value">${summary.completionPercentage}%</span>
               <span class="archive-kpi-label">Canon complete</span>
             </div>
@@ -2693,7 +2691,7 @@ function renderArchiveSummary() {
         </div>
       </section>
 
-      <section class="archive-stat-group section-shell section-shell--subtle" aria-label="Solved books by testament">
+      <section class="archive-stat-group ui-card section-shell section-shell--subtle" aria-label="Solved books by testament">
         <div class="section-shell__header">
           <h3>By testament</h3>
         </div>
@@ -2704,7 +2702,7 @@ function renderArchiveSummary() {
         </div>
       </section>
 
-      <section class="archive-stat-group section-shell section-shell--subtle" aria-label="Solved books by section">
+      <section class="archive-stat-group ui-card section-shell section-shell--subtle" aria-label="Solved books by section">
         <div class="section-shell__header">
           <h3>By section</h3>
         </div>
