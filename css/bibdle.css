@@ -3,6 +3,8 @@
     --font-display: "Inter", "Segoe UI", sans-serif;
     --font-body: "Cormorant Garamond", Georgia, serif;
     --font-ui: "Inter", "Segoe UI", sans-serif;
+    --font-ml-ui: "Noto Sans Malayalam", "Nirmala UI", "Kartika", sans-serif;
+    --font-ml-body: "Noto Sans Malayalam", "Nirmala UI", "Kartika", sans-serif;
     --text-xs: clamp(0.75rem, 0.7rem + 0.25vw, 0.875rem);
     --text-sm: clamp(0.875rem, 0.8rem + 0.35vw, 1rem);
     --text-base: clamp(1rem, 0.95rem + 0.25vw, 1.125rem);
@@ -1615,5 +1617,94 @@ html.reduced-motion *::after {
         animation-iteration-count: 1 !important;
         transition-duration: 0.01ms !important;
         scroll-behavior: auto !important;
+    }
+}
+
+html[lang-mode="ml"] {
+    font-kerning: normal;
+}
+
+html[lang-mode="ml"] .verse-text,
+html[lang-mode="ml"] .postgame-book,
+html[lang-mode="ml"] .postgame-intro-title,
+html[lang-mode="ml"] .postgame-text,
+html[lang-mode="ml"] .postgame-reference,
+html[lang-mode="ml"] .archive-cell-book,
+html[lang-mode="ml"] .archive-cell-meta,
+html[lang-mode="ml"] .archive-details-title,
+html[lang-mode="ml"] .archive-details-subtitle,
+html[lang-mode="ml"] .archive-details-copy,
+html[lang-mode="ml"] .archive-detail-stat-value,
+html[lang-mode="ml"] .archive-bar-label,
+html[lang-mode="ml"] .suggestion-primary,
+html[lang-mode="ml"] .suggestion-secondary,
+html[lang-mode="ml"] .guess-card.is-book-data,
+html[lang-mode="ml"] .meta-line.is-book-data {
+    font-family: var(--font-ml-body);
+    letter-spacing: normal;
+}
+
+html[lang-mode="ml"] .verse-text {
+    line-height: 1.45;
+    max-width: 24ch;
+}
+
+html[lang-mode="ml"] .postgame-text,
+html[lang-mode="ml"] .archive-details-copy,
+html[lang-mode="ml"] .archive-cell-meta {
+    line-height: 1.8;
+}
+
+html[lang-mode="ml"] .guess-card.is-book-data,
+html[lang-mode="ml"] .archive-cell-book,
+html[lang-mode="ml"] .postgame-book,
+html[lang-mode="ml"] .postgame-intro-title,
+html[lang-mode="ml"] .archive-details-title {
+    font-family: var(--font-ml-ui);
+    font-weight: 700;
+}
+
+.suggestion {
+    display: grid;
+    gap: 0.18rem;
+    align-items: start;
+}
+
+.suggestion-primary {
+    font-family: var(--font-ui);
+    font-size: 0.98rem;
+    font-weight: 700;
+    line-height: 1.4;
+    color: var(--color-text);
+}
+
+.suggestion-secondary {
+    font-family: var(--font-ui);
+    font-size: 0.8rem;
+    line-height: 1.35;
+    color: var(--color-text-muted);
+}
+
+html[lang-mode="ml"] .suggestion-primary {
+    font-family: var(--font-ml-ui);
+    font-weight: 700;
+}
+
+html[lang-mode="ml"] .suggestion-secondary {
+    font-family: var(--font-ui);
+}
+
+.language-select {
+    min-width: 8.5rem;
+}
+
+.meta-line.is-book-data {
+    line-height: 1.6;
+}
+
+@media (max-width: 720px) {
+    html[lang-mode="ml"] .verse-text {
+        max-width: 22ch;
+        line-height: 1.5;
     }
 }

@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link
-    href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500;600;700;800&display=swap"
+    href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500;600;700;800&family=Noto+Sans+Malayalam:wght@400;500;600;700;800&display=swap"
     rel="stylesheet" />
   <link rel="stylesheet" href="./css/bibdle.css" />
 </head>
@@ -37,7 +37,13 @@
               <option value="hard">Hard</option>
             </select>
           </div>
-
+          <div class="control-group">
+            <label for="languageSelect" class="subtle-label">Language</label>
+            <select id="languageSelect" class="control-select" aria-label="Select book and verse language">
+              <option value="en">English</option>
+              <option value="ml">Malayalam</option>
+            </select>
+          </div>
           <div class="auth-controls" id="authControls">
             <button type="button" class="pill-btn" id="signInBtn">Sign in</button>
             <button type="button" class="pill-btn" id="signOutBtn" hidden>Sign out</button>
@@ -280,15 +286,16 @@
           <p class="postgame-text" id="postGameVerse"></p>
         </section>
 
-        <section class="postgame-section stats-section" id="postGameLeaderboardSection" aria-label="Leaderboard placement">
-  <p class="subtle-label">Today’s leaderboard</p>
-  <div class="leaderboard-user-rank leaderboard-user-rank-inline" id="postGameLeaderboardRank">
-    <div class="leaderboard-empty">Finish a Daily puzzle to see your placement.</div>
-  </div>
-  <div class="pill-actions modal-actions-end">
-    <button type="button" class="pill-btn" id="postGameLeaderboardBtn">Open leaderboard</button>
-  </div>
-</section>
+        <section class="postgame-section stats-section" id="postGameLeaderboardSection"
+          aria-label="Leaderboard placement">
+          <p class="subtle-label">Today’s leaderboard</p>
+          <div class="leaderboard-user-rank leaderboard-user-rank-inline" id="postGameLeaderboardRank">
+            <div class="leaderboard-empty">Finish a Daily puzzle to see your placement.</div>
+          </div>
+          <div class="pill-actions modal-actions-end">
+            <button type="button" class="pill-btn" id="postGameLeaderboardBtn">Open leaderboard</button>
+          </div>
+        </section>
 
         <section class="postgame-section">
           <p class="subtle-label">Book intro</p>

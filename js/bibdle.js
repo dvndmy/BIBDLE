@@ -126,6 +126,7 @@ const state = {
     theme: "dark",
     difficulty: "normal",
     preferredMode: "daily",
+    language: "en",
     sound: false,
     reducedAnimation: false,
     highContrast: false,
@@ -168,7 +169,7 @@ const elements = {
   signInBtn: document.getElementById("signInBtn"),
   signOutBtn: document.getElementById("signOutBtn"),
   authStatus: document.getElementById("authStatus"),
-
+  languageSelect: document.getElementById("languageSelect"),
   verseText: document.getElementById("verseText"),
   dateLabel: document.getElementById("dateLabel"),
   countdownTimer: document.getElementById("countdownTimer"),
@@ -238,9 +239,9 @@ const elements = {
   postGameTriviaTitle: document.getElementById("postGameTriviaTitle"),
   postGameTriviaText: document.getElementById("postGameTriviaText"),
   postGameTriviaChips: document.getElementById("postGameTriviaChips"),
-postGameLeaderboardSection: document.getElementById("postGameLeaderboardSection"),
-postGameLeaderboardRank: document.getElementById("postGameLeaderboardRank"),
-postGameLeaderboardBtn: document.getElementById("postGameLeaderboardBtn"),
+  postGameLeaderboardSection: document.getElementById("postGameLeaderboardSection"),
+  postGameLeaderboardRank: document.getElementById("postGameLeaderboardRank"),
+  postGameLeaderboardBtn: document.getElementById("postGameLeaderboardBtn"),
   archiveBtn: document.getElementById("archiveBtn"),
   archiveModal: document.getElementById("archiveModal"),
   closeArchiveBtn: document.getElementById("closeArchiveBtn"),
@@ -390,6 +391,224 @@ function sanitizeCloudProfile(data) {
   };
 }
 
+function getCurrentLanguage() {
+  return state.preferences?.language === "ml" ? "ml" : "en";
+}
+
+function getSafeString(value) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function getLocalizedValue(primary, fallback) {
+  return getSafeString(primary) || getSafeString(fallback) || "";
+}
+
+function normalizeBookName(value) {
+  return String(value ?? "")
+    .normalize("NFKC")
+    .toLowerCase()
+    .replace(/[\u200B-\u200D\uFEFF]/g, "")
+    .replace(/[^\p{L}\p{N}]+/gu, "");
+}
+
+function getLocalizedBookName(book, language = getCurrentLanguage()) {
+  if (!book) return "";
+  return language === "ml"
+    ? getLocalizedValue(book.nameMl, book.name)
+    : getLocalizedValue(book.name, book.nameMl);
+}
+
+function getLocalizedTestament(book, language = getCurrentLanguage()) {
+  if (!book) return "";
+  return language === "ml"
+    ? getLocalizedValue(book.testamentMl, book.testament)
+    : getLocalizedValue(book.testament, book.testamentMl);
+}
+
+function getLocalizedSection(book, language = getCurrentLanguage()) {
+  if (!book) return "";
+  return language === "ml"
+    ? getLocalizedValue(book.sectionMl, book.section)
+    : getLocalizedValue(book.section, book.sectionMl);
+}
+
+function getLocalizedBookIntroTitle(book, language = getCurrentLanguage()) {
+  if (!book) return "";
+  return language === "ml"
+    ? getLocalizedValue(book.bookIntroTitleMl, book.bookIntroTitle)
+    : getLocalizedValue(book.bookIntroTitle, book.bookIntroTitleMl);
+}
+
+function getLocalizedBookIntroText(book, language = getCurrentLanguage()) {
+  if (!book) return "";
+  return language === "ml"
+    ? getLocalizedValue(book.bookIntroTextMl, book.bookIntroText)
+    : getLocalizedValue(book.bookIntroText, book.bookIntroTextMl);
+}
+
+function getLocalizedReference(verse, language = getCurrentLanguage()) {
+  if (!verse) return "";
+  return language === "ml"
+    ? getLocalizedValue(verse.referenceMl, verse.reference)
+    : getLocalizedValue(verse.reference, verse.referenceMl);
+}
+
+function getLocalizedVerseText(verse, language = getCurrentLanguage()) {
+  if (!verse) return "";
+  return language === "ml"
+    ? getLocalizedValue(verse.textMl, verse.text)
+    : getLocalizedValue(verse.text, verse.textMl);
+}
+
+function getLocalizedClue(verse, language = getCurrentLanguage()) {
+  if (!verse) return "";
+  return language === "ml"
+    ? getLocalizedValue(verse.clueMl, verse.clue)
+    : getLocalizedValue(verse.clue, verse.clueMl);
+}
+
+function getLocalizedExplanation(verse, language = getCurrentLanguage()) {
+  if (!verse) return "";
+  return language === "ml"
+    ? getLocalizedValue(verse.explanationMl, verse.explanation)
+    : getLocalizedValue(verse.explanation, verse.explanationMl);
+}
+
+function getLocalizedThemes(item, language = getCurrentLanguage()) {
+  const source =
+    language === "ml"
+      ? (Array.isArray(item?.themesMl) ? item.themesMl : Array.isArray(item?.bookThemesMl) ? item.bookThemesMl : null)
+      : (Array.isArray(item?.themes) ? item.themes : Array.isArray(item?.bookThemes) ? item.bookThemes : null);
+
+  const fallback =
+    language === "ml"
+      ? (Array.isArray(item?.themes) ? item.themes : Array.isArray(item?.bookThemes) ? item.bookThemes : [])
+      : (Array.isArray(item?.themesMl) ? item.themesMl : Array.isArray(item?.bookThemesMl) ? item.bookThemesMl : []);
+
+  return (source && source.length ? source : fallback || []).filter(Boolean);
+}
+
+function getBookAliases(book) {
+  if (!book) return [];
+  const aliases = new Map();
+
+  const addAlias = (label, source) => {
+    const value = getSafeString(label);
+    const normalized = normalizeBookName(value);
+    if (!value || !normalized) return;
+    aliases.set(normalized, {
+      value,
+      normalized,
+      source,
+      bookId: book.id,
+    });
+  };
+
+  addAlias(book.name, "en");
+  addAlias(book.nameMl, "ml");
+
+  return Array.from(aliases.values());
+}
+
+function getBookById(bookId) {
+  return books.find((book) => book.id === bookId) ?? null;
+}
+
+function getCanonicalBookId(input) {
+  if (!input) return "";
+  if (typeof input === "object" && input.id) return input.id;
+  const byName = getBookByName(input);
+  return byName?.id || "";
+}
+
+function getBookByName(name) {
+  const normalized = normalizeBookName(name);
+
+  return books.find((book) => {
+    if (normalizeBookName(book.normalizedName) === normalized) return true;
+    return getBookAliases(book).some((alias) => alias.normalized === normalized);
+  }) ?? null;
+}
+
+function isBookAlreadyGuessed(bookId) {
+  return state.guesses.some((guess) => guess.bookId === bookId);
+}
+
+function getSuggestionCandidates(query, language = getCurrentLanguage()) {
+  const normalizedQuery = normalizeBookName(query);
+  if (!normalizedQuery) return [];
+
+  const ranked = [];
+
+  books.forEach((book) => {
+    const aliases = getBookAliases(book);
+    const matchingAliases = aliases.filter((alias) =>
+      alias.normalized.includes(normalizedQuery)
+    );
+
+    if (!matchingAliases.length) return;
+    if (isBookAlreadyGuessed(book.id)) return;
+
+    const mlAlias = aliases.find((alias) => alias.source === "ml");
+    const enAlias = aliases.find((alias) => alias.source === "en");
+    const exactMatch = matchingAliases.some((alias) => alias.normalized === normalizedQuery);
+    const startsWithMatch = matchingAliases.some((alias) => alias.normalized.startsWith(normalizedQuery));
+    const matchedMl = matchingAliases.some((alias) => alias.source === "ml");
+    const matchedEn = matchingAliases.some((alias) => alias.source === "en");
+
+    if (language === "en") {
+      if (!matchedEn) return;
+
+      ranked.push({
+        bookId: book.id,
+        primaryLabel: getLocalizedBookName(book, "en"),
+        secondaryLabel: "",
+        matchSource: "en",
+        score: exactMatch ? 0 : startsWithMatch ? 1 : 2,
+      });
+      return;
+    }
+
+    ranked.push({
+      bookId: book.id,
+      primaryLabel: getLocalizedBookName(book, "ml"),
+      secondaryLabel:
+        getLocalizedBookName(book, "ml") !== getLocalizedBookName(book, "en")
+          ? getLocalizedBookName(book, "en")
+          : "",
+      matchSource: matchedMl ? "ml" : "en",
+      score: exactMatch ? 0 : startsWithMatch ? 1 : 2,
+    });
+  });
+
+  return ranked
+    .sort((a, b) => {
+      if (a.score !== b.score) return a.score - b.score;
+      if (language === "ml" && a.matchSource !== b.matchSource) {
+        return a.matchSource === "ml" ? -1 : 1;
+      }
+      return a.primaryLabel.localeCompare(b.primaryLabel, language === "ml" ? "ml" : "en");
+    })
+    .slice(0, CONFIG.ui.maxSuggestions);
+}
+
+function applyLanguageToDocument() {
+  const language = getCurrentLanguage();
+  document.documentElement.lang = language;
+  document.documentElement.setAttribute("lang-mode", language);
+}
+
+function renderLanguageControl() {
+  if (elements.languageSelect) {
+    elements.languageSelect.value = getCurrentLanguage();
+  }
+}
+
+function getDisplayBookNameFromGuess(guess) {
+  const book = getBookById(guess?.bookId);
+  return getLocalizedBookName(book, getCurrentLanguage()) || guess?.book || "";
+}
+
 function mergePreferenceData(localPreferences, cloudPreferences) {
   if (!cloudPreferences || typeof cloudPreferences !== "object") {
     return { ...localPreferences };
@@ -516,15 +735,6 @@ function mergeLocalAndCloudData(localData, cloudData) {
     preferences: mergePreferenceData(localData.preferences, cloudData.preferences),
     stats: mergeStatsData(localData.stats, cloudData.stats),
   };
-}
-
-function normalizeBookName(value) {
-  return value.toLowerCase().replace(/[^a-z0-9]/g, "");
-}
-
-function getBookByName(name) {
-  const normalized = normalizeBookName(name);
-  return books.find((book) => book.normalizedName === normalized);
 }
 
 function getBookStatsKey(book) {
@@ -1306,6 +1516,7 @@ function savePreferences() {
     theme: state.preferences.theme,
     difficulty: state.preferences.difficulty,
     preferredMode: state.preferences.preferredMode,
+    language: getCurrentLanguage(),
     sound: state.preferences.sound,
     reducedAnimation: state.preferences.reducedAnimation,
     highContrast: state.preferences.highContrast,
@@ -1317,7 +1528,7 @@ function savePreferences() {
       CONFIG.storageKeys.preferences,
       JSON.stringify(payload),
     );
-  } catch { }
+  } catch {}
 
   syncCurrentStateToCloudIfSignedIn();
 }
@@ -1327,6 +1538,7 @@ function loadPreferences() {
     theme: getSystemTheme(),
     difficulty: "normal",
     preferredMode: "daily",
+    language: "en",
     sound: false,
     reducedAnimation: false,
     highContrast: false,
@@ -1357,6 +1569,7 @@ function loadPreferences() {
         saved?.preferredMode === "practice"
           ? "practice"
           : defaults.preferredMode,
+      language: saved?.language === "ml" ? "ml" : defaults.language,
       sound: typeof saved?.sound === "boolean" ? saved.sound : defaults.sound,
       reducedAnimation:
         typeof saved?.reducedAnimation === "boolean"
@@ -1806,10 +2019,15 @@ function getHintLines() {
   const target = getBookByName(state.currentPuzzle?.verse.book);
   if (!target) return [];
 
+  const language = getCurrentLanguage();
   const guessCount = state.guesses.length;
   const difficulty = state.preferences.difficulty;
   const schedule = getHintSchedule();
   const lines = [];
+
+  const localizedTestament = getLocalizedTestament(target, language);
+  const localizedSection = getLocalizedSection(target, language);
+  const localizedReference = getLocalizedReference(state.currentPuzzle?.verse, language);
 
   const shouldRevealTestament =
     Number.isInteger(schedule.testamentAt) &&
@@ -1828,11 +2046,11 @@ function getHintLines() {
     guessCount >= schedule.referenceAt;
 
   if (shouldRevealTestament) {
-    lines.push(`It is in the ${target.testament} Testament.`);
+    lines.push(`It is in the ${localizedTestament}.`);
   }
 
   if (shouldRevealSection) {
-    lines.push(`It is in the ${target.section} section.`);
+    lines.push(`It is in the ${localizedSection} section.`);
   }
 
   if (shouldRevealFirstLetter) {
@@ -1854,7 +2072,7 @@ function getHintLines() {
   }
 
   if (shouldRevealReference) {
-    lines.push(`Reference: ${state.currentPuzzle.verse.reference}.`);
+    lines.push(`Reference: ${localizedReference}.`);
   } else if (
     difficulty === "hard" &&
     schedule.referenceAt === null &&
@@ -1866,26 +2084,28 @@ function getHintLines() {
   return lines;
 }
 
-function compareGuess(guessName) {
+function compareGuess(guessInput) {
   const target = getBookByName(state.currentPuzzle?.verse.book);
-  const guess = getBookByName(guessName);
+  const guess = typeof guessInput === "object" ? guessInput : getBookByName(guessInput);
 
   if (!target || !guess) return null;
 
   const distance = getBookDistance(target, guess);
   const sameTestament = guess.testament === target.testament;
   const proximity = getProximityLabel(distance, sameTestament);
+  const language = getCurrentLanguage();
 
   return {
-    book: guess.name,
+    bookId: guess.id,
+    book: getLocalizedBookName(guess, language),
     distance,
     proximity,
     testament: {
-      value: guess.testament,
+      value: getLocalizedTestament(guess, language),
       state: sameTestament ? "correct" : "wrong",
     },
     section: {
-      value: guess.section,
+      value: getLocalizedSection(guess, language),
       state: isSameSection(guess, target)
         ? "correct"
         : sameTestament
@@ -1897,7 +2117,7 @@ function compareGuess(guessName) {
       state: guess.firstLetter === target.firstLetter ? "correct" : "wrong",
     },
     bookResult: {
-      value: guess.name,
+      value: getLocalizedBookName(guess, language),
       state:
         proximity === "exact"
           ? "correct"
@@ -1905,7 +2125,7 @@ function compareGuess(guessName) {
             ? "partial"
             : "wrong",
     },
-    solved: guess.name === target.name,
+    solved: guess.id === target.id,
   };
 }
 
@@ -1937,6 +2157,13 @@ function syncPreferenceControls() {
     elements.modeSelect.setAttribute("aria-disabled", "false");
     elements.modeSelect.title = "Switch between Daily and Practice mode.";
   }
+
+  if (elements.languageSelect) {
+    elements.languageSelect.value = getCurrentLanguage();
+    elements.languageSelect.disabled = false;
+    elements.languageSelect.setAttribute("aria-disabled", "false");
+    elements.languageSelect.title = "Choose how book and verse content is displayed.";
+  }
 }
 
 function syncActionButtons() {
@@ -1950,7 +2177,8 @@ function syncActionButtons() {
 }
 
 function renderPuzzleCard() {
-  elements.verseText.textContent = state.currentPuzzle?.verse.text ?? "";
+  const language = getCurrentLanguage();
+  elements.verseText.textContent = getLocalizedVerseText(state.currentPuzzle?.verse, language);
   elements.dateLabel.textContent =
     state.mode === "daily"
       ? `Daily puzzle · ${formatDate()}`
@@ -1973,7 +2201,7 @@ function renderHintBlock() {
   const lines = getHintLines();
 
   elements.hintBlock.innerHTML = lines
-    .map((line) => `<p class="meta-line">${line}</p>`)
+    .map((line) => `<p class="meta-line is-book-data">${line}</p>`)
     .join("");
 
   elements.attemptLabel.textContent = getAttemptLabel();
@@ -1992,13 +2220,14 @@ function renderEmptyGuessRows() {
 
 function renderGuessRow(guess, rowIndex, animate = false) {
   const baseDelay = animate ? rowIndex * 200 : 0;
+  const bookLabel = getDisplayBookNameFromGuess(guess);
 
   return `
-    <div class="guess-grid" aria-label="Guess ${guess.book}">
-      <div class="guess-card ${guess.testament.state}${animate ? " reveal-animate" : ""}" style="--reveal-delay: ${baseDelay}ms">${guess.testament.value}</div>
-      <div class="guess-card ${guess.section.state}${animate ? " reveal-animate" : ""}" style="--reveal-delay: ${baseDelay + 180}ms">${guess.section.value}</div>
+    <div class="guess-grid" aria-label="Guess ${bookLabel}">
+      <div class="guess-card is-book-data ${guess.testament.state}${animate ? " reveal-animate" : ""}" style="--reveal-delay: ${baseDelay}ms">${guess.testament.value}</div>
+      <div class="guess-card is-book-data ${guess.section.state}${animate ? " reveal-animate" : ""}" style="--reveal-delay: ${baseDelay + 180}ms">${guess.section.value}</div>
       <div class="guess-card ${guess.firstLetter.state}${animate ? " reveal-animate" : ""}" style="--reveal-delay: ${baseDelay + 360}ms">${guess.firstLetter.value}</div>
-      <div class="guess-card ${guess.bookResult.state}${animate ? " reveal-animate" : ""}" style="--reveal-delay: ${baseDelay + 540}ms">${guess.bookResult.value}</div>
+      <div class="guess-card is-book-data ${guess.bookResult.state}${animate ? " reveal-animate" : ""}" style="--reveal-delay: ${baseDelay + 540}ms">${bookLabel}</div>
     </div>
   `;
 }
@@ -2217,6 +2446,8 @@ function formatTriviaLabel(value) {
 }
 
 function buildTriviaContent(puzzle, book) {
+  const language = getCurrentLanguage();
+
   if (!puzzle && !book) {
     return {
       title: "",
@@ -2225,54 +2456,48 @@ function buildTriviaContent(puzzle, book) {
     };
   }
 
-  const verseThemes = Array.isArray(puzzle?.themes) ? puzzle.themes : [];
-  const bookThemes = Array.isArray(book?.bookThemes) ? book.bookThemes : [];
+  const verseThemes = getLocalizedThemes(puzzle, language);
+  const bookThemes = getLocalizedThemes(book, language);
   const combinedThemes = [...new Set([...verseThemes, ...bookThemes])].slice(0, 3);
   const chips = [];
 
-  if (book?.testament) {
-    chips.push(`${book.testament} Testament`);
-  }
-
-  if (book?.section) {
-    chips.push(book.section);
+  if (book) {
+    const testament = getLocalizedTestament(book, language);
+    const section = getLocalizedSection(book, language);
+    if (testament) chips.push(`${testament} Testament`);
+    if (section) chips.push(section);
   }
 
   if (combinedThemes.length) {
-    chips.push(`Themes: ${combinedThemes.map(formatTriviaLabel).join(", ")}`);
+    chips.push(`Themes: ${combinedThemes.join(", ")}`);
   }
 
   if (puzzle?.difficulty) {
     chips.push(`Difficulty: ${formatTriviaLabel(puzzle.difficulty)}`);
   }
 
+  const localizedBookName = getLocalizedBookName(book, language) || getLocalizedValue(puzzle?.bookMl, puzzle?.book);
+
   const title =
-    puzzle?.clue ||
-    book?.bookIntroTitle ||
-    `Learn more about ${puzzle?.book ?? book?.name ?? "this book"}`;
+    getLocalizedClue(puzzle, language) ||
+    getLocalizedBookIntroTitle(book, language) ||
+    `Learn more about ${localizedBookName || "this book"}`;
 
   const textParts = [];
 
-  if (puzzle?.explanation) {
-    textParts.push(puzzle.explanation);
-  } else if (puzzle?.clue) {
-    textParts.push(puzzle.clue);
+  const explanation = getLocalizedExplanation(puzzle, language);
+  const clue = getLocalizedClue(puzzle, language);
+
+  if (explanation) {
+    textParts.push(explanation);
+  } else if (clue) {
+    textParts.push(clue);
   }
 
-  if (book?.bookThemes?.length) {
-    const themeText = book.bookThemes
-      .slice(0, 3)
-      .map(formatTriviaLabel)
-      .join(", ");
-
-    textParts.push(`${book.name} often emphasizes themes such as ${themeText}.`);
+  if (bookThemes.length) {
+    textParts.push(`${localizedBookName} often emphasizes themes such as ${bookThemes.slice(0, 3).join(", ")}.`);
   } else if (verseThemes.length) {
-    const verseThemeText = verseThemes
-      .slice(0, 3)
-      .map(formatTriviaLabel)
-      .join(", ");
-
-    textParts.push(`This verse highlights themes such as ${verseThemeText}.`);
+    textParts.push(`This verse highlights themes such as ${verseThemes.slice(0, 3).join(", ")}.`);
   }
 
   if (puzzle?.devotional) {
@@ -2335,17 +2560,18 @@ function getPostGameContent() {
   const puzzle = state.currentPuzzle?.verse;
   if (!puzzle) return null;
 
+  const language = getCurrentLanguage();
   const book = getBookByName(puzzle.book);
 
   return {
     title: state.status === "won" ? "Well done" : "Game over",
     badge: state.status === "won" ? "Solved" : "Failed",
-    reference: puzzle.reference,
-    bookName: puzzle.book,
-    verseText: puzzle.text,
-    explanation: puzzle.explanation ?? "",
-    introTitle: book?.bookIntroTitle ?? "",
-    introText: book?.bookIntroText ?? "",
+    reference: getLocalizedReference(puzzle, language),
+    bookName: getLocalizedBookName(book, language) || getLocalizedValue(puzzle.bookMl, puzzle.book),
+    verseText: getLocalizedVerseText(puzzle, language),
+    explanation: getLocalizedExplanation(puzzle, language),
+    introTitle: getLocalizedBookIntroTitle(book, language),
+    introText: getLocalizedBookIntroText(book, language),
     devotionalText: puzzle.devotional ?? book?.devotionalText ?? "",
     trivia: buildTriviaContent(puzzle, book),
   };
@@ -2362,36 +2588,39 @@ function computeArchiveSummary() {
     totalBooks > 0 ? Math.round((solvedBooks / totalBooks) * 100) : 0;
 
   const testamentSummary = books.reduce((acc, book) => {
-    const key = book.testament;
-    if (!acc[key]) {
-      acc[key] = { total: 0, solved: 0, totalAttempts: 0, solveCount: 0 };
+    const key = book.id ? `testament:${book.id}:${book.testament}` : book.testament;
+    const label = getLocalizedTestament(book, getCurrentLanguage());
+
+    if (!acc[label]) {
+      acc[label] = { total: 0, solved: 0, totalAttempts: 0, solveCount: 0 };
     }
 
-    acc[key].total += 1;
+    acc[label].total += 1;
 
     const entry = getBookStats(book);
     if (entry && entry.solves > 0) {
-      acc[key].solved += 1;
-      acc[key].totalAttempts += entry.totalAttempts;
-      acc[key].solveCount += entry.solves;
+      acc[label].solved += 1;
+      acc[label].totalAttempts += entry.totalAttempts;
+      acc[label].solveCount += entry.solves;
     }
 
     return acc;
   }, {});
 
   const sectionSummary = books.reduce((acc, book) => {
-    const key = book.section;
-    if (!acc[key]) {
-      acc[key] = { total: 0, solved: 0, totalAttempts: 0, solveCount: 0 };
+    const label = getLocalizedSection(book, getCurrentLanguage());
+
+    if (!acc[label]) {
+      acc[label] = { total: 0, solved: 0, totalAttempts: 0, solveCount: 0 };
     }
 
-    acc[key].total += 1;
+    acc[label].total += 1;
 
     const entry = getBookStats(book);
     if (entry && entry.solves > 0) {
-      acc[key].solved += 1;
-      acc[key].totalAttempts += entry.totalAttempts;
-      acc[key].solveCount += entry.solves;
+      acc[label].solved += 1;
+      acc[label].totalAttempts += entry.totalAttempts;
+      acc[label].solveCount += entry.solves;
     }
 
     return acc;
@@ -2472,6 +2701,8 @@ function renderArchiveSummary() {
 function renderArchiveGrid(selectedBookKey = "") {
   if (!elements.archiveGrid) return;
 
+  const language = getCurrentLanguage();
+
   elements.archiveGrid.innerHTML = books
     .map((book) => {
       const entry = getBookStats(book);
@@ -2485,7 +2716,7 @@ function renderArchiveGrid(selectedBookKey = "") {
           ? `Best ${entry.bestAttempts ?? "—"} · Avg ${average ? average.toFixed(1) : "—"}`
           : entry && entry.plays > 0
             ? `Played ${entry.plays} · Unsolved`
-            : `${book.testament} · ${book.section}`;
+            : `${getLocalizedTestament(book, language)} · ${getLocalizedSection(book, language)}`;
 
       return `
         <button
@@ -2499,7 +2730,7 @@ function renderArchiveGrid(selectedBookKey = "") {
             <span class="archive-cell-order">#${book.order}</span>
             <span class="archive-cell-state">${stateLabel}</span>
           </div>
-          <div class="archive-cell-book">${book.name}</div>
+          <div class="archive-cell-book">${getLocalizedBookName(book, language)}</div>
           <div class="archive-cell-meta">${metaLine}</div>
         </button>
       `;
@@ -2520,6 +2751,7 @@ function renderArchiveDetails(bookKey = "") {
     return;
   }
 
+  const language = getCurrentLanguage();
   const entry = getBookStats(book);
   const average = getAverageAttemptsForBook(book);
   const solved = entry?.solves ?? 0;
@@ -2530,8 +2762,8 @@ function renderArchiveDetails(bookKey = "") {
 
   elements.archiveDetails.innerHTML = `
     <div class="archive-details-header">
-      <div class="archive-details-title">${book.name}</div>
-      <div class="archive-details-subtitle">${book.testament} Testament · ${book.section} · Canon #${book.order}</div>
+      <div class="archive-details-title">${getLocalizedBookName(book, language)}</div>
+      <div class="archive-details-subtitle">${getLocalizedTestament(book, language)} Testament · ${getLocalizedSection(book, language)} · Canon #${book.order}</div>
     </div>
 
     <div class="archive-details-grid">
@@ -2718,12 +2950,12 @@ function renderPostGamePanel() {
   elements.postGameBook.textContent = content.bookName;
   elements.postGameVerse.textContent = content.verseText;
   elements.postGameIntroTitle.textContent = content.introTitle;
-  elements.postGameIntroText.textContent = content.introText;
+  elements.postGameIntroText.textContent = content.introText || content.explanation || "";
   elements.postGameNextBtn.hidden = state.mode !== "practice";
 
   renderTriviaSection(content.trivia);
   renderPostGameStats(state.mode);
-if (state.mode === "daily") {
+  if (state.mode === "daily") {
     loadPostGameLeaderboardRank();
   } else {
     renderPostGameLeaderboardRank(null);
@@ -2742,6 +2974,8 @@ function closePostGamePanel() {
 }
 
 function renderPuzzleView() {
+  applyLanguageToDocument();
+  renderLanguageControl();
   renderPuzzleCard();
   renderHintBlock();
   renderGuessRows();
@@ -2752,14 +2986,14 @@ function renderPuzzleView() {
 
   if (state.status === "won") {
     renderStatus(
-      `Correct — ${state.currentPuzzle.verse.book} (${state.currentPuzzle.verse.reference}).`,
+      `Correct — ${getLocalizedValue(state.currentPuzzle.verse.bookMl, state.currentPuzzle.verse.book)} (${getLocalizedReference(state.currentPuzzle.verse, getCurrentLanguage())}).`,
     );
     return;
   }
 
   if (state.status === "lost") {
     renderStatus(
-      `Out of guesses — the answer was ${state.currentPuzzle.verse.book} (${state.currentPuzzle.verse.reference}).`,
+      `Out of guesses — the answer was ${getLocalizedValue(state.currentPuzzle.verse.bookMl, state.currentPuzzle.verse.book)} (${getLocalizedReference(state.currentPuzzle.verse, getCurrentLanguage())}).`,
     );
     return;
   }
@@ -2816,7 +3050,7 @@ function renderSuggestions() {
   }
 
   elements.autocomplete.innerHTML = state.currentSuggestions
-    .map((book, index) => {
+    .map((suggestion, index) => {
       const active = index === state.selectedSuggestionIndex;
 
       return `
@@ -2828,7 +3062,8 @@ function renderSuggestions() {
           aria-selected="${active}"
           data-index="${index}"
         >
-          ${book.name}
+          <span class="suggestion-primary">${suggestion.primaryLabel}</span>
+          ${suggestion.secondaryLabel ? `<span class="suggestion-secondary">${suggestion.secondaryLabel}</span>` : ""}
         </button>
       `;
     })
@@ -2840,7 +3075,7 @@ function renderSuggestions() {
 }
 
 function updateSuggestions(query) {
-  const value = query.trim().toLowerCase();
+  const value = query.trim();
 
   if (!value) {
     resetSuggestionsState();
@@ -2848,10 +3083,7 @@ function updateSuggestions(query) {
     return;
   }
 
-  state.currentSuggestions = books
-    .filter((book) => book.name.toLowerCase().includes(value))
-    .slice(0, CONFIG.ui.maxSuggestions);
-
+  state.currentSuggestions = getSuggestionCandidates(value, getCurrentLanguage());
   state.selectedSuggestionIndex = -1;
   renderSuggestions();
 }
@@ -2860,7 +3092,11 @@ function handleInvalidGuess() {
   renderStatus("Choose a valid Catholic Bible book from the list.");
 }
 
-function handleDuplicateGuess(bookName) {
+function handleDuplicateGuess(book) {
+  const bookName =
+    typeof book === "object"
+      ? getLocalizedBookName(book, getCurrentLanguage())
+      : String(book || "");
   renderStatus(`You already tried ${bookName}.`);
 }
 
@@ -2907,18 +3143,18 @@ async function applyGuess(rawGuess) {
     return;
   }
 
-  const match = getBookByName(rawGuess);
+  const match = typeof rawGuess === "object" ? rawGuess : getBookByName(rawGuess);
   if (!match) {
     handleInvalidGuess();
     return;
   }
 
-  if (state.guesses.some((guess) => guess.book === match.name)) {
-    handleDuplicateGuess(match.name);
+  if (isBookAlreadyGuessed(match.id)) {
+    handleDuplicateGuess(match);
     return;
   }
 
-  const result = compareGuess(match.name);
+  const result = compareGuess(match);
   if (!result) return;
 
   state.guesses.push(result);
@@ -2936,7 +3172,7 @@ async function applyGuess(rawGuess) {
     return;
   }
 
-  handleIncorrectGuess(match.name);
+  handleIncorrectGuess(getLocalizedBookName(match, getCurrentLanguage()));
 }
 
 function buildShareSummary() {
@@ -3072,7 +3308,7 @@ async function handleGuessSubmit(event) {
   event.preventDefault();
   await applyGuess(elements.guessInput.value);
 }
-  
+
 function handleGuessInput(event) {
   if (isGameOver()) return;
 
@@ -3143,7 +3379,10 @@ async function handleGuessKeydown(event) {
   if (event.key === "Enter" && state.selectedSuggestionIndex >= 0) {
     event.preventDefault();
     const picked = state.currentSuggestions[state.selectedSuggestionIndex];
-    if (picked) await applyGuess(picked.name);
+    if (picked) {
+      await applyGuess(getBookById(picked.bookId));
+      return;
+    }
   }
 }
 
@@ -3151,8 +3390,9 @@ async function handleSuggestionClick(event) {
   const button = event.target.closest(".suggestion");
   if (!button) return;
 
-  const book = state.currentSuggestions[Number(button.dataset.index)];
-  if (book) await applyGuess(book.name);
+  const suggestion = state.currentSuggestions[Number(button.dataset.index)];
+  const book = suggestion ? getBookById(suggestion.bookId) : null;
+  if (book) await applyGuess(book);
 }
 
 function handleDocumentClick(event) {
@@ -3175,6 +3415,16 @@ function handleThemeToggle() {
   applyTheme(nextTheme);
   renderThemeToggle();
   savePreferences();
+}
+
+function handleLanguageChange(event) {
+  const value = event.target.value === "ml" ? "ml" : "en";
+  state.preferences.language = value;
+  applyLanguageToDocument();
+  savePreferences();
+  closeSuggestions();
+  updateSuggestions(elements.guessInput?.value ?? "");
+  renderPuzzleView();
 }
 
 function handleDifficultyChange(event) {
@@ -3433,7 +3683,9 @@ function bindEvents() {
   if (elements.themeToggle) {
     elements.themeToggle.addEventListener("click", handleThemeToggle);
   }
-
+  if (elements.languageSelect) {
+    elements.languageSelect.addEventListener("change", handleLanguageChange);
+  }
   if (elements.difficultySelect) {
     elements.difficultySelect.addEventListener("change", handleDifficultyChange);
   }
@@ -3533,7 +3785,7 @@ function bindEvents() {
     elements.closeLeaderboardBtn.addEventListener("click", closeLeaderboardModal);
   }
 
-   if (elements.postGameLeaderboardBtn) {
+  if (elements.postGameLeaderboardBtn) {
     elements.postGameLeaderboardBtn.addEventListener("click", handlePostGameLeaderboardOpen);
   }
 
@@ -3582,10 +3834,12 @@ function resetPuzzle(mode = state.mode) {
 
 function init() {
   loadPreferences();
+  applyLanguageToDocument();
   applyAccessibilityPreferences();
   loadStats();
   initTheme();
   syncPreferenceControls();
+  renderLanguageControl();
   renderAuthUI();
   bindEvents();
   initFirebaseAuth();
