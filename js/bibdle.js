@@ -1240,11 +1240,11 @@ function renderLeaderboardList(entries) {
   if (!elements.leaderboardList) return;
 
   if (!entries || entries.length === 0) {
-    elements.leaderboardList.innerHTML = `
-      <div class="leaderboard-empty">
-        No winning scores have been submitted yet for today.
-      </div>
-    `;
+    elements.leaderboardList.innerHTML = renderEmptyState({
+      title: "No entries yet",
+      body: "No winning scores have been submitted for today’s Daily puzzle yet.",
+      showMarker: true,
+    });
     return;
   }
 
@@ -1253,15 +1253,15 @@ function renderLeaderboardList(entries) {
   elements.leaderboardList.innerHTML = `
     <div class="leaderboard-list-shell">
       ${entries
-      .map((entry, index) => {
-        const isCurrentUser = currentUid && entry.uid === currentUid;
-        const name =
-          entry.uid && String(entry.displayName || "").startsWith("disciple_")
-            ? entry.displayName
-            : entry.displayName
-              ? sanitizeLeaderboardName(entry.displayName)
-              : getAnonymousPublicNameFromUid(entry.uid);
-        return `
+        .map((entry, index) => {
+          const isCurrentUser = currentUid && entry.uid === currentUid;
+          const name =
+            entry.uid && String(entry.displayName || "").startsWith("disciple_")
+              ? entry.displayName
+              : entry.displayName
+                ? sanitizeLeaderboardName(entry.displayName)
+                : getAnonymousPublicNameFromUid(entry.uid);
+          return `
             <div class="leaderboard-row${isCurrentUser ? " is-current-user" : ""}">
               <div class="leaderboard-rank">#${index + 1}</div>
               <div class="leaderboard-name">${name}</div>
@@ -1269,8 +1269,8 @@ function renderLeaderboardList(entries) {
               <div class="leaderboard-time">${formatLeaderboardTime(entry.completedAt)}</div>
             </div>
           `;
-      })
-      .join("")}
+        })
+        .join("")}
     </div>
   `;
 }
@@ -1279,20 +1279,22 @@ function renderCurrentUserRank(rankEntry) {
   if (!elements.leaderboardUserRank) return;
 
   if (!state.auth.user) {
-    elements.leaderboardUserRank.innerHTML = `
-      <div class="leaderboard-empty">
-        Complete today’s Daily puzzle to join the global leaderboard automatically.
-      </div>
-    `;
+    elements.leaderboardUserRank.innerHTML = renderEmptyState({
+      title: "No Daily result yet",
+      body: "Complete today’s Daily puzzle to join the global leaderboard automatically.",
+      compact: true,
+      showMarker: true,
+    });
     return;
   }
 
   if (!rankEntry) {
-    elements.leaderboardUserRank.innerHTML = `
-      <div class="leaderboard-empty">
-        You have not submitted a Daily result for this puzzle yet.
-      </div>
-    `;
+    elements.leaderboardUserRank.innerHTML = renderEmptyState({
+      title: "Not submitted yet",
+      body: "You have not submitted a Daily result for this puzzle yet.",
+      compact: true,
+      showMarker: true,
+    });
     return;
   }
 
@@ -1335,16 +1337,22 @@ function renderPostGameLeaderboardRank(rankEntry) {
   }
 
   if (!state.auth.user) {
-    elements.postGameLeaderboardRank.innerHTML = `
-      <div class="leaderboard-empty">Your Daily result will appear here after submission.</div>
-    `;
+    elements.postGameLeaderboardRank.innerHTML = renderEmptyState({
+      title: "Placement unavailable",
+      body: "Your Daily result will appear here after submission.",
+      compact: true,
+      showMarker: true,
+    });
     return;
   }
 
   if (!rankEntry) {
-    elements.postGameLeaderboardRank.innerHTML = `
-      <div class="leaderboard-empty">Loading your placement…</div>
-    `;
+    elements.postGameLeaderboardRank.innerHTML = renderEmptyState({
+      title: "Loading placement",
+      body: "Checking your current Daily leaderboard position.",
+      compact: true,
+      showMarker: true,
+    });
     return;
   }
 
@@ -1384,15 +1392,21 @@ async function loadPostGameLeaderboardRank() {
   if (!elements.postGameLeaderboardSection) return;
 
   elements.postGameLeaderboardSection.hidden = false;
-  elements.postGameLeaderboardRank.innerHTML = `
-    <div class="leaderboard-empty">Loading your placement…</div>
-  `;
+  elements.postGameLeaderboardRank.innerHTML = renderEmptyState({
+    title: "Loading placement",
+    body: "Checking your current Daily leaderboard position.",
+    compact: true,
+    showMarker: true,
+  });
 
   const user = state.auth.user || firebaseAuth?.currentUser || null;
   if (!user?.uid || !state.auth.enabled || !firebaseDb) {
-    elements.postGameLeaderboardRank.innerHTML = `
-      <div class="leaderboard-empty">Complete a Daily puzzle while connected to global stats to see your placement.</div>
-    `;
+    elements.postGameLeaderboardRank.innerHTML = renderEmptyState({
+      title: "Placement unavailable",
+      body: "Complete a Daily puzzle while connected to global stats to see your placement.",
+      compact: true,
+      showMarker: true,
+    });
     return;
   }
 
@@ -1402,9 +1416,12 @@ async function loadPostGameLeaderboardRank() {
     renderPostGameLeaderboardRank(userRank);
   } catch (error) {
     console.error("Post-game rank load failed:", error);
-    elements.postGameLeaderboardRank.innerHTML = `
-      <div class="leaderboard-empty">Could not load your placement yet.</div>
-    `;
+    elements.postGameLeaderboardRank.innerHTML = renderEmptyState({
+      title: "Could not load placement",
+      body: "Your result was saved locally, but your current global placement is not available yet.",
+      compact: true,
+      showMarker: true,
+    });
   }
 }
 
@@ -2267,6 +2284,45 @@ function renderStatus(message = "Guess the book from the verse above.") {
   elements.statusLine.textContent = message;
 }
 
+function renderEmptyState({
+  title = "",
+  body = "",
+  compact = false,
+  inline = false,
+  showMarker = true,
+  actions = "",
+  className = "",
+} = {}) {
+  const classes = [
+    "empty-state",
+    compact ? "empty-state--compact" : "empty-state--standard",
+    inline ? "empty-state--inline" : "",
+    className || "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  const safeTitle = title ? `<p class="empty-state__title">${title}</p>` : "";
+  const safeBody = body ? `<p class="empty-state__body">${body}</p>` : "";
+  const safeMarker = showMarker
+    ? '<div class="empty-state__marker" aria-hidden="true"></div>'
+    : "";
+  const safeActions = actions
+    ? `<div class="empty-state__actions">${actions}</div>`
+    : "";
+
+  return `
+    <div class="${classes}">
+      ${safeMarker}
+      <div class="empty-state__content">
+        ${safeTitle}
+        ${safeBody}
+      </div>
+      ${safeActions}
+    </div>
+  `;
+}
+
 function computeModeStatsSummary(mode = "daily") {
   const source = mode === "practice" ? state.stats.practice : state.stats.daily;
 
@@ -2374,10 +2430,12 @@ function renderStatsSection(statsObj, container) {
   container.innerHTML = "";
 
   if (safeStats.played <= 0 && totalWins <= 0 && safeStats.lost <= 0) {
-    const empty = document.createElement("p");
-    empty.className = "dist-empty";
-    empty.textContent = "No stats yet. Get playing to see your guess distribution here!";
-    container.appendChild(empty);
+    container.innerHTML = renderEmptyState({
+      title: "No history yet",
+      body: "Play a few rounds to see your guess distribution here.",
+      compact: true,
+      showMarker: true,
+    });
     return;
   }
 
@@ -2417,6 +2475,16 @@ function renderEarnedBadges(container) {
 
   const earnedIds = new Set(getEarnedBadgeIds());
 
+  if (!earnedIds.size) {
+    container.innerHTML = renderEmptyState({
+      title: "No badges earned yet",
+      body: "Keep a Daily winning streak going to unlock streak badges.",
+      compact: true,
+      showMarker: true,
+    });
+    return;
+  }
+
   container.innerHTML = STREAK_BADGES.map((badge) => {
     const isEarned = earnedIds.has(badge.id);
     const badgeClass = isEarned
@@ -2433,13 +2501,6 @@ function renderEarnedBadges(container) {
       </span>
     `;
   }).join("");
-
-  if (!getEarnedBadgeIds().length) {
-    container.insertAdjacentHTML(
-      "beforeend",
-      `<p class="streak-badges-empty">No streak badges yet — keep your Daily win streak going.</p>`,
-    );
-  }
 }
 
 function formatTriviaLabel(value) {
@@ -2546,15 +2607,20 @@ function renderTriviaSection(content) {
   const hasText = !!content?.text;
   const hasChips = Array.isArray(content?.chips) && content.chips.length > 0;
 
+  postGameTriviaSection.hidden = false;
+
   if (!hasTitle && !hasText && !hasChips) {
-    postGameTriviaSection.hidden = true;
     postGameTriviaTitle.textContent = "";
     postGameTriviaText.textContent = "";
-    postGameTriviaChips.innerHTML = "";
+    postGameTriviaChips.innerHTML = renderEmptyState({
+      title: "No trivia available",
+      body: "There is no extra book or verse context to show for this puzzle yet.",
+      compact: true,
+      showMarker: true,
+    });
     return;
   }
 
-  postGameTriviaSection.hidden = false;
   postGameTriviaTitle.textContent = content.title || "Learn more";
   postGameTriviaText.textContent = content.text || "";
   postGameTriviaChips.innerHTML = (content.chips || [])
@@ -2759,13 +2825,16 @@ function renderArchiveGrid(selectedBookKey = "") {
 function renderArchiveDetails(bookKey = "") {
   if (!elements.archiveDetails) return;
 
-  const fallbackBook = books[0];
-  const book =
-    books.find((item) => getBookStatsKey(item) === bookKey) || fallbackBook;
+  const book = books.find((item) => getBookStatsKey(item) === bookKey) || null;
 
   if (!book) {
-    elements.archiveDetails.innerHTML =
-      '<p class="archive-details-empty">Select a book to view archive details.</p>';
+    elements.archiveDetails.innerHTML = renderEmptyState({
+      title: "No book selected",
+      body: "Choose a book from the progress map to view its Daily archive details.",
+      compact: false,
+      inline: false,
+      showMarker: true,
+    });
     return;
   }
 
@@ -2820,19 +2889,28 @@ async function openLeaderboardModal() {
   elements.leaderboardModal.dataset.open = "true";
   elements.leaderboardModal.setAttribute("aria-hidden", "false");
 
-  elements.leaderboardSummary.innerHTML = `
-    <div class="leaderboard-empty">Loading global daily stats…</div>
-  `;
+  elements.leaderboardSummary.innerHTML = renderEmptyState({
+    title: "Loading global stats",
+    body: "Fetching today’s Daily leaderboard activity.",
+    compact: true,
+    showMarker: true,
+  });
   elements.leaderboardList.innerHTML = "";
   elements.leaderboardUserRank.innerHTML = "";
 
   if (!state.auth.enabled || !firebaseDb) {
-    elements.leaderboardSummary.innerHTML = `
-      <div class="leaderboard-empty">Global stats are unavailable right now.</div>
-    `;
-    elements.leaderboardList.innerHTML = `
-      <div class="leaderboard-empty">Firebase is not available, but local gameplay still works.</div>
-    `;
+    elements.leaderboardSummary.innerHTML = renderEmptyState({
+      title: "Global stats unavailable",
+      body: "Global Daily leaderboard data is unavailable right now.",
+      compact: true,
+      showMarker: true,
+    });
+    elements.leaderboardList.innerHTML = renderEmptyState({
+      title: "Leaderboard unavailable",
+      body: "Firebase is not available, but local gameplay still works.",
+      compact: true,
+      showMarker: true,
+    });
     renderCurrentUserRank(null);
     return;
   }
@@ -2852,12 +2930,18 @@ async function openLeaderboardModal() {
     renderLeaderboardList(entries);
   } catch (error) {
     console.error("Leaderboard stats/list load failed:", error);
-    elements.leaderboardSummary.innerHTML = `
-      <div class="leaderboard-empty">Could not load today’s global stats.</div>
-    `;
-    elements.leaderboardList.innerHTML = `
-      <div class="leaderboard-empty">Please try again later.</div>
-    `;
+    elements.leaderboardSummary.innerHTML = renderEmptyState({
+      title: "Could not load global stats",
+      body: "Today’s global Daily metrics are not available right now.",
+      compact: true,
+      showMarker: true,
+    });
+    elements.leaderboardList.innerHTML = renderEmptyState({
+      title: "Could not load leaderboard",
+      body: "Please try again in a moment.",
+      compact: true,
+      showMarker: true,
+    });
     renderCurrentUserRank(null);
     return;
   }
@@ -2867,9 +2951,12 @@ async function openLeaderboardModal() {
     return;
   }
 
-  elements.leaderboardUserRank.innerHTML = `
-    <div class="leaderboard-empty">Loading your placement…</div>
-  `;
+  elements.leaderboardUserRank.innerHTML = renderEmptyState({
+    title: "Loading placement",
+    body: "Checking your current Daily leaderboard position.",
+    compact: true,
+    showMarker: true,
+  });
 
   try {
     const userRank = await fetchCurrentUserRank(dateKey, state.auth.user.uid);
@@ -2877,9 +2964,12 @@ async function openLeaderboardModal() {
     renderCurrentUserRank(userRank);
   } catch (error) {
     console.error("Leaderboard rank load failed:", error);
-    elements.leaderboardUserRank.innerHTML = `
-      <div class="leaderboard-empty">Could not load your personal placement yet.</div>
-    `;
+    elements.leaderboardUserRank.innerHTML = renderEmptyState({
+      title: "Could not load placement",
+      body: "Your personal Daily placement is not available yet.",
+      compact: true,
+      showMarker: true,
+    });
   }
 }
 
@@ -2896,7 +2986,7 @@ function openArchiveModal() {
     books.find((book) => {
       const entry = getBookStats(book);
       return entry && entry.plays > 0;
-    }) || books[0];
+    }) || null;
 
   const selectedKey = selectedBook ? getBookStatsKey(selectedBook) : "";
 
@@ -3063,7 +3153,24 @@ function scrollActiveSuggestionIntoView() {
 
 function renderSuggestions() {
   if (!state.currentSuggestions.length) {
-    closeSuggestions();
+    const query = elements.guessInput?.value?.trim() || "";
+
+    if (!query) {
+      closeSuggestions();
+      return;
+    }
+
+    elements.autocomplete.innerHTML = `
+      <div class="empty-state empty-state--compact" role="presentation">
+        <div class="empty-state__marker" aria-hidden="true"></div>
+        <div class="empty-state__content">
+          <p class="empty-state__title">No matching books</p>
+          <p class="empty-state__body">Try another spelling or a different Bible book name.</p>
+        </div>
+      </div>
+    `;
+    openSuggestions();
+    updateComboboxA11y(false);
     return;
   }
 
