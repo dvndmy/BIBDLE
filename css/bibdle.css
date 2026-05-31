@@ -692,6 +692,112 @@ input::placeholder {
     display: none;
 }
 
+.expander {
+    width: 100%;
+    background: var(--surface-panel);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-card);
+    backdrop-filter: blur(14px);
+    overflow: hidden;
+}
+
+.expander + .expander {
+    margin-top: var(--space-3);
+}
+
+.expander__summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    width: 100%;
+    padding: var(--card-padding-md);
+    list-style: none;
+    cursor: pointer;
+    font-family: var(--font-ui);
+    color: var(--color-text);
+}
+
+.expander__summary::-webkit-details-marker {
+    display: none;
+}
+
+.expander__summary::marker {
+    content: "";
+}
+
+.expander__summary:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: -2px;
+    border-radius: var(--radius-card);
+}
+
+.expander__summary-text {
+    display: grid;
+    gap: var(--space-1);
+    min-width: 0;
+    text-align: left;
+}
+
+.expander__title {
+    font-family: var(--font-ui);
+    font-size: var(--text-sm);
+    font-weight: 800;
+    line-height: 1.35;
+    color: var(--color-text);
+}
+
+.expander__meta {
+    font-family: var(--font-ui);
+    font-size: var(--text-xs);
+    line-height: 1.45;
+    color: var(--color-text-muted);
+}
+
+.expander__icon {
+    flex: 0 0 auto;
+    width: 1rem;
+    height: 1rem;
+    color: var(--color-text-faint);
+    transition: transform var(--transition-interactive), color var(--transition-interactive);
+}
+
+.expander[open] .expander__icon {
+    transform: rotate(90deg);
+    color: var(--color-text);
+}
+
+.expander__body {
+    display: grid;
+    gap: var(--section-gap-sm);
+    padding: 0 var(--card-padding-md) var(--card-padding-md);
+    border-top: 1px solid var(--divider-default);
+}
+
+.expander__body > :first-child {
+    padding-top: var(--space-3);
+}
+
+.expander--subtle {
+    background: var(--surface-card);
+    box-shadow: none;
+}
+
+.expander--compact .expander__summary {
+    padding: var(--card-padding-sm) var(--card-padding-md);
+}
+
+.expander--compact .expander__body {
+    padding: 0 var(--card-padding-md) var(--card-padding-sm);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .expander__icon {
+        transition: none;
+    }
+}
+
 .helper,
 .status-line,
 .footer-note {

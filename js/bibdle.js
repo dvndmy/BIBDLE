@@ -246,6 +246,7 @@ const elements = {
   archiveModal: document.getElementById("archiveModal"),
   closeArchiveBtn: document.getElementById("closeArchiveBtn"),
   archiveSummary: document.getElementById("archiveSummary"),
+  archiveSummaryExpanded: document.getElementById("archiveSummaryExpanded"),
   archiveGrid: document.getElementById("archiveGrid"),
   archiveDetails: document.getElementById("archiveDetails"),
 
@@ -2607,9 +2608,8 @@ function renderTriviaSection(content) {
   const hasText = !!content?.text;
   const hasChips = Array.isArray(content?.chips) && content.chips.length > 0;
 
-  postGameTriviaSection.hidden = false;
-
   if (!hasTitle && !hasText && !hasChips) {
+    postGameTriviaSection.open = false;
     postGameTriviaTitle.textContent = "";
     postGameTriviaText.textContent = "";
     postGameTriviaChips.innerHTML = renderEmptyState({
