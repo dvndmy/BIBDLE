@@ -166,6 +166,8 @@ const state = {
 };
 
 const elements = {
+  mobileLanguageToggle: document.getElementById("mobileLanguageToggle"),
+  mobileLanguageGlyph: document.getElementById("mobileLanguageGlyph"),
   signInBtn: document.getElementById("signInBtn"),
   signOutBtn: document.getElementById("signOutBtn"),
   authStatus: document.getElementById("authStatus"),
@@ -1254,15 +1256,15 @@ function renderLeaderboardList(entries) {
   elements.leaderboardList.innerHTML = `
     <div class="leaderboard-list-shell">
       ${entries
-        .map((entry, index) => {
-          const isCurrentUser = currentUid && entry.uid === currentUid;
-          const name =
-            entry.uid && String(entry.displayName || "").startsWith("disciple_")
-              ? entry.displayName
-              : entry.displayName
-                ? sanitizeLeaderboardName(entry.displayName)
-                : getAnonymousPublicNameFromUid(entry.uid);
-          return `
+      .map((entry, index) => {
+        const isCurrentUser = currentUid && entry.uid === currentUid;
+        const name =
+          entry.uid && String(entry.displayName || "").startsWith("disciple_")
+            ? entry.displayName
+            : entry.displayName
+              ? sanitizeLeaderboardName(entry.displayName)
+              : getAnonymousPublicNameFromUid(entry.uid);
+        return `
             <div class="leaderboard-row${isCurrentUser ? " is-current-user" : ""}">
               <div class="leaderboard-rank">#${index + 1}</div>
               <div class="leaderboard-name">${name}</div>
@@ -1270,8 +1272,8 @@ function renderLeaderboardList(entries) {
               <div class="leaderboard-time">${formatLeaderboardTime(entry.completedAt)}</div>
             </div>
           `;
-        })
-        .join("")}
+      })
+      .join("")}
     </div>
   `;
 }
@@ -1330,30 +1332,36 @@ function renderPostGameLeaderboardRank(rankEntry) {
   if (!elements.postGameLeaderboardSection || !elements.postGameLeaderboardRank) return;
 
   const isDaily = state.mode === "daily";
-  elements.postGameLeaderboardSection.hidden = !isDaily;
+  setHidden(elements.postGameLeaderboardSection, !isDaily);
 
   if (!isDaily) {
-    elements.postGameLeaderboardRank.innerHTML = "";
+    renderInto(elements.postGameLeaderboardRank, "", { visible: false });
     return;
   }
 
   if (!state.auth.user) {
-    elements.postGameLeaderboardRank.innerHTML = renderEmptyState({
-      title: "Placement unavailable",
-      body: "Your Daily result will appear here after submission.",
-      compact: true,
-      showMarker: true,
-    });
+    renderInto(
+      elements.postGameLeaderboardRank,
+      renderEmptyState({
+        title: "Placement unavailable",
+        body: "Your Daily result will appear here after submission.",
+        compact: true,
+        showMarker: true,
+      }),
+    );
     return;
   }
 
   if (!rankEntry) {
-    elements.postGameLeaderboardRank.innerHTML = renderEmptyState({
-      title: "Loading placement",
-      body: "Checking your current Daily leaderboard position.",
-      compact: true,
-      showMarker: true,
-    });
+    renderInto(
+      elements.postGameLeaderboardRank,
+      renderEmptyState({
+        title: "Loading placement",
+        body: "Checking your current Daily leaderboard position.",
+        compact: true,
+        showMarker: true,
+      }),
+    );
     return;
   }
 
@@ -1362,26 +1370,29 @@ function renderPostGameLeaderboardRank(rankEntry) {
       ? `#${rankEntry.rank}`
       : "Recorded";
 
-  elements.postGameLeaderboardRank.innerHTML = `
-    <div class="leaderboard-user-rank-card">
-      <div>
-        <div class="label">Your place</div>
-        <div class="value">${rankLabel}</div>
+  renderInto(
+    elements.postGameLeaderboardRank,
+    `
+      <div class="leaderboard-user-rank-card">
+        <div>
+          <div class="label">Your place</div>
+          <div class="value">${rankLabel}</div>
+        </div>
+        <div>
+          <div class="label">Result</div>
+          <div class="value">${rankEntry.result === "won" ? "Solved" : "Played"}</div>
+        </div>
+        <div>
+          <div class="label">Guesses</div>
+          <div class="value">${rankEntry.guesses ?? "—"}</div>
+        </div>
+        <div>
+          <div class="label">Time</div>
+          <div class="value">${formatLeaderboardTime(rankEntry.completedAt)}</div>
+        </div>
       </div>
-      <div>
-        <div class="label">Result</div>
-        <div class="value">${rankEntry.result === "won" ? "Solved" : "Played"}</div>
-      </div>
-      <div>
-        <div class="label">Guesses</div>
-        <div class="value">${rankEntry.guesses ?? "—"}</div>
-      </div>
-      <div>
-        <div class="label">Time</div>
-        <div class="value">${formatLeaderboardTime(rankEntry.completedAt)}</div>
-      </div>
-    </div>
-  `;
+    `,
+  );
 }
 
 async function loadPostGameLeaderboardRank() {
@@ -1390,24 +1401,30 @@ async function loadPostGameLeaderboardRank() {
     return;
   }
 
-  if (!elements.postGameLeaderboardSection) return;
+  if (!elements.postGameLeaderboardSection || !elements.postGameLeaderboardRank) return;
 
-  elements.postGameLeaderboardSection.hidden = false;
-  elements.postGameLeaderboardRank.innerHTML = renderEmptyState({
-    title: "Loading placement",
-    body: "Checking your current Daily leaderboard position.",
-    compact: true,
-    showMarker: true,
-  });
+  setHidden(elements.postGameLeaderboardSection, false);
+  renderInto(
+    elements.postGameLeaderboardRank,
+    renderEmptyState({
+      title: "Loading placement",
+      body: "Checking your current Daily leaderboard position.",
+      compact: true,
+      showMarker: true,
+    }),
+  );
 
   const user = state.auth.user || firebaseAuth?.currentUser || null;
   if (!user?.uid || !state.auth.enabled || !firebaseDb) {
-    elements.postGameLeaderboardRank.innerHTML = renderEmptyState({
-      title: "Placement unavailable",
-      body: "Complete a Daily puzzle while connected to global stats to see your placement.",
-      compact: true,
-      showMarker: true,
-    });
+    renderInto(
+      elements.postGameLeaderboardRank,
+      renderEmptyState({
+        title: "Placement unavailable",
+        body: "Complete a Daily puzzle while connected to global stats to see your placement.",
+        compact: true,
+        showMarker: true,
+      }),
+    );
     return;
   }
 
@@ -1417,12 +1434,15 @@ async function loadPostGameLeaderboardRank() {
     renderPostGameLeaderboardRank(userRank);
   } catch (error) {
     console.error("Post-game rank load failed:", error);
-    elements.postGameLeaderboardRank.innerHTML = renderEmptyState({
-      title: "Could not load placement",
-      body: "Your result was saved locally, but your current global placement is not available yet.",
-      compact: true,
-      showMarker: true,
-    });
+    renderInto(
+      elements.postGameLeaderboardRank,
+      renderEmptyState({
+        title: "Could not load placement",
+        body: "Your result was saved locally, but your current global placement is not available yet.",
+        compact: true,
+        showMarker: true,
+      }),
+    );
   }
 }
 
@@ -2324,6 +2344,41 @@ function renderEmptyState({
   `;
 }
 
+function setHidden(element, hidden) {
+  if (!element) return;
+  element.hidden = !!hidden;
+}
+
+function setModalOpenState(modal, isOpen) {
+  if (!modal) return;
+  modal.dataset.open = isOpen ? "true" : "false";
+  modal.setAttribute("aria-hidden", isOpen ? "false" : "true");
+}
+
+function setContentVisibility(element, shouldShow, renderWhenHidden = false) {
+  if (!element) return;
+  setHidden(element, !shouldShow);
+  if (!shouldShow && !renderWhenHidden) {
+    element.innerHTML = "";
+  }
+}
+
+function renderInto(container, markup, options = {}) {
+  if (!container) return;
+  const { visible = true, preserveWhenHidden = false } = options;
+  setContentVisibility(container, visible, preserveWhenHidden);
+  if (!visible && !preserveWhenHidden) return;
+  container.innerHTML = markup;
+}
+
+function hasItems(value) {
+  return Array.isArray(value) && value.length > 0;
+}
+
+function hasTextContent(value) {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
 function computeModeStatsSummary(mode = "daily") {
   const source = mode === "practice" ? state.stats.practice : state.stats.daily;
 
@@ -2390,15 +2445,9 @@ function renderPostGameStats(mode) {
     elements.postGameStatsLost.textContent = String(statsObj.lost);
   }
 
-  if (elements.postGameStatsGridSecondary) {
-    elements.postGameStatsGridSecondary.hidden = !isDaily;
-  }
-  if (elements.postGameCurrentStreakItem) {
-    elements.postGameCurrentStreakItem.hidden = !isDaily;
-  }
-  if (elements.postGameBestStreakItem) {
-    elements.postGameBestStreakItem.hidden = !isDaily;
-  }
+  setHidden(elements.postGameStatsGridSecondary, !isDaily);
+  setHidden(elements.postGameCurrentStreakItem, !isDaily);
+  setHidden(elements.postGameBestStreakItem, !isDaily);
 
   if (isDaily) {
     if (elements.postGameStatsCurrentStreak) {
@@ -2604,28 +2653,37 @@ function renderTriviaSection(content) {
     return;
   }
 
-  const hasTitle = !!content?.title;
-  const hasText = !!content?.text;
-  const hasChips = Array.isArray(content?.chips) && content.chips.length > 0;
+  const hasTitle = hasTextContent(content?.title);
+  const hasText = hasTextContent(content?.text);
+  const hasChips = hasItems(content?.chips);
+  const hasTrivia = hasTitle || hasText || hasChips;
 
-  if (!hasTitle && !hasText && !hasChips) {
-    postGameTriviaSection.open = false;
+  setHidden(postGameTriviaSection, !hasTrivia);
+
+  if (!hasTrivia) {
     postGameTriviaTitle.textContent = "";
     postGameTriviaText.textContent = "";
-    postGameTriviaChips.innerHTML = renderEmptyState({
-      title: "No trivia available",
-      body: "There is no extra book or verse context to show for this puzzle yet.",
-      compact: true,
-      showMarker: true,
-    });
+    renderInto(
+      postGameTriviaChips,
+      renderEmptyState({
+        title: "No trivia available",
+        body: "There is no extra book or verse context to show for this puzzle yet.",
+        compact: true,
+        showMarker: true,
+      }),
+      { visible: false },
+    );
     return;
   }
 
   postGameTriviaTitle.textContent = content.title || "Learn more";
   postGameTriviaText.textContent = content.text || "";
-  postGameTriviaChips.innerHTML = (content.chips || [])
-    .map((chip) => `<span class="postgame-chip ui-chip">${chip}</span>`)
-    .join("");
+  renderInto(
+    postGameTriviaChips,
+    (content.chips || [])
+      .map((chip) => `<span class="postgame-chip ui-chip">${chip}</span>`)
+      .join(""),
+  );
 }
 
 function getPostGameContent() {
@@ -2828,13 +2886,16 @@ function renderArchiveDetails(bookKey = "") {
   const book = books.find((item) => getBookStatsKey(item) === bookKey) || null;
 
   if (!book) {
-    elements.archiveDetails.innerHTML = renderEmptyState({
-      title: "No book selected",
-      body: "Choose a book from the progress map to view its Daily archive details.",
-      compact: false,
-      inline: false,
-      showMarker: true,
-    });
+    renderInto(
+      elements.archiveDetails,
+      renderEmptyState({
+        title: "No book selected",
+        body: "Choose a book from the progress map to view its Daily archive details.",
+        compact: false,
+        inline: false,
+        showMarker: true,
+      }),
+    );
     return;
   }
 
@@ -2847,35 +2908,38 @@ function renderArchiveDetails(bookKey = "") {
   const lastSolvedDate = entry?.lastSolvedDate ?? "Not yet solved";
   const stateLabel = getArchiveCellStateLabel(book);
 
-  elements.archiveDetails.innerHTML = `
-    <div class="archive-details-header">
-      <div class="archive-details-title">${getLocalizedBookName(book, language)}</div>
-      <div class="archive-details-subtitle">${getLocalizedTestament(book, language)} Testament · ${getLocalizedSection(book, language)} · Canon #${book.order}</div>
-    </div>
+  renderInto(
+    elements.archiveDetails,
+    `
+      <div class="archive-details-header">
+        <div class="archive-details-title">${getLocalizedBookName(book, language)}</div>
+        <div class="archive-details-subtitle">${getLocalizedTestament(book, language)} Testament · ${getLocalizedSection(book, language)} · Canon #${book.order}</div>
+      </div>
 
-    <div class="archive-details-grid">
-      <div class="archive-detail-stat">
-        <span class="archive-detail-stat-value">${plays}</span>
-        <span class="archive-detail-stat-label">Daily plays</span>
+      <div class="archive-details-grid">
+        <div class="archive-detail-stat">
+          <span class="archive-detail-stat-value">${plays}</span>
+          <span class="archive-detail-stat-label">Daily plays</span>
+        </div>
+        <div class="archive-detail-stat">
+          <span class="archive-detail-stat-value">${solved}</span>
+          <span class="archive-detail-stat-label">Daily solves</span>
+        </div>
+        <div class="archive-detail-stat">
+          <span class="archive-detail-stat-value">${bestAttempts}</span>
+          <span class="archive-detail-stat-label">Best attempts</span>
+        </div>
+        <div class="archive-detail-stat">
+          <span class="archive-detail-stat-value">${average ? average.toFixed(1) : "—"}</span>
+          <span class="archive-detail-stat-label">Average attempts</span>
+        </div>
       </div>
-      <div class="archive-detail-stat">
-        <span class="archive-detail-stat-value">${solved}</span>
-        <span class="archive-detail-stat-label">Daily solves</span>
-      </div>
-      <div class="archive-detail-stat">
-        <span class="archive-detail-stat-value">${bestAttempts}</span>
-        <span class="archive-detail-stat-label">Best attempts</span>
-      </div>
-      <div class="archive-detail-stat">
-        <span class="archive-detail-stat-value">${average ? average.toFixed(1) : "—"}</span>
-        <span class="archive-detail-stat-label">Average attempts</span>
-      </div>
-    </div>
 
-    <p class="archive-details-copy">
-      Status: ${stateLabel}. Last solved date: ${lastSolvedDate}. This archive tracks Daily mode progress only, so books still appear here even if they have never been played.
-    </p>
-  `;
+      <p class="archive-details-copy">
+        Status: ${stateLabel}. Last solved date: ${lastSolvedDate}. This archive tracks Daily mode progress only, so books still appear here even if they have never been played.
+      </p>
+    `,
+  );
 }
 
 function handlePostGameLeaderboardOpen() {
@@ -2886,31 +2950,40 @@ function handlePostGameLeaderboardOpen() {
 async function openLeaderboardModal() {
   if (!elements.leaderboardModal) return;
 
-  elements.leaderboardModal.dataset.open = "true";
-  elements.leaderboardModal.setAttribute("aria-hidden", "false");
+  setModalOpenState(elements.leaderboardModal, true);
 
-  elements.leaderboardSummary.innerHTML = renderEmptyState({
-    title: "Loading global stats",
-    body: "Fetching today’s Daily leaderboard activity.",
-    compact: true,
-    showMarker: true,
-  });
-  elements.leaderboardList.innerHTML = "";
-  elements.leaderboardUserRank.innerHTML = "";
+  renderInto(
+    elements.leaderboardSummary,
+    renderEmptyState({
+      title: "Loading global stats",
+      body: "Fetching today’s Daily leaderboard activity.",
+      compact: true,
+      showMarker: true,
+    }),
+    { visible: true, preserveWhenHidden: true },
+  );
+  renderInto(elements.leaderboardList, "", { visible: false });
+  renderInto(elements.leaderboardUserRank, "", { visible: false });
 
   if (!state.auth.enabled || !firebaseDb) {
-    elements.leaderboardSummary.innerHTML = renderEmptyState({
-      title: "Global stats unavailable",
-      body: "Global Daily leaderboard data is unavailable right now.",
-      compact: true,
-      showMarker: true,
-    });
-    elements.leaderboardList.innerHTML = renderEmptyState({
-      title: "Leaderboard unavailable",
-      body: "Firebase is not available, but local gameplay still works.",
-      compact: true,
-      showMarker: true,
-    });
+    renderInto(
+      elements.leaderboardSummary,
+      renderEmptyState({
+        title: "Global stats unavailable",
+        body: "Global Daily leaderboard data is unavailable right now.",
+        compact: true,
+        showMarker: true,
+      }),
+    );
+    renderInto(
+      elements.leaderboardList,
+      renderEmptyState({
+        title: "Leaderboard unavailable",
+        body: "Firebase is not available, but local gameplay still works.",
+        compact: true,
+        showMarker: true,
+      }),
+    );
     renderCurrentUserRank(null);
     return;
   }
@@ -2930,18 +3003,24 @@ async function openLeaderboardModal() {
     renderLeaderboardList(entries);
   } catch (error) {
     console.error("Leaderboard stats/list load failed:", error);
-    elements.leaderboardSummary.innerHTML = renderEmptyState({
-      title: "Could not load global stats",
-      body: "Today’s global Daily metrics are not available right now.",
-      compact: true,
-      showMarker: true,
-    });
-    elements.leaderboardList.innerHTML = renderEmptyState({
-      title: "Could not load leaderboard",
-      body: "Please try again in a moment.",
-      compact: true,
-      showMarker: true,
-    });
+    renderInto(
+      elements.leaderboardSummary,
+      renderEmptyState({
+        title: "Could not load global stats",
+        body: "Today’s global Daily metrics are not available right now.",
+        compact: true,
+        showMarker: true,
+      }),
+    );
+    renderInto(
+      elements.leaderboardList,
+      renderEmptyState({
+        title: "Could not load leaderboard",
+        body: "Please try again in a moment.",
+        compact: true,
+        showMarker: true,
+      }),
+    );
     renderCurrentUserRank(null);
     return;
   }
@@ -2951,12 +3030,15 @@ async function openLeaderboardModal() {
     return;
   }
 
-  elements.leaderboardUserRank.innerHTML = renderEmptyState({
-    title: "Loading placement",
-    body: "Checking your current Daily leaderboard position.",
-    compact: true,
-    showMarker: true,
-  });
+  renderInto(
+    elements.leaderboardUserRank,
+    renderEmptyState({
+      title: "Loading placement",
+      body: "Checking your current Daily leaderboard position.",
+      compact: true,
+      showMarker: true,
+    }),
+  );
 
   try {
     const userRank = await fetchCurrentUserRank(dateKey, state.auth.user.uid);
@@ -2964,19 +3046,21 @@ async function openLeaderboardModal() {
     renderCurrentUserRank(userRank);
   } catch (error) {
     console.error("Leaderboard rank load failed:", error);
-    elements.leaderboardUserRank.innerHTML = renderEmptyState({
-      title: "Could not load placement",
-      body: "Your personal Daily placement is not available yet.",
-      compact: true,
-      showMarker: true,
-    });
+    renderInto(
+      elements.leaderboardUserRank,
+      renderEmptyState({
+        title: "Could not load placement",
+        body: "Your personal Daily placement is not available yet.",
+        compact: true,
+        showMarker: true,
+      }),
+    );
   }
 }
 
 function closeLeaderboardModal() {
   if (!elements.leaderboardModal) return;
-  elements.leaderboardModal.dataset.open = "false";
-  elements.leaderboardModal.setAttribute("aria-hidden", "true");
+  setModalOpenState(elements.leaderboardModal, false);
 }
 
 function openArchiveModal() {
@@ -3046,8 +3130,7 @@ function renderPostGamePanel() {
   const content = getPostGameContent();
 
   if (!content || !isGameOver()) {
-    elements.postGameModal.dataset.open = "false";
-    elements.postGameModal.setAttribute("aria-hidden", "true");
+    setModalOpenState(elements.postGameModal, false);
     state.postGameOpen = false;
     return;
   }
@@ -3059,25 +3142,25 @@ function renderPostGamePanel() {
   elements.postGameVerse.textContent = content.verseText;
   elements.postGameIntroTitle.textContent = content.introTitle;
   elements.postGameIntroText.textContent = content.introText || content.explanation || "";
-  elements.postGameNextBtn.hidden = state.mode !== "practice";
+  setHidden(elements.postGameNextBtn, state.mode !== "practice");
 
   renderTriviaSection(content.trivia);
   renderPostGameStats(state.mode);
+
   if (state.mode === "daily") {
     loadPostGameLeaderboardRank();
   } else {
     renderPostGameLeaderboardRank(null);
   }
-  elements.postGameModal.dataset.open = "true";
-  elements.postGameModal.setAttribute("aria-hidden", "false");
+
+  setModalOpenState(elements.postGameModal, true);
   state.postGameOpen = true;
 }
 
 function closePostGamePanel() {
   if (!elements.postGameModal) return;
 
-  elements.postGameModal.dataset.open = "false";
-  elements.postGameModal.setAttribute("aria-hidden", "true");
+  setModalOpenState(elements.postGameModal, false);
   state.postGameOpen = false;
 }
 
@@ -3123,8 +3206,10 @@ function resetSuggestionsState() {
 
 function closeSuggestions() {
   state.selectedSuggestionIndex = -1;
-  elements.autocomplete.dataset.open = "false";
-  elements.autocomplete.innerHTML = "";
+  if (elements.autocomplete) {
+    elements.autocomplete.dataset.open = "false";
+    renderInto(elements.autocomplete, "", { visible: false });
+  }
   updateComboboxA11y(false);
 }
 
@@ -3142,7 +3227,9 @@ function updateComboboxA11y(isOpen) {
 }
 
 function openSuggestions() {
+  if (!elements.autocomplete) return;
   elements.autocomplete.dataset.open = "true";
+  setHidden(elements.autocomplete, false);
   updateComboboxA11y(true);
 }
 
@@ -3152,6 +3239,8 @@ function scrollActiveSuggestionIntoView() {
 }
 
 function renderSuggestions() {
+  if (!elements.autocomplete) return;
+
   if (!state.currentSuggestions.length) {
     const query = elements.guessInput?.value?.trim() || "";
 
@@ -3160,39 +3249,42 @@ function renderSuggestions() {
       return;
     }
 
-    elements.autocomplete.innerHTML = `
-      <div class="empty-state empty-state--compact" role="presentation">
-        <div class="empty-state__marker" aria-hidden="true"></div>
-        <div class="empty-state__content">
-          <p class="empty-state__title">No matching books</p>
-          <p class="empty-state__body">Try another spelling or a different Bible book name.</p>
-        </div>
-      </div>
-    `;
+    renderInto(
+      elements.autocomplete,
+      renderEmptyState({
+        title: "No matching books",
+        body: "Try another spelling or a different Bible book name.",
+        compact: true,
+        showMarker: true,
+      }),
+    );
     openSuggestions();
     updateComboboxA11y(false);
     return;
   }
 
-  elements.autocomplete.innerHTML = state.currentSuggestions
-    .map((suggestion, index) => {
-      const active = index === state.selectedSuggestionIndex;
+  renderInto(
+    elements.autocomplete,
+    state.currentSuggestions
+      .map((suggestion, index) => {
+        const active = index === state.selectedSuggestionIndex;
 
-      return `
-        <button
-          id="suggestion-${index}"
-          type="button"
-          class="suggestion${active ? " is-active" : ""}"
-          role="option"
-          aria-selected="${active}"
-          data-index="${index}"
-        >
-          <span class="suggestion-primary">${suggestion.primaryLabel}</span>
-          ${suggestion.secondaryLabel ? `<span class="suggestion-secondary">${suggestion.secondaryLabel}</span>` : ""}
-        </button>
-      `;
-    })
-    .join("");
+        return `
+          <button
+            id="suggestion-${index}"
+            type="button"
+            class="suggestion${active ? " is-active" : ""}"
+            role="option"
+            aria-selected="${active}"
+            data-index="${index}"
+          >
+            <span class="suggestion-primary">${suggestion.primaryLabel}</span>
+            ${suggestion.secondaryLabel ? `<span class="suggestion-secondary">${suggestion.secondaryLabel}</span>` : ""}
+          </button>
+        `;
+      })
+      .join(""),
+  );
 
   openSuggestions();
   updateComboboxA11y(state.selectedSuggestionIndex >= 0);
@@ -3340,10 +3432,7 @@ async function copyResult() {
 }
 
 function setModalOpen(modal, isOpen) {
-  if (!modal) return;
-
-  modal.dataset.open = isOpen ? "true" : "false";
-  modal.setAttribute("aria-hidden", isOpen ? "false" : "true");
+  setModalOpenState(modal, isOpen);
 }
 
 function openHelpModal() {
@@ -3549,7 +3638,42 @@ function handleLanguageChange(event) {
   savePreferences();
   closeSuggestions();
   updateSuggestions(elements.guessInput?.value ?? "");
+  renderMobileLanguageToggle();
   renderPuzzleView();
+}
+
+function renderMobileLanguageToggle() {
+  const currentLanguage = getCurrentLanguage();
+  const nextLanguage = currentLanguage === "ml" ? "en" : "ml";
+
+  if (elements.mobileLanguageGlyph) {
+    elements.mobileLanguageGlyph.textContent = currentLanguage === "ml" ? "A" : "അ";
+  }
+
+  if (elements.mobileLanguageToggle) {
+    const label =
+      nextLanguage === "ml"
+        ? "Switch language to Malayalam"
+        : "Switch language to English";
+
+    elements.mobileLanguageToggle.setAttribute("aria-label", label);
+    elements.mobileLanguageToggle.title =
+      nextLanguage === "ml" ? "Malayalam" : "English";
+  }
+}
+
+function handleMobileLanguageToggle() {
+  const nextLanguage = getCurrentLanguage() === "ml" ? "en" : "ml";
+
+  if (elements.languageSelect) {
+    elements.languageSelect.value = nextLanguage;
+  }
+
+  handleLanguageChange({
+    target: {
+      value: nextLanguage,
+    },
+  });
 }
 
 function handleDifficultyChange(event) {
@@ -3808,9 +3932,15 @@ function bindEvents() {
   if (elements.themeToggle) {
     elements.themeToggle.addEventListener("click", handleThemeToggle);
   }
+
   if (elements.languageSelect) {
     elements.languageSelect.addEventListener("change", handleLanguageChange);
   }
+
+  if (elements.mobileLanguageToggle) {
+    elements.mobileLanguageToggle.addEventListener("click", handleMobileLanguageToggle);
+  }
+
   if (elements.difficultySelect) {
     elements.difficultySelect.addEventListener("change", handleDifficultyChange);
   }
@@ -3914,13 +4044,7 @@ function bindEvents() {
     elements.postGameLeaderboardBtn.addEventListener("click", handlePostGameLeaderboardOpen);
   }
 
-  if (elements.leaderboardModal) {
-    elements.leaderboardModal.addEventListener("click", (event) => {
-      if (event.target === elements.leaderboardModal) {
-        closeLeaderboardModal();
-      }
-    });
-  }
+  bindBackdropClose(elements.leaderboardModal, closeLeaderboardModal);
 }
 
 function initGame() {
@@ -3965,6 +4089,7 @@ function init() {
   initTheme();
   syncPreferenceControls();
   renderLanguageControl();
+  renderMobileLanguageToggle();
   renderAuthUI();
   bindEvents();
   initFirebaseAuth();
