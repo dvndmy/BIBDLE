@@ -1105,41 +1105,37 @@ async function fetchCurrentUserRank(dateKey, uid) {
 function renderLeaderboardSummary(stats) {
   if (!elements.leaderboardSummary) return;
 
-  const players = stats?.players || 0;
-  const solvers = stats?.solvers || 0;
-  const averageWinningGuesses =
-    typeof stats?.averageWinningGuesses === "number"
-      ? stats.averageWinningGuesses
-      : 0;
-  const solveRate = players > 0 ? Math.round((solvers / players) * 100) : 0;
+  if (!stats) {
+    renderInto(
+      elements.leaderboardSummary,
+      renderEmptyState({
+        title: "Loading global stats",
+        body: "Fetching today’s Daily leaderboard activity.",
+        compact: true,
+        showMarker: true,
+        tone: "loading",
+      }),
+    );
+    return;
+  }
 
   elements.leaderboardSummary.innerHTML = `
-    <div class="section-shell section-shell--subtle">
-      <div class="section-shell__header">
-        <p class="subtle-label section-shell__meta">Today’s activity</p>
+    <div class="leaderboard-kpis">
+      <div class="leaderboard-kpi">
+        <div class="leaderboard-kpi-value">${stats.totalPlayers ?? 0}</div>
+        <div class="leaderboard-kpi-label">Players</div>
       </div>
-      <div class="section-shell__body">
-        <div class="leaderboard-kpis">
-          <div class="leaderboard-kpi kpi-card">
-            <span class="leaderboard-kpi-value">${players}</span>
-            <span class="leaderboard-kpi-label">Players today</span>
-          </div>
-          <div class="leaderboard-kpi kpi-card">
-            <span class="leaderboard-kpi-value">${solvers}</span>
-            <span class="leaderboard-kpi-label">Solved today</span>
-          </div>
-          <div class="leaderboard-kpi kpi-card">
-            <span class="leaderboard-kpi-value">${solveRate}%</span>
-            <span class="leaderboard-kpi-label">Solve rate</span>
-          </div>
-          <div class="leaderboard-kpi kpi-card">
-            <span class="leaderboard-kpi-value">${solvers > 0 ? averageWinningGuesses.toFixed(2) : "—"}</span>
-            <span class="leaderboard-kpi-label">Avg. winning guesses</span>
-          </div>
-        </div>
+      <div class="leaderboard-kpi">
+        <div class="leaderboard-kpi-value">${stats.completed ?? 0}</div>
+        <div class="leaderboard-kpi-label">Completed</div>
       </div>
-      <div class="section-shell__footer">
-        <p class="leaderboard-meta-note">Global daily metrics for the current puzzle.</p>
+      <div class="leaderboard-kpi">
+        <div class="leaderboard-kpi-value">${stats.avgGuesses ?? "—"}</div>
+        <div class="leaderboard-kpi-label">Average guesses</div>
+      </div>
+      <div class="leaderboard-kpi">
+        <div class="leaderboard-kpi-value">${stats.fastestTime ?? "—"}</div>
+        <div class="leaderboard-kpi-label">Fastest time</div>
       </div>
     </div>
   `;
@@ -1242,40 +1238,54 @@ async function submitDailyResultToLeaderboard(outcome) {
 function renderLeaderboardList(entries) {
   if (!elements.leaderboardList) return;
 
-  if (!entries || entries.length === 0) {
-    elements.leaderboardList.innerHTML = renderEmptyState({
-      title: "No entries yet",
-      body: "No winning scores have been submitted for today’s Daily puzzle yet.",
-      showMarker: true,
-    });
+  if (!Array.isArray(entries)) {
+    renderInto(
+      elements.leaderboardList,
+      renderEmptyState({
+        title: "Loading leaderboard",
+        body: "Fetching today’s top Daily scores.",
+        compact: true,
+        showMarker: true,
+        tone: "loading",
+      }),
+    );
     return;
   }
 
-  const currentUid = state.auth.user?.uid || null;
+  if (!entries.length) {
+    renderInto(
+      elements.leaderboardList,
+      renderEmptyState({
+        title: "No leaderboard entries yet",
+        body: "Be the first player to finish today’s Daily puzzle.",
+        compact: false,
+        showMarker: true,
+        tone: "empty",
+      }),
+    );
+    return;
+  }
 
-  elements.leaderboardList.innerHTML = `
-    <div class="leaderboard-list-shell">
-      ${entries
-      .map((entry, index) => {
-        const isCurrentUser = currentUid && entry.uid === currentUid;
-        const name =
-          entry.uid && String(entry.displayName || "").startsWith("disciple_")
-            ? entry.displayName
-            : entry.displayName
-              ? sanitizeLeaderboardName(entry.displayName)
-              : getAnonymousPublicNameFromUid(entry.uid);
-        return `
-            <div class="leaderboard-row${isCurrentUser ? " is-current-user" : ""}">
-              <div class="leaderboard-rank">#${index + 1}</div>
-              <div class="leaderboard-name">${name}</div>
-              <div class="leaderboard-guesses">${entry.guesses} guesses</div>
-              <div class="leaderboard-time">${formatLeaderboardTime(entry.completedAt)}</div>
-            </div>
-          `;
-      })
-      .join("")}
-    </div>
-  `;
+  const rows = entries
+    .map((entry) => {
+      const isCurrentUser =
+        state.auth.user && entry.userId && entry.userId === state.auth.user.uid;
+
+      return `
+        <div class="leaderboard-row ${isCurrentUser ? "is-current-user" : ""}">
+          <div class="leaderboard-rank">#${entry.rank}</div>
+          <div class="leaderboard-name">${escapeHtml(entry.displayName || "Anonymous")}</div>
+          <div class="leaderboard-guesses">${entry.guesses ?? "—"} guesses</div>
+          <div class="leaderboard-time">${formatLeaderboardTime(entry.completedAt)}</div>
+        </div>
+      `;
+    })
+    .join("");
+
+  renderInto(
+    elements.leaderboardList,
+    `<div class="leaderboard-list-shell">${rows}</div>`,
+  );
 }
 
 function renderCurrentUserRank(rankEntry) {
@@ -1283,20 +1293,22 @@ function renderCurrentUserRank(rankEntry) {
 
   if (!state.auth.user) {
     elements.leaderboardUserRank.innerHTML = renderEmptyState({
-      title: "No Daily result yet",
-      body: "Complete today’s Daily puzzle to join the global leaderboard automatically.",
+      title: "Sign in to join the leaderboard",
+      body: "Complete today’s Daily puzzle while signed in to record your placement.",
       compact: true,
       showMarker: true,
+      tone: "empty",
     });
     return;
   }
 
   if (!rankEntry) {
     elements.leaderboardUserRank.innerHTML = renderEmptyState({
-      title: "Not submitted yet",
-      body: "You have not submitted a Daily result for this puzzle yet.",
+      title: "No Daily result yet",
+      body: "Finish today’s Daily puzzle to see your placement here.",
       compact: true,
       showMarker: true,
+      tone: "empty",
     });
     return;
   }
@@ -1343,10 +1355,11 @@ function renderPostGameLeaderboardRank(rankEntry) {
     renderInto(
       elements.postGameLeaderboardRank,
       renderEmptyState({
-        title: "Placement unavailable",
-        body: "Your Daily result will appear here after submission.",
+        title: "Sign in to track placement",
+        body: "Your Daily result can appear here once you are signed in.",
         compact: true,
         showMarker: true,
+        tone: "empty",
       }),
     );
     return;
@@ -1360,6 +1373,7 @@ function renderPostGameLeaderboardRank(rankEntry) {
         body: "Checking your current Daily leaderboard position.",
         compact: true,
         showMarker: true,
+        tone: "loading",
       }),
     );
     return;
@@ -1411,6 +1425,7 @@ async function loadPostGameLeaderboardRank() {
       body: "Checking your current Daily leaderboard position.",
       compact: true,
       showMarker: true,
+      tone: "loading",
     }),
   );
 
@@ -1423,6 +1438,7 @@ async function loadPostGameLeaderboardRank() {
         body: "Complete a Daily puzzle while connected to global stats to see your placement.",
         compact: true,
         showMarker: true,
+        tone: "error",
       }),
     );
     return;
@@ -1441,6 +1457,7 @@ async function loadPostGameLeaderboardRank() {
         body: "Your result was saved locally, but your current global placement is not available yet.",
         compact: true,
         showMarker: true,
+        tone: "error",
       }),
     );
   }
@@ -2303,38 +2320,29 @@ function renderStatus(message = "Guess the book from the verse above.") {
 function renderEmptyState({
   title = "",
   body = "",
+  actions = "",
   compact = false,
   inline = false,
   showMarker = true,
-  actions = "",
-  className = "",
+  tone = "empty",
 } = {}) {
   const classes = [
     "empty-state",
     compact ? "empty-state--compact" : "empty-state--standard",
     inline ? "empty-state--inline" : "",
-    className || "",
+    tone ? `empty-state--${tone}` : "",
   ]
     .filter(Boolean)
     .join(" ");
 
-  const safeTitle = title ? `<p class="empty-state__title">${title}</p>` : "";
-  const safeBody = body ? `<p class="empty-state__body">${body}</p>` : "";
-  const safeMarker = showMarker
-    ? '<div class="empty-state__marker" aria-hidden="true"></div>'
-    : "";
-  const safeActions = actions
-    ? `<div class="empty-state__actions">${actions}</div>`
-    : "";
-
   return `
-    <div class="${classes}">
-      ${safeMarker}
+    <div class="${classes}" ${tone === "error" ? 'role="alert"' : ""}>
+      ${showMarker ? '<div class="empty-state__marker" aria-hidden="true"></div>' : ""}
       <div class="empty-state__content">
-        ${safeTitle}
-        ${safeBody}
+        ${title ? `<p class="empty-state__title">${title}</p>` : ""}
+        ${body ? `<p class="empty-state__body">${body}</p>` : ""}
       </div>
-      ${safeActions}
+      ${actions ? `<div class="empty-state__actions">${actions}</div>` : ""}
     </div>
   `;
 }
@@ -2513,9 +2521,21 @@ function renderStatsSection(statsObj, container) {
   if (!hasStats) {
     container.innerHTML = renderEmptyState({
       title: "No history yet",
-      body: "Play a few rounds to see your guess distribution here.",
+      body: "Play a few rounds to build your guess distribution.",
       compact: true,
       showMarker: true,
+      tone: "empty",
+    });
+    return;
+  }
+
+  if (!guessKeys.length) {
+    container.innerHTML = renderEmptyState({
+      title: "No solved rounds yet",
+      body: "Win a puzzle to start filling the guess distribution.",
+      compact: true,
+      showMarker: true,
+      tone: "empty",
     });
     return;
   }
@@ -2689,12 +2709,21 @@ function renderTriviaSection(content) {
   const hasChips = isNonEmptyArray(content?.chips);
   const hasTrivia = hasTitle || hasText || hasChips;
 
-  showWhen(postGameTriviaSection, hasTrivia);
+  showWhen(postGameTriviaSection, true);
 
   if (!hasTrivia) {
-    postGameTriviaTitle.textContent = "";
+    postGameTriviaTitle.textContent = "Book trivia";
     postGameTriviaText.textContent = "";
-    renderWhen(postGameTriviaChips, false, "");
+    renderInto(
+      postGameTriviaChips,
+      renderEmptyState({
+        title: "No trivia available",
+        body: "This book does not have extra trivia to show yet.",
+        compact: true,
+        showMarker: true,
+        tone: "empty",
+      }),
+    );
     return;
   }
 
@@ -2705,7 +2734,20 @@ function renderTriviaSection(content) {
     .map((chip) => `<span class="postgame-chip ui-chip">${chip}</span>`)
     .join("");
 
-  renderWhen(postGameTriviaChips, hasRenderableMarkup(chipsMarkup), chipsMarkup);
+  if (chipsMarkup) {
+    renderWhen(postGameTriviaChips, true, chipsMarkup);
+  } else {
+    renderInto(
+      postGameTriviaChips,
+      renderEmptyState({
+        title: "No extra trivia points",
+        body: "There is a short summary for this book, but no additional trivia tags yet.",
+        compact: true,
+        showMarker: true,
+        tone: "empty",
+      }),
+    );
+  }
 }
 
 function getPostGameContent() {
@@ -2912,10 +2954,11 @@ function renderArchiveDetails(bookKey = "") {
       elements.archiveDetails,
       renderEmptyState({
         title: "No book selected",
-        body: "Choose a book from the progress map to view its Daily archive details.",
+        body: "Choose a book from the archive map to view its Daily progress details.",
         compact: false,
         inline: false,
         showMarker: true,
+        tone: "empty",
       }),
     );
     return;
@@ -2958,7 +3001,7 @@ function renderArchiveDetails(bookKey = "") {
       </div>
 
       <p class="archive-details-copy">
-        Status: ${stateLabel}. Last solved date: ${lastSolvedDate}. This archive tracks Daily mode progress only, so books still appear here even if they have never been played.
+        Status: ${stateLabel}. Last solved date: ${lastSolvedDate}. This archive tracks Daily mode progress only.
       </p>
     `,
   );
@@ -2981,11 +3024,34 @@ async function openLeaderboardModal() {
       body: "Fetching today’s Daily leaderboard activity.",
       compact: true,
       showMarker: true,
+      tone: "loading",
     }),
     { visible: true, preserveWhenHidden: true },
   );
-  renderWhen(elements.leaderboardList, false, "");
-  renderWhen(elements.leaderboardUserRank, false, "");
+
+  renderInto(
+    elements.leaderboardList,
+    renderEmptyState({
+      title: "Loading leaderboard",
+      body: "Fetching today’s top Daily scores.",
+      compact: true,
+      showMarker: true,
+      tone: "loading",
+    }),
+    { visible: true, preserveWhenHidden: true },
+  );
+
+  renderInto(
+    elements.leaderboardUserRank,
+    renderEmptyState({
+      title: "Loading placement",
+      body: "Checking your current Daily leaderboard position.",
+      compact: true,
+      showMarker: true,
+      tone: "loading",
+    }),
+    { visible: true, preserveWhenHidden: true },
+  );
 
   if (!state.auth.enabled || !firebaseDb) {
     renderInto(
@@ -2995,6 +3061,7 @@ async function openLeaderboardModal() {
         body: "Global Daily leaderboard data is unavailable right now.",
         compact: true,
         showMarker: true,
+        tone: "error",
       }),
     );
     renderInto(
@@ -3004,6 +3071,7 @@ async function openLeaderboardModal() {
         body: "Firebase is not available, but local gameplay still works.",
         compact: true,
         showMarker: true,
+        tone: "error",
       }),
     );
     renderCurrentUserRank(null);
@@ -3032,6 +3100,7 @@ async function openLeaderboardModal() {
         body: "Today’s global Daily metrics are not available right now.",
         compact: true,
         showMarker: true,
+        tone: "error",
       }),
     );
     renderInto(
@@ -3041,6 +3110,7 @@ async function openLeaderboardModal() {
         body: "Please try again in a moment.",
         compact: true,
         showMarker: true,
+        tone: "error",
       }),
     );
     renderCurrentUserRank(null);
@@ -3059,6 +3129,7 @@ async function openLeaderboardModal() {
       body: "Checking your current Daily leaderboard position.",
       compact: true,
       showMarker: true,
+      tone: "loading",
     }),
   );
 
@@ -3075,6 +3146,7 @@ async function openLeaderboardModal() {
         body: "Your personal Daily placement is not available yet.",
         compact: true,
         showMarker: true,
+        tone: "error",
       }),
     );
   }
@@ -3144,6 +3216,72 @@ function renderStatsModal() {
   if (elements.practiceStatsGuessDistribution) {
     renderStatsSection(practiceStats, elements.practiceStatsGuessDistribution);
   }
+}
+
+function renderStatsModalBadges() {
+  if (!elements.statsModalBadges) return;
+
+  const badges = getDailyStreakBadges();
+
+  if (!isNonEmptyArray(badges)) {
+    renderInto(
+      elements.statsModalBadges,
+      renderEmptyState({
+        title: "No badges yet",
+        body: "Keep a Daily streak going to unlock badge milestones here.",
+        compact: true,
+        showMarker: true,
+        tone: "empty",
+      }),
+    );
+    return;
+  }
+
+  const markup = badges
+    .map((badge) => {
+      const earned = badge.earned;
+      return `
+        <span class="streak-badge ${earned ? "is-earned" : "is-locked"}">
+          <span class="streak-badge-text">${badge.label}</span>
+          <span class="streak-badge-state">${earned ? "Earned" : "Locked"}</span>
+        </span>
+      `;
+    })
+    .join("");
+
+  renderInto(elements.statsModalBadges, markup);
+}
+
+function renderPostGameBadges(container, badges) {
+  if (!container) return;
+
+  if (!isNonEmptyArray(badges)) {
+    renderInto(
+      container,
+      renderEmptyState({
+        title: "No new badge this round",
+        body: "Keep building your Daily streak to unlock badge milestones.",
+        compact: true,
+        showMarker: true,
+        tone: "empty",
+      }),
+    );
+    return;
+  }
+
+  const markup = badges
+    .map((badge) => {
+      const earned = badge.earned !== false;
+      return `
+        <span class="streak-badge ${earned ? "is-earned" : "is-locked"}">
+          <span class="streak-badge-text">${badge.label}</span>
+          <span class="streak-badge-state">${earned ? "Earned" : "Locked"}</span>
+        </span>
+      `;
+    })
+    .join("");
+
+  renderInto(container, markup);
 }
 
 function renderPostGamePanel() {
@@ -3279,6 +3417,7 @@ function renderSuggestions() {
         body: "Try another spelling or a different Bible book name.",
         compact: true,
         showMarker: true,
+        tone: "empty",
       }),
     );
     openSuggestions();
@@ -3291,18 +3430,18 @@ function renderSuggestions() {
       const active = index === state.selectedSuggestionIndex;
 
       return `
-          <button
-            id="suggestion-${index}"
-            type="button"
-            class="suggestion${active ? " is-active" : ""}"
-            role="option"
-            aria-selected="${active}"
-            data-index="${index}"
-          >
-            <span class="suggestion-primary">${suggestion.primaryLabel}</span>
-            ${suggestion.secondaryLabel ? `<span class="suggestion-secondary">${suggestion.secondaryLabel}</span>` : ""}
-          </button>
-        `;
+        <button
+          id="suggestion-${index}"
+          type="button"
+          class="suggestion${active ? " is-active" : ""}"
+          role="option"
+          aria-selected="${active}"
+          data-index="${index}"
+        >
+          <span class="suggestion-primary">${suggestion.primaryLabel}</span>
+          ${suggestion.secondaryLabel ? `<span class="suggestion-secondary">${suggestion.secondaryLabel}</span>` : ""}
+        </button>
+      `;
     })
     .join("");
 

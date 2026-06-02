@@ -965,6 +965,32 @@ input::placeholder {
     display: none;
 }
 
+.empty-state--loading .empty-state__marker {
+    background:
+        radial-gradient(circle at center,
+            rgba(127, 127, 127, 0.16) 0,
+            rgba(127, 127, 127, 0.16) 32%,
+            transparent 36%);
+    opacity: 0.9;
+}
+
+.empty-state--error .empty-state__marker {
+    background:
+        radial-gradient(circle at center,
+            rgba(255, 77, 93, 0.16) 0,
+            rgba(255, 77, 93, 0.16) 32%,
+            transparent 36%);
+}
+
+.empty-state--loading .empty-state__title,
+.empty-state--error .empty-state__title {
+    color: var(--color-text);
+}
+
+.empty-state--error .empty-state__body {
+    color: var(--color-text-muted);
+}
+
 .expander {
     width: 100%;
     background: var(--surface-panel);
