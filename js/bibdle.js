@@ -1332,10 +1332,10 @@ function renderPostGameLeaderboardRank(rankEntry) {
   if (!elements.postGameLeaderboardSection || !elements.postGameLeaderboardRank) return;
 
   const isDaily = state.mode === "daily";
-  setHidden(elements.postGameLeaderboardSection, !isDaily);
+  showWhen(elements.postGameLeaderboardSection, isDaily);
 
   if (!isDaily) {
-    renderInto(elements.postGameLeaderboardRank, "", { visible: false });
+    renderWhen(elements.postGameLeaderboardRank, false, "");
     return;
   }
 
@@ -1403,7 +1403,7 @@ async function loadPostGameLeaderboardRank() {
 
   if (!elements.postGameLeaderboardSection || !elements.postGameLeaderboardRank) return;
 
-  setHidden(elements.postGameLeaderboardSection, false);
+  showWhen(elements.postGameLeaderboardSection, true);
   renderInto(
     elements.postGameLeaderboardRank,
     renderEmptyState({
@@ -2211,13 +2211,8 @@ function syncPreferenceControls() {
 }
 
 function syncActionButtons() {
-  if (elements.nextPracticeBtn) {
-    elements.nextPracticeBtn.hidden = !(state.mode === "practice" && isGameOver());
-  }
-
-  if (elements.statsBtn) {
-    elements.statsBtn.hidden = false;
-  }
+  showWhen(elements.nextPracticeBtn, state.mode === "practice" && isGameOver());
+  showWhen(elements.statsBtn, true);
 }
 
 function renderPuzzleCard() {
@@ -2379,6 +2374,39 @@ function hasTextContent(value) {
   return typeof value === "string" && value.trim().length > 0;
 }
 
+function isNonEmptyArray(value) {
+  return Array.isArray(value) && value.length > 0;
+}
+
+function hasRenderableMarkup(value) {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function setVisibility(element, visible) {
+  setHidden(element, !visible);
+}
+
+function showWhen(element, condition) {
+  setVisibility(element, !!condition);
+  return !!condition;
+}
+
+function showWhenHasItems(element, items) {
+  return showWhen(element, isNonEmptyArray(items));
+}
+
+function showWhenHasText(element, text) {
+  return showWhen(element, hasTextContent(text));
+}
+
+function renderWhen(container, condition, markup = "", options = {}) {
+  renderInto(container, markup, {
+    visible: !!condition,
+    preserveWhenHidden: !!options.preserveWhenHidden,
+  });
+  return !!condition;
+}
+
 function computeModeStatsSummary(mode = "daily") {
   const source = mode === "practice" ? state.stats.practice : state.stats.daily;
 
@@ -2445,9 +2473,9 @@ function renderPostGameStats(mode) {
     elements.postGameStatsLost.textContent = String(statsObj.lost);
   }
 
-  setHidden(elements.postGameStatsGridSecondary, !isDaily);
-  setHidden(elements.postGameCurrentStreakItem, !isDaily);
-  setHidden(elements.postGameBestStreakItem, !isDaily);
+  showWhen(elements.postGameStatsGridSecondary, isDaily);
+  showWhen(elements.postGameCurrentStreakItem, isDaily);
+  showWhen(elements.postGameBestStreakItem, isDaily);
 
   if (isDaily) {
     if (elements.postGameStatsCurrentStreak) {
@@ -2479,7 +2507,10 @@ function renderStatsSection(statsObj, container) {
 
   container.innerHTML = "";
 
-  if (safeStats.played <= 0 && totalWins <= 0 && safeStats.lost <= 0) {
+  const hasStats =
+    safeStats.played > 0 || totalWins > 0 || safeStats.lost > 0;
+
+  if (!hasStats) {
     container.innerHTML = renderEmptyState({
       title: "No history yet",
       body: "Play a few rounds to see your guess distribution here.",
@@ -2655,35 +2686,26 @@ function renderTriviaSection(content) {
 
   const hasTitle = hasTextContent(content?.title);
   const hasText = hasTextContent(content?.text);
-  const hasChips = hasItems(content?.chips);
+  const hasChips = isNonEmptyArray(content?.chips);
   const hasTrivia = hasTitle || hasText || hasChips;
 
-  setHidden(postGameTriviaSection, !hasTrivia);
+  showWhen(postGameTriviaSection, hasTrivia);
 
   if (!hasTrivia) {
     postGameTriviaTitle.textContent = "";
     postGameTriviaText.textContent = "";
-    renderInto(
-      postGameTriviaChips,
-      renderEmptyState({
-        title: "No trivia available",
-        body: "There is no extra book or verse context to show for this puzzle yet.",
-        compact: true,
-        showMarker: true,
-      }),
-      { visible: false },
-    );
+    renderWhen(postGameTriviaChips, false, "");
     return;
   }
 
   postGameTriviaTitle.textContent = content.title || "Learn more";
   postGameTriviaText.textContent = content.text || "";
-  renderInto(
-    postGameTriviaChips,
-    (content.chips || [])
-      .map((chip) => `<span class="postgame-chip ui-chip">${chip}</span>`)
-      .join(""),
-  );
+
+  const chipsMarkup = (content.chips || [])
+    .map((chip) => `<span class="postgame-chip ui-chip">${chip}</span>`)
+    .join("");
+
+  renderWhen(postGameTriviaChips, hasRenderableMarkup(chipsMarkup), chipsMarkup);
 }
 
 function getPostGameContent() {
@@ -2962,8 +2984,8 @@ async function openLeaderboardModal() {
     }),
     { visible: true, preserveWhenHidden: true },
   );
-  renderInto(elements.leaderboardList, "", { visible: false });
-  renderInto(elements.leaderboardUserRank, "", { visible: false });
+  renderWhen(elements.leaderboardList, false, "");
+  renderWhen(elements.leaderboardUserRank, false, "");
 
   if (!state.auth.enabled || !firebaseDb) {
     renderInto(
@@ -3142,7 +3164,7 @@ function renderPostGamePanel() {
   elements.postGameVerse.textContent = content.verseText;
   elements.postGameIntroTitle.textContent = content.introTitle;
   elements.postGameIntroText.textContent = content.introText || content.explanation || "";
-  setHidden(elements.postGameNextBtn, state.mode !== "practice");
+  showWhen(elements.postGameNextBtn, state.mode === "practice");
 
   renderTriviaSection(content.trivia);
   renderPostGameStats(state.mode);
@@ -3167,6 +3189,7 @@ function closePostGamePanel() {
 function renderPuzzleView() {
   applyLanguageToDocument();
   renderLanguageControl();
+  renderMobileLanguageToggle();
   renderPuzzleCard();
   renderHintBlock();
   renderGuessRows();
@@ -3208,7 +3231,7 @@ function closeSuggestions() {
   state.selectedSuggestionIndex = -1;
   if (elements.autocomplete) {
     elements.autocomplete.dataset.open = "false";
-    renderInto(elements.autocomplete, "", { visible: false });
+    renderWhen(elements.autocomplete, false, "");
   }
   updateComboboxA11y(false);
 }
@@ -3229,7 +3252,7 @@ function updateComboboxA11y(isOpen) {
 function openSuggestions() {
   if (!elements.autocomplete) return;
   elements.autocomplete.dataset.open = "true";
-  setHidden(elements.autocomplete, false);
+  showWhen(elements.autocomplete, true);
   updateComboboxA11y(true);
 }
 
@@ -3263,13 +3286,11 @@ function renderSuggestions() {
     return;
   }
 
-  renderInto(
-    elements.autocomplete,
-    state.currentSuggestions
-      .map((suggestion, index) => {
-        const active = index === state.selectedSuggestionIndex;
+  const markup = state.currentSuggestions
+    .map((suggestion, index) => {
+      const active = index === state.selectedSuggestionIndex;
 
-        return `
+      return `
           <button
             id="suggestion-${index}"
             type="button"
@@ -3282,10 +3303,10 @@ function renderSuggestions() {
             ${suggestion.secondaryLabel ? `<span class="suggestion-secondary">${suggestion.secondaryLabel}</span>` : ""}
           </button>
         `;
-      })
-      .join(""),
-  );
+    })
+    .join("");
 
+  renderWhen(elements.autocomplete, hasRenderableMarkup(markup), markup);
   openSuggestions();
   updateComboboxA11y(state.selectedSuggestionIndex >= 0);
   scrollActiveSuggestionIntoView();

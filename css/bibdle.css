@@ -274,10 +274,9 @@ input::placeholder {
 }
 
 .topbar-toolbar {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: end;
-    gap: var(--space-2);
+    display: grid;
+    gap: var(--space-3);
+    align-items: stretch;
     width: 100%;
     padding: var(--card-padding-sm);
     background: var(--surface-panel);
@@ -285,6 +284,41 @@ input::placeholder {
     border-radius: var(--radius-card);
     box-shadow: var(--shadow-card);
     backdrop-filter: blur(14px);
+}
+
+.topbar-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: end;
+    gap: var(--space-2);
+    min-width: 0;
+}
+
+.topbar-row--utilities {
+    justify-content: space-between;
+}
+
+.topbar-row--account {
+    justify-content: flex-end;
+    padding-top: var(--space-2);
+    border-top: 1px solid var(--divider-default);
+}
+
+.topbar-group {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: end;
+    gap: var(--space-2);
+    min-width: 0;
+}
+
+.topbar-group--icon-tools {
+    flex: 0 1 auto;
+}
+
+.topbar-group--selectors {
+    flex: 1 1 20rem;
+    justify-content: flex-end;
 }
 
 .topbar-icon-btn {
@@ -342,7 +376,7 @@ input::placeholder {
 }
 
 .auth-controls--toolbar {
-    flex: 1 1 15rem;
+    flex: 1 1 auto;
     justify-content: flex-end;
 }
 
@@ -369,15 +403,161 @@ input::placeholder {
     opacity: 0;
 }
 
+.controls-panel {
+    display: grid;
+    gap: var(--space-3);
+    width: 100%;
+}
+
+.controls-cluster {
+    display: grid;
+    gap: var(--space-2);
+    min-width: 0;
+}
+
+.controls-cluster--browse,
+.controls-cluster--results {
+    width: 100%;
+}
+
+.pill-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    align-items: center;
+    min-width: 0;
+}
+
+.pill-actions--secondary {
+    justify-content: flex-start;
+}
+
+.pill-actions--primary {
+    justify-content: flex-start;
+}
+
+.pill-actions--primary .pill-btn.primary {
+    order: 2;
+}
+
+.modal-system {
+    gap: var(--section-gap-md);
+}
+
+.modal-system__header {
+    display: grid;
+    gap: var(--space-2);
+}
+
+.modal-system__body {
+    display: grid;
+    gap: var(--section-gap-md);
+    align-content: start;
+}
+
+.modal-system__block {
+    gap: var(--section-gap-sm);
+}
+
+.modal-system__block-header {
+    display: grid;
+    gap: var(--space-1);
+}
+
+.modal-system__block-body {
+    display: grid;
+    gap: var(--section-gap-sm);
+    min-width: 0;
+}
+
+.modal-system__block-footer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--space-2);
+    padding-top: var(--space-2);
+    border-top: 1px solid var(--divider-default);
+}
+
+.modal-system__footer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--space-2);
+}
+
+[hidden],
+.is-hidden {
+    display: none !important;
+}
+
 @media (max-width: 960px) {
+    .topbar-row--utilities {
+        justify-content: stretch;
+    }
+
+    .topbar-group--selectors {
+        flex: 1 1 100%;
+        justify-content: stretch;
+    }
+
     .auth-controls--toolbar {
         flex: 1 1 100%;
         justify-content: flex-start;
     }
 }
 
+@media (max-width: 820px) {
+
+    .topbar-row,
+    .topbar-group,
+    .auth-controls {
+        justify-content: stretch;
+    }
+
+    .topbar-group--icon-tools {
+        flex: 1 1 100%;
+    }
+
+    .topbar-group--icon-tools>* {
+        flex: 0 0 auto;
+    }
+
+    .topbar-group--selectors {
+        width: 100%;
+    }
+
+    .topbar-row--account {
+        justify-content: stretch;
+    }
+
+    .auth-status {
+        white-space: normal;
+    }
+
+    .controls-panel--secondary {
+        gap: var(--space-2);
+    }
+
+    .pill-actions--secondary,
+    .pill-actions--primary {
+        width: 100%;
+    }
+
+    .pill-actions--secondary .pill-btn,
+    .pill-actions--primary .pill-btn {
+        flex: 1 1 calc(50% - var(--space-2));
+    }
+}
+
 @media (max-width: 720px) {
     .topbar-toolbar {
+        gap: var(--space-2);
+    }
+
+    .topbar-row {
         align-items: stretch;
     }
 
@@ -386,34 +566,30 @@ input::placeholder {
         min-width: 0;
     }
 
-    .auth-controls--toolbar {
-        flex: 1 1 100%;
+    .modal-system__footer,
+    .modal-system__block-footer {
         justify-content: stretch;
     }
 
-    .auth-controls--toolbar .pill-btn {
-        flex: 0 0 auto;
-    }
-
-    .auth-status {
-        white-space: normal;
+    .modal-system__footer .pill-btn,
+    .modal-system__block-footer .pill-btn {
+        flex: 1 1 100%;
     }
 }
 
 @media (max-width: 560px) {
-    .topbar-toolbar > * {
-        flex-shrink: 1;
+    .topbar-group--icon-tools>* {
+        flex: 1 1 calc(33.333% - var(--space-2));
     }
 
-    .topbar-icon-btn {
-        padding-inline: 0.75rem;
-    }
-
-    .control-group--toolbar {
+    .control-group--toolbar,
+    .auth-controls--toolbar,
+    .pill-actions--secondary .pill-btn,
+    .pill-actions--primary .pill-btn {
         flex: 1 1 100%;
     }
 
-    .auth-controls--toolbar {
+    .auth-controls {
         flex-direction: column;
         align-items: stretch;
     }
@@ -421,33 +597,6 @@ input::placeholder {
     .auth-status {
         text-align: center;
     }
-}
-
-
-.auth-controls {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: flex-end;
-    gap: var(--space-2);
-    min-width: 0;
-}
-
-.auth-status {
-    display: inline-flex;
-    align-items: center;
-    min-height: 44px;
-    padding: 0.55rem 0.85rem;
-    font-family: var(--font-ui);
-    font-size: var(--text-xs);
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    color: var(--color-text-muted);
-    background: var(--surface-panel);
-    border: 1px solid var(--border-default);
-    border-radius: var(--radius-control);
-    backdrop-filter: blur(14px);
-    white-space: nowrap;
 }
 
 .theme-toggle,
@@ -826,7 +975,7 @@ input::placeholder {
     overflow: hidden;
 }
 
-.expander + .expander {
+.expander+.expander {
     margin-top: var(--space-3);
 }
 
@@ -899,7 +1048,7 @@ input::placeholder {
     border-top: 1px solid var(--divider-default);
 }
 
-.expander__body > :first-child {
+.expander__body> :first-child {
     padding-top: var(--space-3);
 }
 
@@ -939,25 +1088,6 @@ input::placeholder {
 
 .status-line {
     min-height: 1.7rem;
-}
-
-.pill-actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-2);
-    align-items: center;
-}
-
-.pill-actions--secondary {
-    justify-content: flex-start;
-}
-
-.pill-actions--primary {
-    justify-content: flex-start;
-}
-
-.pill-actions--primary .pill-btn.primary {
-    order: 2;
 }
 
 .modal-actions-end,
@@ -2107,52 +2237,6 @@ html.reduced-motion *::after {
     }
 }
 
-@media (max-width: 820px) {
-    .topbar-row,
-    .topbar-group--utility {
-        justify-content: stretch;
-    }
-
-    .topbar-group--utility {
-        width: 100%;
-    }
-
-    .topbar-group--utility > * {
-        flex: 1 1 auto;
-    }
-
-    .topbar-group--utility .theme-toggle {
-        flex: 0 0 44px;
-        justify-self: end;
-    }
-
-    .auth-controls {
-        justify-content: flex-start;
-    }
-
-    .auth-status {
-        white-space: normal;
-    }
-
-    .controls-panel--primary .control-group {
-        flex: 1 1 100%;
-    }
-
-    .controls-panel--secondary {
-        gap: var(--space-2);
-    }
-
-    .pill-actions--secondary,
-    .pill-actions--primary {
-        width: 100%;
-    }
-
-    .pill-actions--secondary .pill-btn,
-    .pill-actions--primary .pill-btn {
-        flex: 1 1 calc(50% - var(--space-2));
-    }
-}
-
 @media (max-width: 720px) {
     .app-shell {
         padding-inline: 0.9rem;
@@ -2231,30 +2315,6 @@ html.reduced-motion *::after {
     .dist-count {
         grid-column: 2;
         justify-self: end;
-    }
-}
-
-@media (max-width: 560px) {
-    .topbar-group--utility > * {
-        flex: 1 1 100%;
-    }
-
-    .topbar-group--utility .theme-toggle {
-        flex: 0 0 44px;
-    }
-
-    .pill-actions--secondary .pill-btn,
-    .pill-actions--primary .pill-btn {
-        flex: 1 1 100%;
-    }
-
-    .auth-controls {
-        flex-direction: column;
-        align-items: stretch;
-    }
-
-    .auth-status {
-        text-align: center;
     }
 }
 
