@@ -478,17 +478,24 @@ function getLocalizedExplanation(verse, language = getCurrentLanguage()) {
 }
 
 function getLocalizedThemes(item, language = getCurrentLanguage()) {
-  const source =
-    language === "ml"
-      ? (Array.isArray(item?.themesMl) ? item.themesMl : Array.isArray(item?.bookThemes) ? item.bookThemes : null)
-      : (Array.isArray(item?.themes) ? item.themes : Array.isArray(item?.bookThemesMl) ? item.bookThemesMl : null);
+  const englishThemes = Array.isArray(item?.themes)
+    ? item.themes
+    : Array.isArray(item?.bookThemes)
+      ? item.bookThemes
+      : [];
 
-  const fallback =
-    language === "ml"
-      ? (Array.isArray(item?.themes) ? item.themes : Array.isArray(item?.bookThemesMl) ? item.bookThemesMl : [])
-      : (Array.isArray(item?.themesMl) ? item.themesMl : Array.isArray(item?.bookThemes) ? item.bookThemes : []);
+  const malayalamThemes = Array.isArray(item?.themesMl)
+    ? item.themesMl
+    : Array.isArray(item?.bookThemesMl)
+      ? item.bookThemesMl
+      : [];
 
-  return (source && source.length ? source : fallback || []).filter(Boolean);
+  const source = language === "ml" ? malayalamThemes : englishThemes;
+  const fallback = language === "ml" ? englishThemes : [];
+
+  return (source.length ? source : fallback).filter(
+    (value) => typeof value === "string" && value.trim().length > 0,
+  );
 }
 
 function getBookAliases(book) {
@@ -1069,35 +1076,37 @@ async function fetchCurrentUserRank(dateKey, uid) {
   const scoresRef = getDailyScoresCollectionRef(dateKey);
   if (!scoresRef) return { rank: null, ...entry };
 
-  const betterQuery = query(
-    scoresRef,
-    where("result", "==", "won"),
-    where("guesses", "<", entry.guesses),
-  );
-
-  const sameGuessEarlierQuery = query(
-    scoresRef,
-    where("result", "==", "won"),
-    where("guesses", "==", entry.guesses),
-    where("completedAt", "<", entry.completedAt),
-  );
-
-  let betterCount = 0;
-  let earlierCount = 0;
-
   try {
-    const [betterSnap, earlierSnap] = await Promise.all([
-      getDocs(betterQuery),
-      getDocs(sameGuessEarlierQuery),
-    ]);
-    betterCount = betterSnap.size;
-    earlierCount = earlierSnap.size;
-  } catch {
-    return { rank: null, ...entry };
+    const q = query(
+      scoresRef,
+      where("result", "==", "won"),
+      orderBy("guesses", "asc"),
+      orderBy("completedAt", "asc"),
+      limit(100),
+    );
+
+    const snapshot = await getDocs(q);
+
+    const rankedDocs = snapshot.docs.map((docSnap, index) => ({
+      id: docSnap.id,
+      rank: index + 1,
+      ...docSnap.data(),
+    }));
+
+    const match = rankedDocs.find((doc) => doc.uid === uid);
+
+    if (match) {
+      return {
+        ...entry,
+        rank: match.rank,
+      };
+    }
+  } catch (error) {
+    console.error("Rank derivation failed:", error);
   }
 
   return {
-    rank: betterCount + earlierCount + 1,
+    rank: null,
     ...entry,
   };
 }
@@ -1121,10 +1130,18 @@ function renderLeaderboardSummary(stats) {
   clearBusyState(elements.leaderboardSummary);
 
   const players =
-    Number.isInteger(stats.players) ? stats.players : Number.isInteger(stats.totalPlayers) ? stats.totalPlayers : 0;
+    Number.isInteger(stats.players)
+      ? stats.players
+      : Number.isInteger(stats.totalPlayers)
+        ? stats.totalPlayers
+        : 0;
 
   const completed =
-    Number.isInteger(stats.solvers) ? stats.solvers : Number.isInteger(stats.completed) ? stats.completed : 0;
+    Number.isInteger(stats.solvers)
+      ? stats.solvers
+      : Number.isInteger(stats.completed)
+        ? stats.completed
+        : 0;
 
   const avgWinningGuesses =
     typeof stats.averageWinningGuesses === "number"
@@ -1138,12 +1155,8 @@ function renderLeaderboardSummary(stats) {
       ? avgWinningGuesses.toFixed(1)
       : "—";
 
-  const fastestTimeDisplay =
-    stats.fastestTime
-      ? String(stats.fastestTime)
-      : stats.fastestCompletedAt
-        ? formatLeaderboardTime(stats.fastestCompletedAt)
-        : "—";
+  const solveRate =
+    players > 0 ? `${Math.round((completed / players) * 100)}%` : "0%";
 
   elements.leaderboardSummary.innerHTML = `
     <div class="leaderboard-kpis">
@@ -1160,8 +1173,8 @@ function renderLeaderboardSummary(stats) {
         <div class="leaderboard-kpi-label">Average guesses</div>
       </div>
       <div class="leaderboard-kpi">
-        <div class="leaderboard-kpi-value">${fastestTimeDisplay}</div>
-        <div class="leaderboard-kpi-label">Fastest time</div>
+        <div class="leaderboard-kpi-value">${solveRate}</div>
+        <div class="leaderboard-kpi-label">Solve rate</div>
       </div>
     </div>
   `;
@@ -1317,6 +1330,30 @@ function renderLeaderboardList(entries) {
   );
 }
 
+function getLeaderboardPlacement(rankEntry) {
+  const rank =
+    Number.isInteger(rankEntry?.rank) && rankEntry.rank > 0
+      ? rankEntry.rank
+      : Number.isInteger(rankEntry?.position) && rankEntry.position > 0
+        ? rankEntry.position
+        : Number.isInteger(rankEntry?.place) && rankEntry.place > 0
+          ? rankEntry.place
+          : null;
+
+  const solved = rankEntry?.result === "won" || rankEntry?.result === "solved";
+
+  return {
+    rank,
+    solved,
+    placementLabel: rank ? `#${rank}` : solved ? "Solved" : "Unranked",
+    placementMeta: rank
+      ? `You are currently #${rank} on today’s leaderboard.`
+      : solved
+        ? "You solved today’s puzzle, but a numeric placement is not available yet."
+        : "Your result is recorded, but a ranked position is not available yet.",
+  };
+}
+
 function renderCurrentUserRank(rankEntry) {
   if (!elements.leaderboardUserRank) return;
 
@@ -1347,20 +1384,30 @@ function renderCurrentUserRank(rankEntry) {
     return;
   }
 
-  const rankLabel =
-    rankEntry.result === "won" && rankEntry.rank
-      ? `#${rankEntry.rank}`
-      : "Recorded";
+  const hasRank = Number.isInteger(rankEntry.rank) && rankEntry.rank > 0;
+  const isSolved = rankEntry.result === "won" || rankEntry.result === "solved";
+
+  const placementLabel = hasRank
+    ? `#${rankEntry.rank}`
+    : isSolved
+      ? "Solved"
+      : "Unranked";
+
+  const placementMeta = hasRank
+    ? `You are currently #${rankEntry.rank} on today’s leaderboard.`
+    : isSolved
+      ? "Your result is recorded, but a numeric placement is not available yet."
+      : "Your result is recorded, but a ranked position is not available yet.";
 
   elements.leaderboardUserRank.innerHTML = `
     <div class="leaderboard-user-rank-card">
       <div>
         <div class="label">Your place</div>
-        <div class="value">${rankLabel}</div>
+        <div class="value">${placementLabel}</div>
       </div>
       <div>
         <div class="label">Result</div>
-        <div class="value">${rankEntry.result === "won" ? "Solved" : "Played"}</div>
+        <div class="value">${isSolved ? "Solved" : "Played"}</div>
       </div>
       <div>
         <div class="label">Guesses</div>
@@ -1370,6 +1417,7 @@ function renderCurrentUserRank(rankEntry) {
         <div class="label">Time</div>
         <div class="value">${formatLeaderboardTime(rankEntry.completedAt)}</div>
       </div>
+      <div class="leaderboard-user-rank-note">${placementMeta}</div>
     </div>
   `;
 }
@@ -1416,10 +1464,20 @@ function renderPostGameLeaderboardRank(rankEntry) {
     return;
   }
 
-  const rankLabel =
-    rankEntry.result === "won" && rankEntry.rank
-      ? `#${rankEntry.rank}`
-      : "Recorded";
+  const hasRank = Number.isInteger(rankEntry.rank) && rankEntry.rank > 0;
+  const isSolved = rankEntry.result === "won" || rankEntry.result === "solved";
+
+  const placementLabel = hasRank
+    ? `#${rankEntry.rank}`
+    : isSolved
+      ? "Solved"
+      : "Unranked";
+
+  const placementMeta = hasRank
+    ? `You are currently #${rankEntry.rank} on today’s leaderboard.`
+    : isSolved
+      ? "Your result is recorded, but a numeric placement is not available yet."
+      : "Your result is recorded, but a ranked position is not available yet.";
 
   renderInto(
     elements.postGameLeaderboardRank,
@@ -1427,11 +1485,11 @@ function renderPostGameLeaderboardRank(rankEntry) {
       <div class="leaderboard-user-rank-card">
         <div>
           <div class="label">Your place</div>
-          <div class="value">${rankLabel}</div>
+          <div class="value">${placementLabel}</div>
         </div>
         <div>
           <div class="label">Result</div>
-          <div class="value">${rankEntry.result === "won" ? "Solved" : "Played"}</div>
+          <div class="value">${isSolved ? "Solved" : "Played"}</div>
         </div>
         <div>
           <div class="label">Guesses</div>
@@ -1441,6 +1499,7 @@ function renderPostGameLeaderboardRank(rankEntry) {
           <div class="label">Time</div>
           <div class="value">${formatLeaderboardTime(rankEntry.completedAt)}</div>
         </div>
+        <div class="leaderboard-user-rank-note">${placementMeta}</div>
       </div>
     `,
   );
@@ -3704,9 +3763,11 @@ function renderPostGamePanel() {
   renderPostGameStats(state.mode);
 
   if (state.mode === "daily") {
+    showWhen(elements.postGameLeaderboardSection, true);
     loadPostGameLeaderboardRank();
   } else {
-    renderPostGameLeaderboardRank(null);
+    showWhen(elements.postGameLeaderboardSection, false);
+    renderWhen(elements.postGameLeaderboardRank, false, "");
   }
 
   setModalOpenState(elements.postGameModal, true);

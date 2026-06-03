@@ -223,6 +223,37 @@ select {
     color: inherit;
 }
 
+/* Styling the dropdown selects to respect theme variables */
+.control-select {
+    background-color: var(--color-surface-offset); /* Use your defined surface color */
+    color: var(--color-text);
+    border: 1px solid var(--input-border);
+    border-radius: var(--radius-control);
+    padding: var(--space-2) var(--space-4);
+    cursor: pointer;
+    appearance: none; /* Removes default OS styling so your colors show through */
+    transition: background-color var(--transition-interactive), border-color var(--transition-interactive);
+}
+
+.control-select:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    background-color: var(--color-surface);
+}
+
+/* Optional: Add a custom arrow icon since appearance is none */
+.control-group {
+    position: relative;
+}
+
+.control-select {
+    padding-right: var(--space-8);
+    background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3ccircle cx='12' cy='12' r='10'%3e%3c/circle%3e%3cpolyline points='8 10 12 14 16 10'%3e%3c/polyline%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right 0.5rem center;
+    background-size: 1rem;
+}
+
 button {
     border: none;
     background: none;
@@ -1467,6 +1498,18 @@ html.reduced-motion *::after {
     box-shadow: var(--shadow-panel);
 }
 
+.modal {
+    max-height: min(90vh, 48rem);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+}
+
+#helpModal .modal {
+    max-height: min(92vh, 52rem);
+    overflow-y: auto;
+}
+
 .modal-layout {
     gap: var(--section-gap-md);
 }
@@ -1901,6 +1944,14 @@ html.reduced-motion *::after {
 .leaderboard-user-rank {
     display: grid;
     gap: var(--section-gap-sm);
+}
+
+.leaderboard-user-rank-note {
+    grid-column: 1 / -1;
+    margin-top: var(--space-2);
+    color: var(--text-muted);
+    font-size: var(--text-sm);
+    line-height: 1.45;
 }
 
 .leaderboard-kpis {
