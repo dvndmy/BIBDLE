@@ -16,7 +16,7 @@
 <body>
   <a class="sr-only" href="#game">Skip to game</a>
 
-  <main class="app-shell" id="game">
+  <main class="app-shell" id="appShell">
     <section class="panel" aria-label="Catholic Bibdle game">
       <div class="topbar">
         <div class="topbar-toolbar" aria-label="Game toolbar">
@@ -78,7 +78,7 @@
             <div class="auth-controls auth-controls--toolbar" id="authControls" aria-label="Sign-in controls">
               <button type="button" class="pill-btn" id="signInBtn">Sign in</button>
               <button type="button" class="pill-btn" id="signOutBtn" hidden>Sign out</button>
-              <span class="auth-status" id="authStatus">Playing locally</span>
+              <span class="auth-status" id="authStatus">Playing anonymously</span>
             </div>
 
             <div class="topbar-language-select sr-only" aria-hidden="true">
@@ -163,27 +163,45 @@
   </main>
 
   <div class="modal-backdrop" id="helpModal" data-open="false" aria-hidden="true">
-    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
-      <section class="section-shell modal-section">
-        <div class="section-shell__header">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="helpTitle" tabindex="-1">
+      <section class="section-shell modal-section modal-layout modal-system">
+        <div class="section-shell__header modal-layout__header modal-system__header">
           <h2 id="helpTitle" class="section-shell__title">How to play</h2>
-          <p class="section-shell__meta">Read the verse, then identify the Bible book using the clues revealed after
-            each guess.</p>
+          <p class="section-shell__meta">Guess the Bible book from the verse. Use the feedback cards to narrow your
+            answer in as few tries as possible.</p>
         </div>
 
-        <div class="section-shell__body">
-          <section class="section-shell section-shell--nested" aria-label="Core help">
-            <div class="section-shell__body">
-              <p>Read the verse, then guess the Bible book it comes from. Each guess reveals whether your choice matches
-                the correct testament, section, first letter, and the book itself.</p>
+        <div class="section-shell__body modal-layout__body modal-system__body">
+          <section class="section-shell section-shell--nested modal-block modal-system__block"
+            aria-label="How guessing works">
+            <div class="section-shell__header modal-system__block-header">
+              <p class="subtle-label section-shell__meta">Gameplay</p>
+            </div>
+            <div class="section-shell__body modal-system__block-body">
+              <div class="rules">
+                <article class="rule-card">
+                  <h3>Guess books</h3>
+                  <p>Enter a Bible book name and submit a guess. The puzzle compares your guess with the hidden answer.
+                  </p>
+                </article>
+                <article class="rule-card">
+                  <h3>Read feedback</h3>
+                  <p>Each card shows whether the testament, section, era, and order are correct, close, or wrong.</p>
+                </article>
+                <article class="rule-card">
+                  <h3>Finish the round</h3>
+                  <p>Daily mode tracks streaks and leaderboard placement. Practice mode lets you keep playing with no
+                    streak pressure.</p>
+                </article>
+              </div>
             </div>
           </section>
 
-          <details class="expander expander--subtle" open>
+          <details class="expander expander--subtle modal-block modal-system__block">
             <summary class="expander__summary">
               <span class="expander__summary-text">
-                <span class="expander__title">How clue feedback works</span>
-                <span class="expander__meta">Understand the color and clue system.</span>
+                <span class="expander__title">Feedback colors</span>
+                <span class="expander__meta">Expand to see what each guess state means.</span>
               </span>
               <svg class="expander__icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"
                 aria-hidden="true">
@@ -191,36 +209,25 @@
               </svg>
             </summary>
             <div class="expander__body">
-              <ul>
-                <li>You can type part of a book name and choose from the suggestion list.</li>
-                <li>Green means exact match, gold means you are near the right book in canonical order, and red means
-                  that clue is wrong.</li>
-              </ul>
-            </div>
-          </details>
-
-          <details class="expander expander--subtle">
-            <summary class="expander__summary">
-              <span class="expander__summary-text">
-                <span class="expander__title">Modes and recorded progress</span>
-                <span class="expander__meta">See what counts toward streaks, stats, and archive progress.</span>
-              </span>
-              <svg class="expander__icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"
-                aria-hidden="true">
-                <path d="M5 3.5 10 8l-5 4.5"></path>
-              </svg>
-            </summary>
-            <div class="expander__body">
-              <ul>
-                <li>Daily gives one deterministic puzzle based on the date, while Practice gives random verses from the
-                  pool.</li>
-                <li>Only Daily mode counts toward daily streaks and recorded stats.</li>
-              </ul>
+              <div class="rules">
+                <article class="rule-card">
+                  <h3>Green</h3>
+                  <p>The attribute matches the answer exactly.</p>
+                </article>
+                <article class="rule-card">
+                  <h3>Gold</h3>
+                  <p>The attribute is close, but not exact.</p>
+                </article>
+                <article class="rule-card">
+                  <h3>Red</h3>
+                  <p>The attribute does not match the answer.</p>
+                </article>
+              </div>
             </div>
           </details>
         </div>
 
-        <div class="section-shell__footer modal-actions-end">
+        <div class="section-shell__footer modal-layout__footer modal-actions-end modal-system__footer">
           <button type="button" class="pill-btn primary" id="closeHelpBtn">Close</button>
         </div>
       </section>
@@ -228,7 +235,7 @@
   </div>
 
   <div class="modal-backdrop" id="archiveModal" data-open="false" aria-hidden="true">
-    <div class="modal archive-modal" role="dialog" aria-modal="true" aria-labelledby="archiveTitle">
+    <div class="modal archive-modal" role="dialog" aria-modal="true" aria-labelledby="archiveTitle" tabindex="-1">
       <section class="section-shell modal-section modal-layout modal-system">
         <div class="section-shell__header modal-layout__header modal-system__header">
           <h2 id="archiveTitle" class="section-shell__title">Progress map</h2>
@@ -276,7 +283,7 @@
   </div>
 
   <div class="modal-backdrop" id="settingsModal" data-open="false" aria-hidden="true">
-    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="settingsTitle" tabindex="-1">
       <section class="section-shell modal-section modal-layout modal-system">
         <div class="section-shell__header modal-layout__header modal-system__header">
           <h2 id="settingsTitle" class="section-shell__title">Accessibility settings</h2>
@@ -324,7 +331,7 @@
 
   <div class="modal-backdrop" id="statsModal" data-open="false" aria-hidden="true">
     <div class="modal postgame-modal" role="dialog" aria-modal="true" aria-labelledby="statsTitle"
-      aria-describedby="statsBody">
+      aria-describedby="statsBody" tabindex="-1">
       <div class="section-shell modal-section modal-layout modal-system">
         <div class="section-shell__header modal-layout__header modal-system__header">
           <h2 id="statsTitle" class="section-shell__title">Historical stats</h2>
@@ -428,7 +435,8 @@
   </div>
 
   <div class="modal-backdrop" id="leaderboardModal" data-open="false" aria-hidden="true">
-    <div class="modal leaderboard-modal" role="dialog" aria-modal="true" aria-labelledby="leaderboardTitle">
+    <div class="modal leaderboard-modal" role="dialog" aria-modal="true" aria-labelledby="leaderboardTitle"
+      tabindex="-1">
       <section class="section-shell modal-section modal-layout modal-system">
         <div class="section-shell__header modal-layout__header modal-system__header">
           <h2 id="leaderboardTitle" class="section-shell__title">Global daily stats</h2>
@@ -476,7 +484,7 @@
 
   <div class="modal-backdrop postgame-backdrop" id="postGameModal" data-open="false" aria-hidden="true">
     <div class="modal postgame-modal" role="dialog" aria-modal="true" aria-labelledby="postGameTitle"
-      aria-describedby="postGameBody">
+      aria-describedby="postGameBody" tabindex="-1">
       <div class="section-shell modal-section modal-layout modal-system">
         <div class="section-shell__header modal-layout__header modal-system__header">
           <div class="postgame-badge" id="postGameBadge">Puzzle complete</div>

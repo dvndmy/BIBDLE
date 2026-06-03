@@ -203,7 +203,7 @@ const elements = {
   highContrastToggle: document.getElementById("highContrastToggle"),
   largeTextToggle: document.getElementById("largeTextToggle"),
   soundToggle: document.getElementById("soundToggle"),
-
+  appShell: document.getElementById("appShell"),
   statsModal: document.getElementById("statsModal"),
   closeStatsBtn: document.getElementById("closeStatsBtn"),
   statsPlayed: document.getElementById("statsPlayed"),
@@ -1106,35 +1106,61 @@ function renderLeaderboardSummary(stats) {
   if (!elements.leaderboardSummary) return;
 
   if (!stats) {
-    renderInto(
+    renderBusyInto(
       elements.leaderboardSummary,
-      renderEmptyState({
-        title: "Loading global stats",
-        body: "Fetching today’s Daily leaderboard activity.",
-        compact: true,
-        showMarker: true,
-        tone: "loading",
+      renderLoadingBlock({
+        label: "Loading global stats",
+        variant: "kpis",
+        rows: 4,
       }),
+      "Loading global stats",
     );
     return;
   }
 
+  clearBusyState(elements.leaderboardSummary);
+
+  const players =
+    Number.isInteger(stats.players) ? stats.players : Number.isInteger(stats.totalPlayers) ? stats.totalPlayers : 0;
+
+  const completed =
+    Number.isInteger(stats.solvers) ? stats.solvers : Number.isInteger(stats.completed) ? stats.completed : 0;
+
+  const avgWinningGuesses =
+    typeof stats.averageWinningGuesses === "number"
+      ? stats.averageWinningGuesses
+      : typeof stats.avgGuesses === "number"
+        ? stats.avgGuesses
+        : null;
+
+  const avgGuessesDisplay =
+    avgWinningGuesses !== null && Number.isFinite(avgWinningGuesses)
+      ? avgWinningGuesses.toFixed(1)
+      : "—";
+
+  const fastestTimeDisplay =
+    stats.fastestTime
+      ? String(stats.fastestTime)
+      : stats.fastestCompletedAt
+        ? formatLeaderboardTime(stats.fastestCompletedAt)
+        : "—";
+
   elements.leaderboardSummary.innerHTML = `
     <div class="leaderboard-kpis">
       <div class="leaderboard-kpi">
-        <div class="leaderboard-kpi-value">${stats.totalPlayers ?? 0}</div>
+        <div class="leaderboard-kpi-value">${players}</div>
         <div class="leaderboard-kpi-label">Players</div>
       </div>
       <div class="leaderboard-kpi">
-        <div class="leaderboard-kpi-value">${stats.completed ?? 0}</div>
+        <div class="leaderboard-kpi-value">${completed}</div>
         <div class="leaderboard-kpi-label">Completed</div>
       </div>
       <div class="leaderboard-kpi">
-        <div class="leaderboard-kpi-value">${stats.avgGuesses ?? "—"}</div>
+        <div class="leaderboard-kpi-value">${avgGuessesDisplay}</div>
         <div class="leaderboard-kpi-label">Average guesses</div>
       </div>
       <div class="leaderboard-kpi">
-        <div class="leaderboard-kpi-value">${stats.fastestTime ?? "—"}</div>
+        <div class="leaderboard-kpi-value">${fastestTimeDisplay}</div>
         <div class="leaderboard-kpi-label">Fastest time</div>
       </div>
     </div>
@@ -1239,18 +1265,19 @@ function renderLeaderboardList(entries) {
   if (!elements.leaderboardList) return;
 
   if (!Array.isArray(entries)) {
-    renderInto(
+    renderBusyInto(
       elements.leaderboardList,
-      renderEmptyState({
-        title: "Loading leaderboard",
-        body: "Fetching today’s top Daily scores.",
-        compact: true,
-        showMarker: true,
-        tone: "loading",
+      renderLoadingBlock({
+        label: "Loading leaderboard",
+        variant: "list",
+        rows: 5,
       }),
+      "Loading leaderboard",
     );
     return;
   }
+
+  clearBusyState(elements.leaderboardList);
 
   if (!entries.length) {
     renderInto(
@@ -1261,15 +1288,17 @@ function renderLeaderboardList(entries) {
         compact: false,
         showMarker: true,
         tone: "empty",
+        actions: renderRetryButtonMarkup("Focus guess box", "focus-guess-input"),
       }),
     );
+    bindEmptyStateActions(elements.leaderboardList);
     return;
   }
 
   const rows = entries
     .map((entry) => {
       const isCurrentUser =
-        state.auth.user && entry.userId && entry.userId === state.auth.user.uid;
+        !!state.auth.user?.uid && (entry.uid === state.auth.user.uid || entry.userId === state.auth.user.uid);
 
       return `
         <div class="leaderboard-row ${isCurrentUser ? "is-current-user" : ""}">
@@ -1291,6 +1320,8 @@ function renderLeaderboardList(entries) {
 function renderCurrentUserRank(rankEntry) {
   if (!elements.leaderboardUserRank) return;
 
+  clearBusyState(elements.leaderboardUserRank);
+
   if (!state.auth.user) {
     elements.leaderboardUserRank.innerHTML = renderEmptyState({
       title: "Sign in to join the leaderboard",
@@ -1299,6 +1330,7 @@ function renderCurrentUserRank(rankEntry) {
       showMarker: true,
       tone: "empty",
     });
+    bindEmptyStateActions(elements.leaderboardUserRank);
     return;
   }
 
@@ -1309,7 +1341,9 @@ function renderCurrentUserRank(rankEntry) {
       compact: true,
       showMarker: true,
       tone: "empty",
+      actions: renderRetryButtonMarkup("Focus guess box", "focus-guess-input"),
     });
+    bindEmptyStateActions(elements.leaderboardUserRank);
     return;
   }
 
@@ -1351,6 +1385,8 @@ function renderPostGameLeaderboardRank(rankEntry) {
     return;
   }
 
+  clearBusyState(elements.postGameLeaderboardRank);
+
   if (!state.auth.user) {
     renderInto(
       elements.postGameLeaderboardRank,
@@ -1360,21 +1396,22 @@ function renderPostGameLeaderboardRank(rankEntry) {
         compact: true,
         showMarker: true,
         tone: "empty",
+        actions: renderRetryButtonMarkup("Open leaderboard", "open-leaderboard"),
       }),
     );
+    bindEmptyStateActions(elements.postGameLeaderboardRank);
     return;
   }
 
   if (!rankEntry) {
-    renderInto(
+    renderBusyInto(
       elements.postGameLeaderboardRank,
-      renderEmptyState({
-        title: "Loading placement",
-        body: "Checking your current Daily leaderboard position.",
-        compact: true,
-        showMarker: true,
-        tone: "loading",
+      renderLoadingBlock({
+        label: "Loading placement",
+        variant: "rank",
+        rows: 1,
       }),
+      "Loading placement",
     );
     return;
   }
@@ -1418,19 +1455,19 @@ async function loadPostGameLeaderboardRank() {
   if (!elements.postGameLeaderboardSection || !elements.postGameLeaderboardRank) return;
 
   showWhen(elements.postGameLeaderboardSection, true);
-  renderInto(
+  renderBusyInto(
     elements.postGameLeaderboardRank,
-    renderEmptyState({
-      title: "Loading placement",
-      body: "Checking your current Daily leaderboard position.",
-      compact: true,
-      showMarker: true,
-      tone: "loading",
+    renderLoadingBlock({
+      label: "Loading placement",
+      variant: "rank",
+      rows: 1,
     }),
+    "Loading placement",
   );
 
   const user = state.auth.user || firebaseAuth?.currentUser || null;
   if (!user?.uid || !state.auth.enabled || !firebaseDb) {
+    clearBusyState(elements.postGameLeaderboardRank);
     renderInto(
       elements.postGameLeaderboardRank,
       renderEmptyState({
@@ -1439,8 +1476,10 @@ async function loadPostGameLeaderboardRank() {
         compact: true,
         showMarker: true,
         tone: "error",
+        actions: renderRetryButtonMarkup("Open leaderboard", "open-leaderboard"),
       }),
     );
+    bindEmptyStateActions(elements.postGameLeaderboardRank);
     return;
   }
 
@@ -1450,6 +1489,7 @@ async function loadPostGameLeaderboardRank() {
     renderPostGameLeaderboardRank(userRank);
   } catch (error) {
     console.error("Post-game rank load failed:", error);
+    clearBusyState(elements.postGameLeaderboardRank);
     renderInto(
       elements.postGameLeaderboardRank,
       renderEmptyState({
@@ -1458,8 +1498,10 @@ async function loadPostGameLeaderboardRank() {
         compact: true,
         showMarker: true,
         tone: "error",
+        actions: renderRetryButtonMarkup("Try again", "retry-postgame-rank"),
       }),
     );
+    bindEmptyStateActions(elements.postGameLeaderboardRank);
   }
 }
 
@@ -1994,7 +2036,7 @@ function renderAuthUI() {
     elements.signInBtn.hidden = false;
     elements.signInBtn.disabled = true;
     elements.signOutBtn.hidden = true;
-    setAuthStatus(ready ? "Sign-in unavailable" : "Playing locally");
+    setAuthStatus(ready ? "Sign-in unavailable" : "Playing anonymously");
     return;
   }
 
@@ -2036,7 +2078,7 @@ function renderAuthUI() {
   elements.signInBtn.disabled = false;
   elements.signInBtn.textContent = "Sign in";
   elements.signOutBtn.hidden = true;
-  setAuthStatus("Playing locally");
+  setAuthStatus("Playing anonymously");
 }
 
 function formatDate() {
@@ -2335,6 +2377,9 @@ function renderEmptyState({
     .filter(Boolean)
     .join(" ");
 
+  const normalizedActions =
+    Array.isArray(actions) ? actions.filter(Boolean).join("") : actions;
+
   return `
     <div class="${classes}" ${tone === "error" ? 'role="alert"' : ""}>
       ${showMarker ? '<div class="empty-state__marker" aria-hidden="true"></div>' : ""}
@@ -2342,9 +2387,44 @@ function renderEmptyState({
         ${title ? `<p class="empty-state__title">${title}</p>` : ""}
         ${body ? `<p class="empty-state__body">${body}</p>` : ""}
       </div>
-      ${actions ? `<div class="empty-state__actions">${actions}</div>` : ""}
+      ${normalizedActions ? `<div class="empty-state__actions">${normalizedActions}</div>` : ""}
     </div>
   `;
+}
+
+function renderRetryButtonMarkup(label = "Try again", action = "") {
+  if (!action) return "";
+  return `<button type="button" class="pill-btn" data-empty-action="${action}">${label}</button>`;
+}
+
+function bindEmptyStateActions(container = document) {
+  container.querySelectorAll("[data-empty-action]").forEach((button) => {
+    if (button.dataset.emptyActionBound === "true") return;
+    button.dataset.emptyActionBound = "true";
+
+    button.addEventListener("click", () => {
+      const action = button.dataset.emptyAction;
+
+      if (action === "retry-leaderboard") {
+        openLeaderboardModal();
+        return;
+      }
+
+      if (action === "retry-postgame-rank") {
+        loadPostGameLeaderboardRank();
+        return;
+      }
+
+      if (action === "focus-guess-input") {
+        elements.guessInput?.focus();
+        return;
+      }
+
+      if (action === "open-leaderboard") {
+        openLeaderboardModal();
+      }
+    });
+  });
 }
 
 function setHidden(element, hidden) {
@@ -2352,10 +2432,104 @@ function setHidden(element, hidden) {
   element.hidden = !!hidden;
 }
 
-function setModalOpenState(modal, isOpen) {
-  if (!modal) return;
-  modal.dataset.open = isOpen ? "true" : "false";
-  modal.setAttribute("aria-hidden", isOpen ? "false" : "true");
+function setModalOpenState(modalBackdrop, isOpen, options = {}) {
+  if (!modalBackdrop) return;
+
+  ensureUiState();
+
+  const {
+    trigger = document.activeElement,
+    restoreFocus = true,
+  } = options;
+
+  modalBackdrop.dataset.open = isOpen ? "true" : "false";
+  modalBackdrop.setAttribute("aria-hidden", isOpen ? "false" : "true");
+
+  if (isOpen) {
+    rememberModalTrigger(modalBackdrop, trigger);
+    pushOpenModal(modalBackdrop);
+    syncModalEnvironment();
+    focusModalEntry(modalBackdrop);
+    return;
+  }
+
+  popOpenModal(modalBackdrop);
+  syncModalEnvironment();
+
+  if (restoreFocus) {
+    restoreModalFocus(modalBackdrop);
+  } else {
+    clearRememberedModalTrigger(modalBackdrop);
+  }
+}
+
+function closeModal(modalBackdrop, options = {}) {
+  setModalOpenState(modalBackdrop, false, options);
+}
+
+function renderLoadingBlock({
+  label = "Loading",
+  variant = "list",
+  rows = 3,
+} = {}) {
+  const items = Array.from({ length: rows }, () => {
+    if (variant === "kpis") {
+      return `
+        <div class="loading-card" aria-hidden="true">
+          <div class="loading-card__lines">
+            <div class="loading-line loading-line--short"></div>
+            <div class="loading-line loading-line--mid"></div>
+          </div>
+        </div>
+      `;
+    }
+
+    if (variant === "rank") {
+      return `
+        <div class="loading-card" aria-hidden="true">
+          <div class="loading-card__lines">
+            <div class="loading-line loading-line--rank"></div>
+            <div class="loading-line loading-line--name"></div>
+            <div class="loading-line loading-line--meta"></div>
+          </div>
+        </div>
+      `;
+    }
+
+    return `
+      <div class="loading-row" aria-hidden="true">
+        <div class="loading-row__lines">
+          <div class="loading-line loading-line--rank"></div>
+          <div class="loading-line loading-line--name"></div>
+        </div>
+      </div>
+    `;
+  }).join("");
+
+  const gridClass =
+    variant === "kpis" ? "loading-block__grid loading-block__grid--kpis" : "loading-block__grid loading-block__grid--list";
+
+  return `
+    <div class="loading-block" role="status" aria-live="polite" aria-label="${escapeHtml(label)}">
+      <div class="loading-block__status">${escapeHtml(label)}</div>
+      <div class="${gridClass}">
+        ${items}
+      </div>
+    </div>
+  `;
+}
+
+function renderBusyInto(container, markup, label = "Loading") {
+  if (!container) return;
+  container.setAttribute("aria-busy", "true");
+  container.setAttribute("data-loading-label", label);
+  container.innerHTML = markup;
+}
+
+function clearBusyState(container) {
+  if (!container) return;
+  container.setAttribute("aria-busy", "false");
+  container.removeAttribute("data-loading-label");
 }
 
 function setContentVisibility(element, shouldShow, renderWhenHidden = false) {
@@ -2388,6 +2562,15 @@ function isNonEmptyArray(value) {
 
 function hasRenderableMarkup(value) {
   return typeof value === "string" && value.trim().length > 0;
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 function setVisibility(element, visible) {
@@ -2525,7 +2708,9 @@ function renderStatsSection(statsObj, container) {
       compact: true,
       showMarker: true,
       tone: "empty",
+      actions: renderRetryButtonMarkup("Start guessing", "focus-guess-input"),
     });
+    bindEmptyStateActions(container);
     return;
   }
 
@@ -2536,7 +2721,9 @@ function renderStatsSection(statsObj, container) {
       compact: true,
       showMarker: true,
       tone: "empty",
+      actions: renderRetryButtonMarkup("Keep playing", "focus-guess-input"),
     });
+    bindEmptyStateActions(container);
     return;
   }
 
@@ -2724,6 +2911,7 @@ function renderTriviaSection(content) {
         tone: "empty",
       }),
     );
+    bindEmptyStateActions(postGameTriviaChips);
     return;
   }
 
@@ -2747,6 +2935,7 @@ function renderTriviaSection(content) {
         tone: "empty",
       }),
     );
+    bindEmptyStateActions(postGameTriviaChips);
   }
 }
 
@@ -3007,53 +3196,231 @@ function renderArchiveDetails(bookKey = "") {
   );
 }
 
-function handlePostGameLeaderboardOpen() {
-  closePostGamePanel();
-  openLeaderboardModal();
+const MODAL_FOCUSABLE_SELECTOR = [
+  'button:not([disabled])',
+  '[href]',
+  'input:not([disabled]):not([type="hidden"])',
+  'select:not([disabled])',
+  'textarea:not([disabled])',
+  '[tabindex]:not([tabindex="-1"])',
+].join(",");
+
+function getModalDialog(modalBackdrop) {
+  return modalBackdrop?.querySelector(".modal") || null;
 }
 
-async function openLeaderboardModal() {
+function getFocusableElements(container) {
+  if (!container) return [];
+  return Array.from(container.querySelectorAll(MODAL_FOCUSABLE_SELECTOR)).filter(
+    (node) =>
+      !node.hasAttribute("hidden") &&
+      node.getAttribute("aria-hidden") !== "true" &&
+      node.offsetParent !== null,
+  );
+}
+
+function getTopmostModal() {
+  const openModals = state?.ui?.openModals || [];
+  return openModals.length ? openModals[openModals.length - 1] : null;
+}
+
+function isModalOpen(modalBackdrop) {
+  return !!modalBackdrop && modalBackdrop.dataset.open === "true";
+}
+
+function ensureUiState() {
+  if (!state.ui) state.ui = {};
+  if (!Array.isArray(state.ui.openModals)) state.ui.openModals = [];
+  if (!(state.ui.modalFocusReturn instanceof Map)) {
+    state.ui.modalFocusReturn = new Map();
+  }
+}
+
+function rememberModalTrigger(modalBackdrop, trigger = document.activeElement) {
+  ensureUiState();
+  if (modalBackdrop && trigger instanceof HTMLElement) {
+    state.ui.modalFocusReturn.set(modalBackdrop.id, trigger);
+  }
+}
+
+function getRememberedModalTrigger(modalBackdrop) {
+  ensureUiState();
+  return modalBackdrop ? state.ui.modalFocusReturn.get(modalBackdrop.id) || null : null;
+}
+
+function clearRememberedModalTrigger(modalBackdrop) {
+  ensureUiState();
+  if (modalBackdrop) state.ui.modalFocusReturn.delete(modalBackdrop.id);
+}
+
+function pushOpenModal(modalBackdrop) {
+  ensureUiState();
+  state.ui.openModals = state.ui.openModals.filter((item) => item !== modalBackdrop);
+  state.ui.openModals.push(modalBackdrop);
+}
+
+function popOpenModal(modalBackdrop) {
+  ensureUiState();
+  state.ui.openModals = state.ui.openModals.filter((item) => item !== modalBackdrop);
+}
+
+function getBackgroundRoots() {
+  return [elements.appShell].filter(Boolean);
+}
+
+function syncModalStackClasses() {
+  ensureUiState();
+  state.ui.openModals.forEach((modal, index) => {
+    modal.classList.toggle("is-topmost", index === state.ui.openModals.length - 1);
+  });
+}
+
+function syncBackgroundInertState() {
+  const hasOpenModal = !!getTopmostModal();
+  getBackgroundRoots().forEach((root) => {
+    if (!root) return;
+    if (hasOpenModal) {
+      root.setAttribute("inert", "");
+      root.setAttribute("aria-hidden", "true");
+    } else {
+      root.removeAttribute("inert");
+      root.removeAttribute("aria-hidden");
+    }
+  });
+}
+
+function focusModalEntry(modalBackdrop) {
+  const dialog = getModalDialog(modalBackdrop);
+  if (!dialog) return;
+
+  const autofocusTarget =
+    dialog.querySelector("[data-modal-autofocus]") ||
+    getFocusableElements(dialog)[0] ||
+    dialog;
+
+  requestAnimationFrame(() => {
+    autofocusTarget.focus?.();
+  });
+}
+
+function restoreModalFocus(modalBackdrop) {
+  const trigger = getRememberedModalTrigger(modalBackdrop);
+  clearRememberedModalTrigger(modalBackdrop);
+
+  if (trigger && document.contains(trigger)) {
+    requestAnimationFrame(() => {
+      trigger.focus?.();
+    });
+  }
+}
+
+function trapModalFocus(event, modalBackdrop) {
+  if (event.key !== "Tab") return;
+  const dialog = getModalDialog(modalBackdrop);
+  if (!dialog) return;
+
+  const focusable = getFocusableElements(dialog);
+  if (!focusable.length) {
+    event.preventDefault();
+    dialog.focus();
+    return;
+  }
+
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  const active = document.activeElement;
+
+  if (event.shiftKey) {
+    if (active === first || !dialog.contains(active)) {
+      event.preventDefault();
+      last.focus();
+    }
+    return;
+  }
+
+  if (active === last) {
+    event.preventDefault();
+    first.focus();
+  }
+}
+
+function handleModalKeydown(event) {
+  const activeModal = getTopmostModal();
+  if (!activeModal) return;
+
+  if (event.key === "Escape") {
+    event.preventDefault();
+    closeModal(activeModal);
+    return;
+  }
+
+  if (event.key === "Tab") {
+    trapModalFocus(event, activeModal);
+  }
+}
+
+function syncModalEnvironment() {
+  syncModalStackClasses();
+  syncBackgroundInertState();
+
+  const hasOpenModal = !!getTopmostModal();
+  if (hasOpenModal && !state.ui.modalKeydownBound) {
+    document.addEventListener("keydown", handleModalKeydown);
+    state.ui.modalKeydownBound = true;
+  } else if (!hasOpenModal && state.ui.modalKeydownBound) {
+    document.removeEventListener("keydown", handleModalKeydown);
+    state.ui.modalKeydownBound = false;
+  }
+}
+
+function handlePostGameLeaderboardOpen() {
+  const trigger = document.activeElement;
+  closePostGamePanel();
+  openLeaderboardModal(trigger);
+}
+
+async function openLeaderboardModal(trigger = document.activeElement) {
   if (!elements.leaderboardModal) return;
 
-  setModalOpenState(elements.leaderboardModal, true);
+  setModalOpenState(elements.leaderboardModal, true, {
+    trigger,
+  });
 
-  renderInto(
+  renderBusyInto(
     elements.leaderboardSummary,
-    renderEmptyState({
-      title: "Loading global stats",
-      body: "Fetching today’s Daily leaderboard activity.",
-      compact: true,
-      showMarker: true,
-      tone: "loading",
+    renderLoadingBlock({
+      label: "Loading global stats",
+      variant: "kpis",
+      rows: 4,
     }),
-    { visible: true, preserveWhenHidden: true },
+    "Loading global stats",
   );
 
-  renderInto(
+  renderBusyInto(
     elements.leaderboardList,
-    renderEmptyState({
-      title: "Loading leaderboard",
-      body: "Fetching today’s top Daily scores.",
-      compact: true,
-      showMarker: true,
-      tone: "loading",
+    renderLoadingBlock({
+      label: "Loading leaderboard",
+      variant: "list",
+      rows: 5,
     }),
-    { visible: true, preserveWhenHidden: true },
+    "Loading leaderboard",
   );
 
-  renderInto(
+  renderBusyInto(
     elements.leaderboardUserRank,
-    renderEmptyState({
-      title: "Loading placement",
-      body: "Checking your current Daily leaderboard position.",
-      compact: true,
-      showMarker: true,
-      tone: "loading",
+    renderLoadingBlock({
+      label: "Loading placement",
+      variant: "rank",
+      rows: 1,
     }),
-    { visible: true, preserveWhenHidden: true },
+    "Loading placement",
   );
 
   if (!state.auth.enabled || !firebaseDb) {
+    clearBusyState(elements.leaderboardSummary);
+    clearBusyState(elements.leaderboardList);
+    clearBusyState(elements.leaderboardUserRank);
+
     renderInto(
       elements.leaderboardSummary,
       renderEmptyState({
@@ -3072,9 +3439,13 @@ async function openLeaderboardModal() {
         compact: true,
         showMarker: true,
         tone: "error",
+        actions: renderRetryButtonMarkup("Try again", "retry-leaderboard"),
       }),
     );
     renderCurrentUserRank(null);
+    bindEmptyStateActions(elements.leaderboardSummary);
+    bindEmptyStateActions(elements.leaderboardList);
+    bindEmptyStateActions(elements.leaderboardUserRank);
     return;
   }
 
@@ -3093,6 +3464,11 @@ async function openLeaderboardModal() {
     renderLeaderboardList(entries);
   } catch (error) {
     console.error("Leaderboard stats/list load failed:", error);
+
+    clearBusyState(elements.leaderboardSummary);
+    clearBusyState(elements.leaderboardList);
+    clearBusyState(elements.leaderboardUserRank);
+
     renderInto(
       elements.leaderboardSummary,
       renderEmptyState({
@@ -3111,26 +3487,30 @@ async function openLeaderboardModal() {
         compact: true,
         showMarker: true,
         tone: "error",
+        actions: renderRetryButtonMarkup("Try again", "retry-leaderboard"),
       }),
     );
     renderCurrentUserRank(null);
+    bindEmptyStateActions(elements.leaderboardSummary);
+    bindEmptyStateActions(elements.leaderboardList);
+    bindEmptyStateActions(elements.leaderboardUserRank);
     return;
   }
 
   if (!state.auth.user?.uid) {
+    clearBusyState(elements.leaderboardUserRank);
     renderCurrentUserRank(null);
     return;
   }
 
-  renderInto(
+  renderBusyInto(
     elements.leaderboardUserRank,
-    renderEmptyState({
-      title: "Loading placement",
-      body: "Checking your current Daily leaderboard position.",
-      compact: true,
-      showMarker: true,
-      tone: "loading",
+    renderLoadingBlock({
+      label: "Loading placement",
+      variant: "rank",
+      rows: 1,
     }),
+    "Loading placement",
   );
 
   try {
@@ -3139,6 +3519,7 @@ async function openLeaderboardModal() {
     renderCurrentUserRank(userRank);
   } catch (error) {
     console.error("Leaderboard rank load failed:", error);
+    clearBusyState(elements.leaderboardUserRank);
     renderInto(
       elements.leaderboardUserRank,
       renderEmptyState({
@@ -3147,17 +3528,20 @@ async function openLeaderboardModal() {
         compact: true,
         showMarker: true,
         tone: "error",
+        actions: renderRetryButtonMarkup("Try again", "retry-leaderboard"),
       }),
     );
+    bindEmptyStateActions(elements.leaderboardUserRank);
   }
 }
 
 function closeLeaderboardModal() {
-  if (!elements.leaderboardModal) return;
-  setModalOpenState(elements.leaderboardModal, false);
+  closeModal(elements.leaderboardModal);
 }
 
-function openArchiveModal() {
+
+
+function openArchiveModal(trigger = document.activeElement) {
   if (!elements.archiveModal) return;
 
   const selectedBook =
@@ -3171,11 +3555,12 @@ function openArchiveModal() {
   renderArchiveSummary();
   renderArchiveGrid(selectedKey);
   renderArchiveDetails(selectedKey);
-  setModalOpen(elements.archiveModal, true);
+
+  setModalOpenState(elements.archiveModal, true, { trigger });
 }
 
 function closeArchiveModal() {
-  setModalOpen(elements.archiveModal, false);
+  closeModal(elements.archiveModal);
 }
 
 function renderStatsModal() {
@@ -3218,6 +3603,15 @@ function renderStatsModal() {
   }
 }
 
+function getDailyStreakBadges() {
+  const earnedIds = new Set(getEarnedBadgeIds());
+
+  return STREAK_BADGES.map((badge) => ({
+    ...badge,
+    earned: earnedIds.has(badge.id),
+  }));
+}
+
 function renderStatsModalBadges() {
   if (!elements.statsModalBadges) return;
 
@@ -3234,6 +3628,7 @@ function renderStatsModalBadges() {
         tone: "empty",
       }),
     );
+    bindEmptyStateActions(elements.statsModalBadges);
     return;
   }
 
@@ -3266,6 +3661,7 @@ function renderPostGameBadges(container, badges) {
         tone: "empty",
       }),
     );
+    bindEmptyStateActions(container);
     return;
   }
 
@@ -3317,11 +3713,12 @@ function renderPostGamePanel() {
   state.postGameOpen = true;
 }
 
-function closePostGamePanel() {
-  if (!elements.postGameModal) return;
+function closePostGameModal() {
+  closeModal(elements.postGameModal);
+}
 
-  setModalOpenState(elements.postGameModal, false);
-  state.postGameOpen = false;
+function closePostGamePanel() {
+  closePostGameModal();
 }
 
 function renderPuzzleView() {
@@ -3418,8 +3815,10 @@ function renderSuggestions() {
         compact: true,
         showMarker: true,
         tone: "empty",
+        actions: renderRetryButtonMarkup("Keep typing", "focus-guess-input"),
       }),
     );
+    bindEmptyStateActions(elements.autocomplete);
     openSuggestions();
     updateComboboxA11y(false);
     return;
@@ -3595,30 +3994,30 @@ function setModalOpen(modal, isOpen) {
   setModalOpenState(modal, isOpen);
 }
 
-function openHelpModal() {
-  setModalOpen(elements.helpModal, true);
+function openHelpModal(trigger = document.activeElement) {
+  setModalOpenState(elements.helpModal, true, { trigger });
 }
 
 function closeHelpModal() {
   setModalOpen(elements.helpModal, false);
 }
 
-function openSettingsModal() {
+function openSettingsModal(trigger = document.activeElement) {
   if (!elements.settingsModal) return;
 
   syncSettingsControls();
-  setModalOpen(elements.settingsModal, true);
+  setModalOpenState(elements.settingsModal, true, { trigger });
 }
 
 function closeSettingsModal() {
   setModalOpen(elements.settingsModal, false);
 }
 
-function openStatsModal() {
+function openStatsModal(trigger = document.activeElement) {
   if (!elements.statsModal) return;
 
   renderStatsModal();
-  setModalOpen(elements.statsModal, true);
+  setModalOpenState(elements.statsModal, true, { trigger });
 }
 
 function closeStatsModal() {
@@ -4037,13 +4436,13 @@ async function handleSignIn() {
     state.auth.syncing = false;
     renderAuthUI();
     setAuthStatus("Google sign-in failed");
-    renderStatus("Google sign-in failed. You can keep playing locally.");
+    renderStatus("Google sign-in failed. You can keep playing anonymously.");
   }
 }
 
 async function handleSignOut() {
   if (!state.auth.enabled || !firebaseAuth) {
-    setAuthStatus("Playing locally");
+    setAuthStatus("Playing anonymously");
     return;
   }
 
@@ -4054,7 +4453,7 @@ async function handleSignOut() {
 
   try {
     await firebaseSignOut(firebaseAuth);
-    setAuthStatus("Playing locally");
+    setAuthStatus("Playing anonymously");
   } catch (error) {
     console.error("Sign-out failed:", error);
     setAuthStatus("Sign-out failed");
@@ -4069,9 +4468,11 @@ function bindEvents() {
 
   document.addEventListener("click", handleDocumentClick);
 
-  elements.helpBtn.addEventListener("click", openHelpModal);
+  elements.helpBtn.addEventListener("click", (event) => {
+    openHelpModal(event.currentTarget);
+  });
+
   elements.closeHelpBtn.addEventListener("click", closeHelpModal);
-  bindBackdropClose(elements.helpModal, closeHelpModal);
 
   elements.shareBtn.addEventListener("click", copyResult);
 
@@ -4086,8 +4487,6 @@ function bindEvents() {
   if (elements.postGameNextBtn) {
     elements.postGameNextBtn.addEventListener("click", handleNextPracticePuzzle);
   }
-
-  bindBackdropClose(elements.postGameModal, closePostGamePanel);
 
   if (elements.themeToggle) {
     elements.themeToggle.addEventListener("click", handleThemeToggle);
@@ -4110,14 +4509,14 @@ function bindEvents() {
   }
 
   if (elements.settingsBtn) {
-    elements.settingsBtn.addEventListener("click", openSettingsModal);
+    elements.settingsBtn.addEventListener("click", (event) => {
+      openSettingsModal(event.currentTarget);
+    });
   }
 
   if (elements.closeSettingsBtn) {
     elements.closeSettingsBtn.addEventListener("click", closeSettingsModal);
   }
-
-  bindBackdropClose(elements.settingsModal, closeSettingsModal);
 
   if (elements.reducedMotionToggle) {
     elements.reducedMotionToggle.addEventListener(
@@ -4142,36 +4541,19 @@ function bindEvents() {
   }
 
   if (elements.statsBtn) {
-    elements.statsBtn.addEventListener("click", openStatsModal);
+    elements.statsBtn.addEventListener("click", (event) => {
+      openStatsModal(event.currentTarget);
+    });
   }
 
   if (elements.closeStatsBtn) {
     elements.closeStatsBtn.addEventListener("click", closeStatsModal);
   }
 
-  bindBackdropClose(elements.statsModal, closeStatsModal);
-
-  document.addEventListener("keydown", (event) => {
-    if (event.key !== "Escape") return;
-
-    if (elements.settingsModal?.dataset.open === "true") {
-      closeSettingsModal();
-    } else if (elements.helpModal?.dataset.open === "true") {
-      closeHelpModal();
-    } else if (elements.statsModal?.dataset.open === "true") {
-      closeStatsModal();
-    } else if (elements.postGameModal?.dataset.open === "true") {
-      closePostGamePanel();
-    } else if (elements.archiveModal?.dataset.open === "true") {
-      closeArchiveModal();
-    } else if (elements.leaderboardModal?.dataset.open === "true") {
-      closeLeaderboardModal();
-      return;
-    }
-  });
-
   if (elements.archiveBtn) {
-    elements.archiveBtn.addEventListener("click", openArchiveModal);
+    elements.archiveBtn.addEventListener("click", (event) => {
+      openArchiveModal(event.currentTarget);
+    });
   }
 
   if (elements.closeArchiveBtn) {
@@ -4182,8 +4564,6 @@ function bindEvents() {
     elements.archiveGrid.addEventListener("click", handleArchiveGridClick);
   }
 
-  bindBackdropClose(elements.archiveModal, closeArchiveModal);
-
   if (elements.signInBtn) {
     elements.signInBtn.addEventListener("click", handleSignIn);
   }
@@ -4193,7 +4573,10 @@ function bindEvents() {
   }
 
   if (elements.leaderboardBtn) {
-    elements.leaderboardBtn.addEventListener("click", openLeaderboardModal);
+    elements.leaderboardBtn.addEventListener("click", (event) => {
+      event.preventDefault();
+      openLeaderboardModal(event.currentTarget);
+    });
   }
 
   if (elements.closeLeaderboardBtn) {
@@ -4201,10 +4584,30 @@ function bindEvents() {
   }
 
   if (elements.postGameLeaderboardBtn) {
-    elements.postGameLeaderboardBtn.addEventListener("click", handlePostGameLeaderboardOpen);
+    elements.postGameLeaderboardBtn.addEventListener("click", (event) => {
+      event.preventDefault();
+      handlePostGameLeaderboardOpen();
+    });
   }
 
-  bindBackdropClose(elements.leaderboardModal, closeLeaderboardModal);
+  [
+    elements.helpModal,
+    elements.settingsModal,
+    elements.statsModal,
+    elements.archiveModal,
+    elements.leaderboardModal,
+    elements.postGameModal,
+  ]
+    .filter(Boolean)
+    .forEach((modalBackdrop) => {
+      modalBackdrop.addEventListener("mousedown", (event) => {
+        if (event.target !== modalBackdrop) return;
+        if (getTopmostModal() !== modalBackdrop) return;
+        closeModal(modalBackdrop);
+      });
+    });
+
+  bindEmptyStateActions(document);
 }
 
 function initGame() {

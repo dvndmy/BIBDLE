@@ -991,6 +991,189 @@ input::placeholder {
     color: var(--color-text-muted);
 }
 
+.empty-state__actions .pill-btn {
+    min-width: 0;
+}
+
+.empty-state--loading {
+    border-style: solid;
+}
+
+.empty-state--loading .empty-state__marker {
+    animation: emptyStatePulse 1400ms ease-in-out infinite;
+}
+
+.empty-state--error {
+    border-color: color-mix(in srgb, var(--color-error) 24%, var(--empty-border));
+}
+
+.modal-layout__header > .postgame-badge {
+    margin-bottom: var(--space-1);
+}
+
+.modal-system__header > .section-shell__meta,
+.modal-system__block-header > .section-shell__meta {
+    max-width: 58ch;
+}
+
+.modal-system__body > .modal-block,
+.modal-system__body > .postgame-section,
+.modal-system__body > .expander {
+    min-width: 0;
+}
+
+.modal-system__body > .modal-block + .modal-block,
+.modal-system__body > .postgame-section + .postgame-section,
+.modal-system__body > .expander + .expander {
+    margin-top: 0;
+}
+
+.postgame-body {
+    gap: var(--section-gap-md);
+}
+
+.postgame-section {
+    gap: var(--section-gap-sm);
+    padding-top: var(--space-3);
+    border-top: 1px solid var(--divider-default);
+}
+
+.postgame-section .section-shell__body {
+    gap: var(--section-gap-sm);
+}
+
+.postgame-meta-chips,
+.streak-badges,
+.streak-chips,
+.badge-group,
+.chip-group,
+.pill-group {
+    align-items: flex-start;
+}
+
+.leaderboard-summary,
+.leaderboard-list,
+.leaderboard-user-rank,
+.archive-summary {
+    gap: var(--section-gap-md);
+}
+
+.leaderboard-list-shell,
+.archive-details,
+.archive-summary-group,
+.archive-stat-group,
+.ui-card,
+.kpi-card,
+.stat-block {
+    min-width: 0;
+}
+
+.archive-details > .empty-state,
+.leaderboard-list > .empty-state,
+.leaderboard-summary > .empty-state,
+.leaderboard-user-rank > .empty-state,
+.guess-distribution > .empty-state,
+#statsModalBadges > .empty-state,
+#postGameTriviaChips > .empty-state,
+.autocomplete-list > .empty-state {
+    width: 100%;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+}
+
+.autocomplete-list > .empty-state .empty-state__content {
+    justify-items: start;
+}
+
+.autocomplete-list > .empty-state .empty-state__title,
+.autocomplete-list > .empty-state .empty-state__body {
+    text-align: left;
+}
+
+.helper,
+.status-line,
+.footer-note,
+.section-shell__meta,
+.archive-details-copy,
+.postgame-text,
+.modal p,
+.modal li {
+    text-wrap: pretty;
+}
+
+.rules {
+    align-items: stretch;
+}
+
+.rule-card,
+.settings-row,
+.stat-item,
+.archive-detail-stat,
+.leaderboard-kpi,
+.leaderboard-user-rank-card {
+    min-height: 100%;
+}
+
+.settings-list,
+.guess-distribution,
+.archive-bars,
+.leaderboard-summary,
+.leaderboard-list,
+.leaderboard-user-rank,
+.archive-summary,
+.section-shell__body,
+.modal-system__body {
+    min-width: 0;
+}
+
+@keyframes emptyStatePulse {
+    0%, 100% {
+        transform: scale(1);
+        opacity: 0.72;
+    }
+
+    50% {
+        transform: scale(1.06);
+        opacity: 1;
+    }
+}
+
+@media (max-width: 720px) {
+    .modal {
+        padding: var(--space-5);
+    }
+
+    .modal-system__header,
+    .modal-system__body,
+    .modal-system__block,
+    .section-shell,
+    .section-shell__body {
+        gap: var(--section-gap-sm);
+    }
+
+    .leaderboard-kpis,
+    .archive-details-grid,
+    .stats-grid {
+        gap: var(--space-2);
+    }
+
+    .postgame-meta-chips,
+    .streak-badges,
+    .badge-group,
+    .chip-group,
+    .pill-group {
+        gap: var(--space-2);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .empty-state--loading .empty-state__marker {
+        animation: none;
+    }
+}
+
 .expander {
     width: 100%;
     background: var(--surface-panel);
@@ -1260,11 +1443,12 @@ html.reduced-motion *::after {
 .modal-backdrop {
     position: fixed;
     inset: 0;
-    z-index: 90;
+    z-index: 1000;
     display: none;
-    place-items: center;
+    align-items: center;
+    justify-content: center;
     padding: var(--space-4);
-    background: var(--modal-backdrop);
+    background: rgba(8, 10, 16, 0.56);
     backdrop-filter: blur(10px);
 }
 
@@ -1303,6 +1487,147 @@ html.reduced-motion *::after {
 
 .modal-block {
     min-width: 0;
+}
+
+.modal-backdrop[data-open="true"] {
+    display: flex;
+}
+
+.modal-backdrop[aria-hidden="true"] {
+    display: none;
+}
+
+.modal {
+    outline: none;
+}
+
+.modal-backdrop.is-topmost {
+    z-index: 1000;
+}
+
+.loading-block {
+    display: grid;
+    gap: var(--section-gap-sm);
+    width: 100%;
+}
+
+.loading-block__status {
+    font-family: var(--font-ui);
+    font-size: var(--text-sm);
+    color: var(--color-text-muted);
+}
+
+.loading-block__grid {
+    display: grid;
+    gap: var(--space-2);
+}
+
+.loading-block__grid--kpis {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.loading-block__grid--list {
+    grid-template-columns: 1fr;
+}
+
+.loading-card,
+.loading-row {
+    position: relative;
+    overflow: hidden;
+    background: var(--surface-panel);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-card);
+}
+
+.loading-card {
+    min-height: 84px;
+    padding: var(--card-padding-sm);
+}
+
+.loading-row {
+    min-height: 56px;
+    padding: var(--card-padding-sm);
+}
+
+.loading-card::before,
+.loading-row::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+        90deg,
+        transparent 0%,
+        rgba(255, 255, 255, 0.10) 45%,
+        rgba(255, 255, 255, 0.18) 50%,
+        rgba(255, 255, 255, 0.10) 55%,
+        transparent 100%
+    );
+    transform: translateX(-100%);
+    animation: loadingSweep 1400ms ease-in-out infinite;
+    pointer-events: none;
+}
+
+.loading-card__lines,
+.loading-row__lines {
+    display: grid;
+    gap: var(--space-2);
+}
+
+.loading-line {
+    height: 0.72rem;
+    border-radius: var(--radius-full);
+    background: rgba(127, 127, 127, 0.16);
+}
+
+.loading-line--short {
+    width: 42%;
+}
+
+.loading-line--mid {
+    width: 68%;
+}
+
+.loading-line--full {
+    width: 100%;
+}
+
+.loading-line--rank {
+    width: 16%;
+}
+
+.loading-line--name {
+    width: 32%;
+}
+
+.loading-line--meta {
+    width: 22%;
+}
+
+[aria-busy="true"] {
+    cursor: progress;
+}
+
+@keyframes loadingSweep {
+    from {
+        transform: translateX(-100%);
+    }
+
+    to {
+        transform: translateX(100%);
+    }
+}
+
+@media (max-width: 720px) {
+    .loading-block__grid--kpis {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .loading-card::before,
+    .loading-row::before {
+        animation: none;
+    }
 }
 
 .section-shell {
