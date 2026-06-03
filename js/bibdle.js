@@ -27,6 +27,12 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 import { books } from "./data/books.js";
 import { verses } from "./data/verses.js";
+import {
+  createAppShell,
+  createBootLogger,
+  createBootStateSnapshot,
+} from "./app-shell.js";
+import { createRenderPipeline } from "./render-pipeline.js";
 
 const CONFIG = {
   modes: {
@@ -104,6 +110,20 @@ let firebaseApp = null;
 let firebaseAuth = null;
 let firebaseDb = null;
 let firebaseGoogleProvider = null;
+
+const BOOT_DEBUG =
+  typeof window !== "undefined" &&
+  (window.location.search.includes("bibdleDebug=1") ||
+    window.location.search.includes("debug=1") ||
+    window.location.hash.includes("bibdle-debug"));
+
+const bootLogger = createBootLogger({
+  enabled: BOOT_DEBUG,
+  prefix: "[Bibdle boot]",
+});
+
+let appShell = null;
+let renderPipeline = null;
 
 const STREAK_BADGES = [
   { id: "streak-3", threshold: 3, label: "3-Day Streak" },
@@ -258,7 +278,178 @@ const elements = {
   leaderboardSummary: document.getElementById("leaderboardSummary"),
   leaderboardList: document.getElementById("leaderboardList"),
   leaderboardUserRank: document.getElementById("leaderboardUserRank"),
+  appShellRoot: document.getElementById("appShell")
 };
+
+function getRequiredBootElements() {
+  return {
+    appShell: elements.appShell,
+    verseText: elements.verseText,
+    dateLabel: elements.dateLabel,
+    countdownTimer: elements.countdownTimer,
+    attemptLabel: elements.attemptLabel,
+    hintBlock: elements.hintBlock,
+    guessForm: elements.guessForm,
+    guessInput: elements.guessInput,
+    autocomplete: elements.autocomplete,
+    guessRows: elements.guessRows,
+    proximityLine: elements.proximityLine,
+    statusLine: elements.statusLine,
+    difficultySelect: elements.difficultySelect,
+    modeSelect: elements.modeSelect,
+  };
+}
+
+function getOptionalBootElements() {
+  return {
+    themeToggle: elements.themeToggle,
+    languageSelect: elements.languageSelect,
+    mobileLanguageToggle: elements.mobileLanguageToggle,
+    authStatus: elements.authStatus,
+    signInBtn: elements.signInBtn,
+    signOutBtn: elements.signOutBtn,
+    helpModal: elements.helpModal,
+    settingsModal: elements.settingsModal,
+    statsModal: elements.statsModal,
+    archiveModal: elements.archiveModal,
+    leaderboardModal: elements.leaderboardModal,
+    postGameModal: elements.postGameModal,
+  };
+}
+
+function validateBootRequirements() {
+  const required = getRequiredBootElements();
+  const optional = getOptionalBootElements();
+
+  const missingRequired = Object.entries(required)
+    .filter(([, element]) => !element)
+    .map(([key]) => key);
+
+  const missingOptional = Object.entries(optional)
+    .filter(([, element]) => !element)
+    .map(([key]) => key);
+
+  const contentIssues = [];
+
+  if (!Array.isArray(books) || books.length === 0) {
+    contentIssues.push("books");
+  }
+
+  if (!Array.isArray(verses) || verses.length === 0) {
+    contentIssues.push("verses");
+  }
+
+  return {
+    ok: missingRequired.length === 0 && contentIssues.length === 0,
+    missingRequired,
+    missingOptional,
+    contentIssues,
+  };
+}
+
+function ensureBootDebugSurface() {
+  if (typeof window === "undefined") return;
+
+  if (!window.__BIBDLE_BOOT__) {
+    window.__BIBDLE_BOOT__ = {};
+  }
+
+  window.__BIBDLE_BOOT__.debug = BOOT_DEBUG;
+  window.__BIBDLE_BOOT__.getState = () =>
+    appShell ? appShell.getSnapshot() : createBootStateSnapshot();
+  window.__BIBDLE_BOOT__.state = () =>
+    appShell ? appShell.getSnapshot() : createBootStateSnapshot();
+  window.__BIBDLE_BOOT__.elements = elements;
+  window.__BIBDLE_BOOT__.stateRef = state;
+  window.__BIBDLE_BOOT__.validate = validateBootRequirements;
+}
+
+function getLifecycleReadinessSnapshot() {
+  return {
+    dom: !!elements.appShell,
+    contentLoaded: Array.isArray(books) && books.length > 0 && Array.isArray(verses) && verses.length > 0,
+    hydrated: !!state.preferences && !!state.stats,
+    servicesInitialized: !!state.auth.ready || state.auth.enabled === false,
+    authReady: !!state.auth.ready,
+    puzzleReady: !!state.currentPuzzle,
+    renderReady: !!state.currentPuzzle && !!elements.verseText,
+    eventsBound: !!state.ui?.eventsBound,
+  };
+}
+
+function publishBootSnapshot(extra = {}) {
+  if (!appShell) return;
+
+  appShell.updateReadiness(getLifecycleReadinessSnapshot());
+  appShell.setMeta("mode", state.mode);
+  appShell.setMeta("difficulty", state.preferences?.difficulty || "normal");
+  appShell.setMeta("auth", {
+    ready: !!state.auth.ready,
+    enabled: !!state.auth.enabled,
+    user: state.auth.user
+      ? {
+          uid: state.auth.user.uid,
+          isAnonymous: !!state.auth.user.isAnonymous,
+        }
+      : null,
+    syncing: !!state.auth.syncing,
+  });
+
+  const snapshot = appShell.getSnapshot();
+
+  if (typeof window !== "undefined" && window.__BIBDLE_BOOT__) {
+    window.__BIBDLE_BOOT__.snapshot = snapshot;
+    window.__BIBDLE_BOOT__.last = {
+      ...snapshot,
+      ...extra,
+    };
+  }
+}
+
+function markLifecycleStage(stage, details = {}) {
+  if (!appShell) return;
+  appShell.setStage(stage, details);
+  publishBootSnapshot(details);
+}
+
+function markLifecycleError(stage, error, details = {}) {
+  if (!appShell) return;
+  appShell.fail(stage, error, details);
+  publishBootSnapshot({
+    failedStage: stage,
+    error: error?.message || String(error),
+    ...details,
+  });
+}
+
+function createStartupDependencies() {
+  return {
+    state,
+    elements,
+    bootLogger,
+    validateBootRequirements,
+    loadPreferences,
+    applyLanguageToDocument,
+    applyAccessibilityPreferences,
+    loadStats,
+    initTheme,
+    syncPreferenceControls,
+    renderLanguageControl,
+    renderMobileLanguageToggle,
+    renderAuthUI,
+    bindEvents,
+    initFirebaseAuth,
+    initGame,
+    startPuzzle,
+    resetPuzzle,
+    renderPuzzleView,
+    renderStatsModal,
+    stopCountdownTimer,
+    updateCountdownLabel,
+    startCountdownTimer,
+    isGameOver,
+  };
+}
 
 function getSystemTheme() {
   return window.matchMedia("(prefers-color-scheme: dark)").matches
@@ -3798,6 +3989,7 @@ function renderPuzzleView() {
     renderStatus(
       `Correct — ${getLocalizedValue(state.currentPuzzle.verse.book, state.currentPuzzle.verse.bookMl)} (${getLocalizedReference(state.currentPuzzle.verse, getCurrentLanguage())}).`,
     );
+    publishBootSnapshot({ renderStatus: "won" });
     return;
   }
 
@@ -3805,10 +3997,12 @@ function renderPuzzleView() {
     renderStatus(
       `Out of guesses — the answer was ${getLocalizedValue(state.currentPuzzle.verse.book, state.currentPuzzle.verse.bookMl)} (${getLocalizedReference(state.currentPuzzle.verse, getCurrentLanguage())}).`,
     );
+    publishBootSnapshot({ renderStatus: "lost" });
     return;
   }
 
   renderStatus();
+  publishBootSnapshot({ renderStatus: "playing" });
 }
 
 function resetInput() {
@@ -4317,12 +4511,16 @@ function handleModeChange(event) {
   const value = event.target.value;
   if (value !== "daily" && value !== "practice") return;
 
+  markLifecycleStage("mode-switch", {
+    from: state.mode,
+    to: value,
+  });
+
   state.mode = value;
   state.preferences.preferredMode = value;
   savePreferences();
   resetPuzzle(value);
 }
-
 function handleNextPracticePuzzle() {
   if (state.mode !== "practice") return;
   resetPuzzle("practice");
@@ -4402,15 +4600,25 @@ async function syncLocalDataToCloud(user) {
 async function handleAuthStateChange(user) {
   state.auth.user = user || null;
   state.auth.ready = true;
+  markLifecycleStage("auth-ready", {
+    user: user
+      ? {
+          uid: user.uid,
+          isAnonymous: !!user.isAnonymous,
+        }
+      : null,
+  });
 
   if (!user) {
     state.auth.syncing = false;
     renderAuthUI();
+    publishBootSnapshot({ auth: "anonymous-local" });
     return;
   }
 
   state.auth.syncing = true;
   renderAuthUI();
+  publishBootSnapshot({ auth: "syncing" });
 
   try {
     const hadCloudProfile = await loadCloudDataToLocal(user);
@@ -4425,17 +4633,27 @@ async function handleAuthStateChange(user) {
     } else {
       setAuthStatus("Signed in, cloud sync unavailable");
     }
+    markLifecycleError("auth-ready", error, {
+      user: {
+        uid: user.uid,
+        isAnonymous: !!user.isAnonymous,
+      },
+    });
   } finally {
     state.auth.syncing = false;
     renderAuthUI();
+    publishBootSnapshot({ auth: "ready" });
   }
 }
 
 function initFirebaseAuth() {
+  markLifecycleStage("init-services", { service: "firebase-auth" });
+
   if (!FIREBASE_ENABLED) {
     state.auth.ready = true;
     state.auth.enabled = false;
     renderAuthUI();
+    publishBootSnapshot({ firebase: "disabled" });
     return;
   }
 
@@ -4447,6 +4665,7 @@ function initFirebaseAuth() {
 
     state.auth.enabled = true;
     renderAuthUI();
+    publishBootSnapshot({ firebase: "initialized" });
 
     onAuthStateChanged(firebaseAuth, (user) => {
       handleAuthStateChange(user);
@@ -4456,6 +4675,7 @@ function initFirebaseAuth() {
     state.auth.ready = true;
     state.auth.enabled = false;
     renderAuthUI();
+    markLifecycleError("init-services", error, { service: "firebase-auth" });
   }
 }
 
@@ -4522,6 +4742,10 @@ async function handleSignOut() {
 }
 
 function bindEvents() {
+  if (state.ui?.eventsBound) {
+    return;
+  }
+
   elements.guessForm.addEventListener("submit", handleGuessSubmit);
   elements.guessInput.addEventListener("input", handleGuessInput);
   elements.guessInput.addEventListener("keydown", handleGuessKeydown);
@@ -4529,13 +4753,13 @@ function bindEvents() {
 
   document.addEventListener("click", handleDocumentClick);
 
-  elements.helpBtn.addEventListener("click", (event) => {
+  elements.helpBtn?.addEventListener("click", (event) => {
     openHelpModal(event.currentTarget);
   });
 
-  elements.closeHelpBtn.addEventListener("click", closeHelpModal);
+  elements.closeHelpBtn?.addEventListener("click", closeHelpModal);
 
-  elements.shareBtn.addEventListener("click", copyResult);
+  elements.shareBtn?.addEventListener("click", copyResult);
 
   if (elements.nextPracticeBtn) {
     elements.nextPracticeBtn.addEventListener("click", handleNextPracticePuzzle);
@@ -4669,21 +4893,32 @@ function bindEvents() {
     });
 
   bindEmptyStateActions(document);
+  ensureUiState();
+  state.ui.eventsBound = true;
+  publishBootSnapshot({ eventBinding: "complete" });
 }
 
 function initGame() {
+  markLifecycleStage("hydrate", { step: "progress-restore" });
+
   const restored = loadProgress();
 
   if (!restored) {
+    markLifecycleStage("puzzle-reset", { trigger: "boot", mode: state.mode });
     startPuzzle(state.mode);
     saveProgress();
   }
 
-  renderPuzzleView();
+  renderPipeline.renderStartupView();
 
   if (restored) {
     renderStatus("Progress restored.");
   }
+
+  publishBootSnapshot({
+    progressRestored: restored,
+    currentPuzzleId: state.currentPuzzle?.id || null,
+  });
 }
 
 function startPuzzle(mode = state.mode) {
@@ -4697,30 +4932,29 @@ function startPuzzle(mode = state.mode) {
   resetSuggestionsState();
   closeSuggestions();
   saveProgress();
+  publishBootSnapshot({
+    action: "start-puzzle",
+    mode,
+    puzzleId: state.currentPuzzle?.id || null,
+  });
 }
 
 function resetPuzzle(mode = state.mode) {
+  markLifecycleStage("puzzle-reset", { mode });
   startPuzzle(mode);
   saveProgress();
-  renderPuzzleView();
+  renderPipeline.renderStartupView();
 }
 
-function init() {
-  loadPreferences();
-  applyLanguageToDocument();
-  applyAccessibilityPreferences();
-  loadStats();
-  initTheme();
-  syncPreferenceControls();
-  renderLanguageControl();
-  renderMobileLanguageToggle();
-  renderAuthUI();
-  bindEvents();
-  initFirebaseAuth();
+function bindLifecycleEvents() {
+  if (state.ui?.lifecycleEventsBound) {
+    return;
+  }
 
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) {
       stopCountdownTimer();
+      publishBootSnapshot({ visibility: "hidden" });
       return;
     }
 
@@ -4729,9 +4963,99 @@ function init() {
     } else {
       updateCountdownLabel();
     }
+
+    publishBootSnapshot({ visibility: "visible" });
   });
 
-  initGame();
+  ensureUiState();
+  state.ui.lifecycleEventsBound = true;
 }
 
-init();
+async function bootstrapApplication() {
+  ensureBootDebugSurface();
+
+  appShell = createAppShell({
+    name: "Bibdle",
+    debug: BOOT_DEBUG,
+    logger: bootLogger,
+  });
+
+  renderPipeline = createRenderPipeline({
+    state,
+    elements,
+    renderPuzzleView,
+    renderAuthUI,
+    renderStatsModal,
+    syncPreferenceControls,
+    renderLanguageControl,
+    renderMobileLanguageToggle,
+  });
+
+  const dependencies = createStartupDependencies();
+  appShell.attachDependencies(dependencies);
+
+  try {
+    markLifecycleStage("hydrate", { step: "validate-boot" });
+
+    const validation = validateBootRequirements();
+    appShell.setValidation(validation);
+    publishBootSnapshot({ validation });
+
+    if (!validation.ok) {
+      const message = [
+        validation.missingRequired.length
+          ? `Missing required DOM: ${validation.missingRequired.join(", ")}`
+          : "",
+        validation.contentIssues.length
+          ? `Missing content: ${validation.contentIssues.join(", ")}`
+          : "",
+      ]
+        .filter(Boolean)
+        .join(" | ");
+
+      throw new Error(message || "Boot validation failed");
+    }
+
+    markLifecycleStage("hydrate", { step: "preferences" });
+    loadPreferences();
+
+    markLifecycleStage("hydrate", { step: "document-language" });
+    applyLanguageToDocument();
+
+    markLifecycleStage("hydrate", { step: "accessibility" });
+    applyAccessibilityPreferences();
+
+    markLifecycleStage("hydrate", { step: "stats" });
+    loadStats();
+
+    markLifecycleStage("hydrate", { step: "theme" });
+    initTheme();
+
+    markLifecycleStage("hydrate", { step: "controls" });
+    syncPreferenceControls();
+    renderLanguageControl();
+    renderMobileLanguageToggle();
+    renderAuthUI();
+
+    markLifecycleStage("bind-events");
+    bindEvents();
+    bindLifecycleEvents();
+
+    markLifecycleStage("init-services");
+    initFirebaseAuth();
+
+    markLifecycleStage("render");
+    initGame();
+
+    appShell.markReady();
+    publishBootSnapshot({ boot: "ready" });
+  } catch (error) {
+    console.error("Bibdle boot failed:", error);
+    markLifecycleError(appShell.getStage() || "boot", error);
+
+    renderStatus("Bibdle could not finish booting. Check console diagnostics.");
+    throw error;
+  }
+}
+
+bootstrapApplication();
