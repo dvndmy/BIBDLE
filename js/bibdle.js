@@ -480,13 +480,13 @@ function getLocalizedExplanation(verse, language = getCurrentLanguage()) {
 function getLocalizedThemes(item, language = getCurrentLanguage()) {
   const source =
     language === "ml"
-      ? (Array.isArray(item?.themesMl) ? item.themesMl : Array.isArray(item?.bookThemesMl) ? item.bookThemesMl : null)
-      : (Array.isArray(item?.themes) ? item.themes : Array.isArray(item?.bookThemes) ? item.bookThemes : null);
+      ? (Array.isArray(item?.themesMl) ? item.themesMl : Array.isArray(item?.bookThemes) ? item.bookThemes : null)
+      : (Array.isArray(item?.themes) ? item.themes : Array.isArray(item?.bookThemesMl) ? item.bookThemesMl : null);
 
   const fallback =
     language === "ml"
-      ? (Array.isArray(item?.themes) ? item.themes : Array.isArray(item?.bookThemes) ? item.bookThemes : [])
-      : (Array.isArray(item?.themesMl) ? item.themesMl : Array.isArray(item?.bookThemesMl) ? item.bookThemesMl : []);
+      ? (Array.isArray(item?.themes) ? item.themes : Array.isArray(item?.bookThemesMl) ? item.bookThemesMl : [])
+      : (Array.isArray(item?.themesMl) ? item.themesMl : Array.isArray(item?.bookThemes) ? item.bookThemes : []);
 
   return (source && source.length ? source : fallback || []).filter(Boolean);
 }
@@ -3735,14 +3735,14 @@ function renderPuzzleView() {
 
   if (state.status === "won") {
     renderStatus(
-      `Correct — ${getLocalizedValue(state.currentPuzzle.verse.bookMl, state.currentPuzzle.verse.book)} (${getLocalizedReference(state.currentPuzzle.verse, getCurrentLanguage())}).`,
+      `Correct — ${getLocalizedValue(state.currentPuzzle.verse.book, state.currentPuzzle.verse.bookMl)} (${getLocalizedReference(state.currentPuzzle.verse, getCurrentLanguage())}).`,
     );
     return;
   }
 
   if (state.status === "lost") {
     renderStatus(
-      `Out of guesses — the answer was ${getLocalizedValue(state.currentPuzzle.verse.bookMl, state.currentPuzzle.verse.book)} (${getLocalizedReference(state.currentPuzzle.verse, getCurrentLanguage())}).`,
+      `Out of guesses — the answer was ${getLocalizedValue(state.currentPuzzle.verse.book, state.currentPuzzle.verse.bookMl)} (${getLocalizedReference(state.currentPuzzle.verse, getCurrentLanguage())}).`,
     );
     return;
   }
