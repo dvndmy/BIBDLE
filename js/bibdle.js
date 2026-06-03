@@ -798,17 +798,17 @@ function getArchiveCellAriaLabel(book) {
   const stateLabel = getArchiveCellStateLabel(book);
 
   if (!entry || entry.plays <= 0) {
-    return `${book.name}, ${book.testament} Testament, ${book.section}, not yet solved`;
+    return `${book.name}, ${book.testament}, ${book.section}, not yet solved`;
   }
 
   if (entry.solves <= 0) {
-    return `${book.name}, ${book.testament} Testament, ${book.section}, played but not yet solved`;
+    return `${book.name}, ${book.testament}, ${book.section}, played but not yet solved`;
   }
 
   const bestText =
     entry.bestAttempts === null ? "no best solve recorded" : `best ${entry.bestAttempts} guesses`;
 
-  return `${book.name}, ${book.testament} Testament, ${book.section}, ${stateLabel.toLowerCase()}, solved ${entry.solves} times, ${bestText}`;
+  return `${book.name}, ${book.testament}, ${book.section}, ${stateLabel.toLowerCase()}, solved ${entry.solves} times, ${bestText}`;
 }
 
 function getPuzzleById(id) {
@@ -2819,7 +2819,7 @@ function buildTriviaContent(puzzle, book) {
   if (book) {
     const testament = getLocalizedTestament(book, language);
     const section = getLocalizedSection(book, language);
-    if (testament) chips.push(`${testament} Testament`);
+    if (testament) chips.push(`${testament}`);
     if (section) chips.push(section);
   }
 
@@ -3167,7 +3167,7 @@ function renderArchiveDetails(bookKey = "") {
     `
       <div class="archive-details-header">
         <div class="archive-details-title">${getLocalizedBookName(book, language)}</div>
-        <div class="archive-details-subtitle">${getLocalizedTestament(book, language)} Testament · ${getLocalizedSection(book, language)} · Canon #${book.order}</div>
+        <div class="archive-details-subtitle">${getLocalizedTestament(book, language)} · ${getLocalizedSection(book, language)} · Canon #${book.order}</div>
       </div>
 
       <div class="archive-details-grid">
