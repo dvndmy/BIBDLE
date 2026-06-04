@@ -6,6 +6,7 @@ import {
   signInAnonymously,
   signInWithPopup,
   signInWithCredential,
+  linkWithCredential,
   linkWithPopup,
   signOut as firebaseSignOut,
   fetchSignInMethodsForEmail,
@@ -33,6 +34,9 @@ import {
   createBootStateSnapshot,
 } from "./app-shell.js";
 import { createRenderPipeline } from "./render-pipeline.js";
+import { createModalService } from "./modal-service.js";
+import { createBindings } from "./bindings.js";
+import { createAuthService } from "./auth-service.js";
 
 const CONFIG = {
   modes: {
@@ -109,7 +113,7 @@ const FIREBASE_ENABLED =
 let firebaseApp = null;
 let firebaseAuth = null;
 let firebaseDb = null;
-let firebaseGoogleProvider = null;
+let authService = null;
 
 const BOOT_DEBUG =
   typeof window !== "undefined" &&
@@ -124,6 +128,9 @@ const bootLogger = createBootLogger({
 
 let appShell = null;
 let renderPipeline = null;
+let modalService = null;
+let bindings = null;
+let authUnsubscribe = null;
 
 const STREAK_BADGES = [
   { id: "streak-3", threshold: 3, label: "3-Day Streak" },
@@ -438,7 +445,7 @@ function createStartupDependencies() {
     renderMobileLanguageToggle,
     renderAuthUI,
     bindEvents,
-    initFirebaseAuth,
+    initAuthLifecycle,
     initGame,
     startPuzzle,
     resetPuzzle,
@@ -448,6 +455,8 @@ function createStartupDependencies() {
     updateCountdownLabel,
     startCountdownTimer,
     isGameOver,
+    authService,
+    renderPipeline,
   };
 }
 
@@ -2683,6 +2692,16 @@ function setHidden(element, hidden) {
 }
 
 function setModalOpenState(modalBackdrop, isOpen, options = {}) {
+  if (modalService) {
+    if (isOpen) {
+      modalService.open(modalBackdrop, options);
+      return;
+    }
+
+    modalService.close(modalBackdrop, options);
+    return;
+  }
+
   if (!modalBackdrop) return;
 
   ensureUiState();
@@ -2714,6 +2733,11 @@ function setModalOpenState(modalBackdrop, isOpen, options = {}) {
 }
 
 function closeModal(modalBackdrop, options = {}) {
+  if (modalService) {
+    modalService.close(modalBackdrop, options);
+    return;
+  }
+
   setModalOpenState(modalBackdrop, false, options);
 }
 
@@ -3598,12 +3622,6 @@ function handleModalKeydown(event) {
   const activeModal = getTopmostModal();
   if (!activeModal) return;
 
-  if (event.key === "Escape") {
-    event.preventDefault();
-    closeModal(activeModal);
-    return;
-  }
-
   if (event.key === "Tab") {
     trapModalFocus(event, activeModal);
   }
@@ -3632,9 +3650,10 @@ function handlePostGameLeaderboardOpen() {
 async function openLeaderboardModal(trigger = document.activeElement) {
   if (!elements.leaderboardModal) return;
 
-  setModalOpenState(elements.leaderboardModal, true, {
-    trigger,
-  });
+  modalService?.open("leaderboard", { trigger }) ??
+    setModalOpenState(elements.leaderboardModal, true, {
+      trigger,
+    });
 
   renderBusyInto(
     elements.leaderboardSummary,
@@ -3786,7 +3805,7 @@ async function openLeaderboardModal(trigger = document.activeElement) {
 }
 
 function closeLeaderboardModal() {
-  closeModal(elements.leaderboardModal);
+  modalService?.close("leaderboard") ?? closeModal(elements.leaderboardModal);
 }
 
 
@@ -3806,11 +3825,11 @@ function openArchiveModal(trigger = document.activeElement) {
   renderArchiveGrid(selectedKey);
   renderArchiveDetails(selectedKey);
 
-  setModalOpenState(elements.archiveModal, true, { trigger });
+  modalService?.open("archive", { trigger }) ?? setModalOpenState(elements.archiveModal, true, { trigger });
 }
 
 function closeArchiveModal() {
-  closeModal(elements.archiveModal);
+  modalService?.close("archive") ?? closeModal(elements.archiveModal);
 }
 
 function renderStatsModal() {
@@ -3966,7 +3985,7 @@ function renderPostGamePanel() {
 }
 
 function closePostGameModal() {
-  closeModal(elements.postGameModal);
+  modalService?.close("postGame") ?? closeModal(elements.postGameModal);
 }
 
 function closePostGamePanel() {
@@ -4250,33 +4269,33 @@ function setModalOpen(modal, isOpen) {
 }
 
 function openHelpModal(trigger = document.activeElement) {
-  setModalOpenState(elements.helpModal, true, { trigger });
+  modalService?.open("help", { trigger }) ?? setModalOpenState(elements.helpModal, true, { trigger });
 }
 
 function closeHelpModal() {
-  setModalOpen(elements.helpModal, false);
+  modalService?.close("help") ?? setModalOpen(elements.helpModal, false);
 }
 
 function openSettingsModal(trigger = document.activeElement) {
   if (!elements.settingsModal) return;
 
   syncSettingsControls();
-  setModalOpenState(elements.settingsModal, true, { trigger });
+  modalService?.open("settings", { trigger }) ?? setModalOpenState(elements.settingsModal, true, { trigger });
 }
 
 function closeSettingsModal() {
-  setModalOpen(elements.settingsModal, false);
+  modalService?.close("settings") ?? setModalOpen(elements.settingsModal, false);
 }
 
 function openStatsModal(trigger = document.activeElement) {
   if (!elements.statsModal) return;
 
   renderStatsModal();
-  setModalOpenState(elements.statsModal, true, { trigger });
+  modalService?.open("stats", { trigger }) ?? setModalOpenState(elements.statsModal, true, { trigger });
 }
 
 function closeStatsModal() {
-  setModalOpen(elements.statsModal, false);
+  modalService?.close("stats") ?? setModalOpen(elements.statsModal, false);
 }
 
 function syncSettingsControls() {
@@ -4310,26 +4329,38 @@ function applyAccessibilityPreferences() {
 }
 
 function handleReducedMotionToggle(event) {
-  state.preferences.reducedAnimation = event.target.checked;
+  state.preferences.reducedAnimation = !!event.target.checked;
   applyAccessibilityPreferences();
   savePreferences();
+  renderPipeline.renderPreferencesChanged({
+    reason: "reduced-motion-toggle",
+  });
 }
 
 function handleHighContrastToggle(event) {
-  state.preferences.highContrast = event.target.checked;
+  state.preferences.highContrast = !!event.target.checked;
   applyAccessibilityPreferences();
   savePreferences();
+  renderPipeline.renderPreferencesChanged({
+    reason: "high-contrast-toggle",
+  });
 }
 
 function handleLargeTextToggle(event) {
-  state.preferences.largeText = event.target.checked;
+  state.preferences.largeText = !!event.target.checked;
   applyAccessibilityPreferences();
   savePreferences();
+  renderPipeline.renderPreferencesChanged({
+    reason: "large-text-toggle",
+  });
 }
 
 function handleSoundToggle(event) {
-  state.preferences.sound = event.target.checked;
+  state.preferences.sound = !!event.target.checked;
   savePreferences();
+  renderPipeline.renderPreferencesChanged({
+    reason: "sound-toggle",
+  });
 }
 
 async function handleGuessSubmit(event) {
@@ -4441,19 +4472,27 @@ function handleArchiveGridClick(event) {
 function handleThemeToggle() {
   const nextTheme = state.preferences.theme === "dark" ? "light" : "dark";
   applyTheme(nextTheme);
-  renderThemeToggle();
+  savePreferences();
+  renderPipeline.renderPreferencesChanged({
+    reason: "theme-toggle",
+  });
+}
+
+function setLanguage(language) {
+  const nextLanguage = language === "ml" ? "ml" : "en";
+  state.preferences.language = nextLanguage;
+  applyLanguageToDocument();
+  renderLanguageControl();
+  renderMobileLanguageToggle?.();
   savePreferences();
 }
 
 function handleLanguageChange(event) {
   const value = event.target.value === "ml" ? "ml" : "en";
-  state.preferences.language = value;
-  applyLanguageToDocument();
-  savePreferences();
-  closeSuggestions();
-  updateSuggestions(elements.guessInput?.value ?? "");
-  renderMobileLanguageToggle();
-  renderPuzzleView();
+  setLanguage(value);
+  renderPipeline.renderPreferencesChanged({
+    reason: "language-change",
+  });
 }
 
 function renderMobileLanguageToggle() {
@@ -4477,34 +4516,22 @@ function renderMobileLanguageToggle() {
 }
 
 function handleMobileLanguageToggle() {
-  const nextLanguage = getCurrentLanguage() === "ml" ? "en" : "ml";
-
-  if (elements.languageSelect) {
-    elements.languageSelect.value = nextLanguage;
-  }
-
-  handleLanguageChange({
-    target: {
-      value: nextLanguage,
-    },
+  const nextLanguage = getCurrentLanguage() === "en" ? "ml" : "en";
+  setLanguage(nextLanguage);
+  renderPipeline.renderPreferencesChanged({
+    reason: "mobile-language-toggle",
   });
 }
 
 function handleDifficultyChange(event) {
-  if (!canChangeDifficulty()) {
-    syncPreferenceControls();
-    renderStatus("Difficulty can only be changed before starting the puzzle.");
-    return;
-  }
-
   const value = event.target.value;
   if (!CONFIG.modes[value]) return;
-
   state.preferences.difficulty = value;
   savePreferences();
-  saveProgress();
-  syncPreferenceControls();
-  renderPuzzleView();
+  renderPipeline.renderPreferencesChanged({
+    reason: "difficulty-change",
+  });
+  resetPuzzle(state.mode);
 }
 
 function handleModeChange(event) {
@@ -4519,8 +4546,14 @@ function handleModeChange(event) {
   state.mode = value;
   state.preferences.preferredMode = value;
   savePreferences();
+
+  renderPipeline.renderModeSwitch({
+    mode: value,
+  });
+
   resetPuzzle(value);
 }
+
 function handleNextPracticePuzzle() {
   if (state.mode !== "practice") return;
   resetPuzzle("practice");
@@ -4680,65 +4713,153 @@ function initFirebaseAuth() {
 }
 
 async function handleSignIn() {
-  if (!state.auth.enabled || !firebaseAuth || !firebaseGoogleProvider) {
+  if (!authService) {
     setAuthStatus("Sign-in unavailable");
     return;
   }
 
+  renderPipeline.renderSyncState("sign-in-start");
+
   try {
-    state.auth.syncing = true;
-    renderAuthUI();
-
-    const currentUser = firebaseAuth.currentUser;
-
-    if (currentUser?.isAnonymous) {
-      try {
-        await linkWithPopup(currentUser, firebaseGoogleProvider);
-        return;
-      } catch (error) {
-        const collisionCodes = new Set([
-          "auth/credential-already-in-use",
-          "auth/email-already-in-use",
-          "auth/account-exists-with-different-credential",
-        ]);
-
-        if (collisionCodes.has(error?.code)) {
-          await signInWithPopup(firebaseAuth, firebaseGoogleProvider);
-          return;
-        }
-
-        throw error;
-      }
-    }
-
-    await signInWithPopup(firebaseAuth, firebaseGoogleProvider);
+    await authService.signIn();
   } catch (error) {
-    console.error("Sign-in failed:", error);
-    state.auth.syncing = false;
-    renderAuthUI();
-    setAuthStatus("Google sign-in failed");
-    renderStatus("Google sign-in failed. You can keep playing anonymously.");
+    handleAuthActionError("sign-in", error);
   }
 }
 
 async function handleSignOut() {
-  if (!state.auth.enabled || !firebaseAuth) {
+  if (!authService) {
     setAuthStatus("Playing anonymously");
     return;
   }
 
-  if (firebaseAuth.currentUser?.isAnonymous) {
-    renderAuthUI();
-    return;
-  }
+  renderPipeline.renderSyncState("sign-out-start");
 
   try {
-    await firebaseSignOut(firebaseAuth);
-    setAuthStatus("Playing anonymously");
+    await authService.signOut();
   } catch (error) {
-    console.error("Sign-out failed:", error);
-    setAuthStatus("Sign-out failed");
+    handleAuthActionError("sign-out", error);
   }
+}
+
+function getModalRegistry() {
+  return {
+    help: elements.helpModal,
+    settings: elements.settingsModal,
+    stats: elements.statsModal,
+    archive: elements.archiveModal,
+    leaderboard: elements.leaderboardModal,
+    postGame: elements.postGameModal,
+  };
+}
+
+function createRenderPipelineApi() {
+  return {
+    state,
+    elements,
+    modalService,
+    renderPuzzleView,
+    renderAuthUI,
+    renderStatsModal,
+    renderLanguageControl,
+    renderMobileLanguageToggle,
+    renderThemeToggle,
+    syncPreferenceControls,
+    renderPostGamePanel,
+    renderStatus,
+    bindEmptyStateActions,
+    closeSuggestions,
+    closePostGamePanel,
+    publishBootSnapshot,
+  };
+}
+
+function createModalCallbacks() {
+  return {
+    onOpen(modalBackdrop, options = {}) {
+      const trigger = options.trigger ?? document.activeElement;
+      if (!modalBackdrop) return;
+
+      ensureUiState();
+      modalBackdrop.dataset.open = "true";
+      modalBackdrop.setAttribute("aria-hidden", "false");
+      rememberModalTrigger(modalBackdrop, trigger);
+      pushOpenModal(modalBackdrop);
+      syncModalEnvironment();
+      focusModalEntry(modalBackdrop);
+      publishBootSnapshot({
+        modalAction: "open",
+        modalId: modalBackdrop.id,
+      });
+    },
+    onClose(modalBackdrop, options = {}) {
+      if (!modalBackdrop) return;
+
+      const restoreFocus = options.restoreFocus !== false;
+
+      modalBackdrop.dataset.open = "false";
+      modalBackdrop.setAttribute("aria-hidden", "true");
+      popOpenModal(modalBackdrop);
+      syncModalEnvironment();
+
+      if (restoreFocus) {
+        restoreModalFocus(modalBackdrop);
+      } else {
+        clearRememberedModalTrigger(modalBackdrop);
+      }
+
+      publishBootSnapshot({
+        modalAction: "close",
+        modalId: modalBackdrop.id,
+      });
+    },
+    onEscape(modalBackdrop) {
+      closeModal(modalBackdrop);
+    },
+  };
+}
+
+function createBindingsApi() {
+  return {
+    elements,
+    state,
+    modalService,
+    handlers: {
+      handleGuessSubmit,
+      handleGuessInput,
+      handleGuessKeydown,
+      handleSuggestionClick,
+      handleDocumentClick,
+      handleArchiveGridClick,
+      handleThemeToggle,
+      handleLanguageChange,
+      handleMobileLanguageToggle,
+      handleDifficultyChange,
+      handleModeChange,
+      handleReducedMotionToggle,
+      handleHighContrastToggle,
+      handleLargeTextToggle,
+      handleSoundToggle,
+      handleSignIn,
+      handleSignOut,
+      handleNextPracticePuzzle,
+      copyResult,
+      closeSuggestions,
+      bindEmptyStateActions,
+      openHelpModal,
+      closeHelpModal,
+      openSettingsModal,
+      closeSettingsModal,
+      openStatsModal,
+      closeStatsModal,
+      openArchiveModal,
+      closeArchiveModal,
+      openLeaderboardModal,
+      closeLeaderboardModal,
+      closePostGamePanel,
+      handlePostGameLeaderboardOpen,
+    },
+  };
 }
 
 function bindEvents() {
@@ -4746,156 +4867,154 @@ function bindEvents() {
     return;
   }
 
-  elements.guessForm.addEventListener("submit", handleGuessSubmit);
-  elements.guessInput.addEventListener("input", handleGuessInput);
-  elements.guessInput.addEventListener("keydown", handleGuessKeydown);
-  elements.autocomplete.addEventListener("click", handleSuggestionClick);
-
-  document.addEventListener("click", handleDocumentClick);
-
-  elements.helpBtn?.addEventListener("click", (event) => {
-    openHelpModal(event.currentTarget);
-  });
-
-  elements.closeHelpBtn?.addEventListener("click", closeHelpModal);
-
-  elements.shareBtn?.addEventListener("click", copyResult);
-
-  if (elements.nextPracticeBtn) {
-    elements.nextPracticeBtn.addEventListener("click", handleNextPracticePuzzle);
-  }
-
-  if (elements.postGameCloseBtn) {
-    elements.postGameCloseBtn.addEventListener("click", closePostGamePanel);
-  }
-
-  if (elements.postGameNextBtn) {
-    elements.postGameNextBtn.addEventListener("click", handleNextPracticePuzzle);
-  }
-
-  if (elements.themeToggle) {
-    elements.themeToggle.addEventListener("click", handleThemeToggle);
-  }
-
-  if (elements.languageSelect) {
-    elements.languageSelect.addEventListener("change", handleLanguageChange);
-  }
-
-  if (elements.mobileLanguageToggle) {
-    elements.mobileLanguageToggle.addEventListener("click", handleMobileLanguageToggle);
-  }
-
-  if (elements.difficultySelect) {
-    elements.difficultySelect.addEventListener("change", handleDifficultyChange);
-  }
-
-  if (elements.modeSelect) {
-    elements.modeSelect.addEventListener("change", handleModeChange);
-  }
-
-  if (elements.settingsBtn) {
-    elements.settingsBtn.addEventListener("click", (event) => {
-      openSettingsModal(event.currentTarget);
-    });
-  }
-
-  if (elements.closeSettingsBtn) {
-    elements.closeSettingsBtn.addEventListener("click", closeSettingsModal);
-  }
-
-  if (elements.reducedMotionToggle) {
-    elements.reducedMotionToggle.addEventListener(
-      "change",
-      handleReducedMotionToggle,
-    );
-  }
-
-  if (elements.highContrastToggle) {
-    elements.highContrastToggle.addEventListener(
-      "change",
-      handleHighContrastToggle,
-    );
-  }
-
-  if (elements.largeTextToggle) {
-    elements.largeTextToggle.addEventListener("change", handleLargeTextToggle);
-  }
-
-  if (elements.soundToggle) {
-    elements.soundToggle.addEventListener("change", handleSoundToggle);
-  }
-
-  if (elements.statsBtn) {
-    elements.statsBtn.addEventListener("click", (event) => {
-      openStatsModal(event.currentTarget);
-    });
-  }
-
-  if (elements.closeStatsBtn) {
-    elements.closeStatsBtn.addEventListener("click", closeStatsModal);
-  }
-
-  if (elements.archiveBtn) {
-    elements.archiveBtn.addEventListener("click", (event) => {
-      openArchiveModal(event.currentTarget);
-    });
-  }
-
-  if (elements.closeArchiveBtn) {
-    elements.closeArchiveBtn.addEventListener("click", closeArchiveModal);
-  }
-
-  if (elements.archiveGrid) {
-    elements.archiveGrid.addEventListener("click", handleArchiveGridClick);
-  }
-
-  if (elements.signInBtn) {
-    elements.signInBtn.addEventListener("click", handleSignIn);
-  }
-
-  if (elements.signOutBtn) {
-    elements.signOutBtn.addEventListener("click", handleSignOut);
-  }
-
-  if (elements.leaderboardBtn) {
-    elements.leaderboardBtn.addEventListener("click", (event) => {
-      event.preventDefault();
-      openLeaderboardModal(event.currentTarget);
-    });
-  }
-
-  if (elements.closeLeaderboardBtn) {
-    elements.closeLeaderboardBtn.addEventListener("click", closeLeaderboardModal);
-  }
-
-  if (elements.postGameLeaderboardBtn) {
-    elements.postGameLeaderboardBtn.addEventListener("click", (event) => {
-      event.preventDefault();
-      handlePostGameLeaderboardOpen();
-    });
-  }
-
-  [
-    elements.helpModal,
-    elements.settingsModal,
-    elements.statsModal,
-    elements.archiveModal,
-    elements.leaderboardModal,
-    elements.postGameModal,
-  ]
-    .filter(Boolean)
-    .forEach((modalBackdrop) => {
-      modalBackdrop.addEventListener("mousedown", (event) => {
-        if (event.target !== modalBackdrop) return;
-        if (getTopmostModal() !== modalBackdrop) return;
-        closeModal(modalBackdrop);
-      });
-    });
-
-  bindEmptyStateActions(document);
   ensureUiState();
+
+  if (!bindings) {
+    throw new Error("Event bindings service is not initialized.");
+  }
+
+  bindings.bindAll();
   state.ui.eventsBound = true;
   publishBootSnapshot({ eventBinding: "complete" });
+}
+
+function handleAuthDisabled() {
+  state.auth.ready = true;
+  state.auth.enabled = false;
+  state.auth.user = null;
+  state.auth.syncing = false;
+  renderPipeline.renderAuthState("disabled");
+  publishBootSnapshot({ firebase: "disabled" });
+}
+
+function handleAuthInitialized(context = {}) {
+  firebaseApp = context.app || null;
+  firebaseAuth = context.auth || null;
+  firebaseDb = context.db || null;
+
+  state.auth.enabled = !!context.enabled;
+  renderPipeline.renderAuthState("initialized");
+  publishBootSnapshot({ firebase: "initialized" });
+}
+
+function handleAuthInitFailure(error) {
+  console.error("Firebase init failed:", error);
+  state.auth.ready = true;
+  state.auth.enabled = false;
+  state.auth.user = null;
+  state.auth.syncing = false;
+  renderPipeline.renderAuthState("init-failed");
+  markLifecycleError("init-services", error, { service: "firebase-auth" });
+}
+
+function handleAuthStateSyncStart(user) {
+  state.auth.user = user || null;
+  state.auth.ready = true;
+  state.auth.syncing = !!user;
+
+  markLifecycleStage("auth-ready", {
+    user: user
+      ? {
+          uid: user.uid,
+          isAnonymous: !!user.isAnonymous,
+        }
+      : null,
+  });
+
+  renderPipeline.renderAuthState(user ? "syncing" : "anonymous-local");
+  publishBootSnapshot({
+    auth: user ? "syncing" : "anonymous-local",
+  });
+}
+
+function handleAuthStateReady({ user, hadCloudProfile } = {}) {
+  state.auth.user = user || null;
+  state.auth.ready = true;
+  state.auth.syncing = false;
+
+  renderPipeline.renderAuthState("ready");
+  publishBootSnapshot({
+    auth: "ready",
+    hadCloudProfile: !!hadCloudProfile,
+  });
+}
+
+function handleAuthStateSyncError({ user, error } = {}) {
+  console.error("Auth sync failed:", error);
+
+  state.auth.user = user || null;
+  state.auth.ready = true;
+  state.auth.syncing = false;
+
+  if (user?.isAnonymous) {
+    setAuthStatus(`Playing anonymously as ${getPublicUserName(user)}`);
+  } else {
+    setAuthStatus("Signed in, cloud sync unavailable");
+  }
+
+  renderPipeline.renderAuthState("sync-error");
+  markLifecycleError("auth-ready", error, {
+    user: user
+      ? {
+          uid: user.uid,
+          isAnonymous: !!user.isAnonymous,
+        }
+      : null,
+  });
+}
+
+function handleAuthActionError(type, error) {
+  console.error(`${type} failed:`, error);
+
+  if (type === "sign-in") {
+    setAuthStatus("Sign-in failed");
+  }
+
+  if (type === "sign-out") {
+    setAuthStatus("Sign-out failed");
+  }
+
+  renderPipeline.renderAuthState(`${type}-error`);
+  publishBootSnapshot({
+    authAction: type,
+    authError: error?.message || String(error),
+  });
+}
+
+function initAuthLifecycle() {
+  markLifecycleStage("init-services", { service: "firebase-auth" });
+
+  authService = createAuthService({
+    enabled: FIREBASE_ENABLED,
+    config: FIREBASE_CONFIG,
+    firebase: {
+      initializeApp,
+      getAuth,
+      getFirestore,
+      GoogleAuthProvider,
+      onAuthStateChanged,
+      signInAnonymously,
+      signInWithPopup,
+      signOut: firebaseSignOut,
+      linkWithCredential,
+      GoogleAuthProviderCredential: GoogleAuthProvider.credential,
+    },
+    hooks: {
+      onDisabled: handleAuthDisabled,
+      onInitialized: handleAuthInitialized,
+      onInitFailure: handleAuthInitFailure,
+      onAuthStateSyncStart: handleAuthStateSyncStart,
+      onAuthStateReady: handleAuthStateReady,
+      onAuthStateSyncError: handleAuthStateSyncError,
+      onActionError: handleAuthActionError,
+    },
+    sync: {
+      loadCloudDataToLocal,
+      syncLocalDataToCloud,
+    },
+  });
+
+  authUnsubscribe = authService.init();
 }
 
 function initGame() {
@@ -4909,7 +5028,9 @@ function initGame() {
     saveProgress();
   }
 
-  renderPipeline.renderStartupView();
+  renderPipeline.renderBootComplete({
+    restored,
+  });
 
   if (restored) {
     renderStatus("Progress restored.");
@@ -4932,6 +5053,12 @@ function startPuzzle(mode = state.mode) {
   resetSuggestionsState();
   closeSuggestions();
   saveProgress();
+
+  renderPipeline.renderPuzzleReset({
+    mode,
+    source: "startPuzzle",
+  });
+
   publishBootSnapshot({
     action: "start-puzzle",
     mode,
@@ -4943,7 +5070,10 @@ function resetPuzzle(mode = state.mode) {
   markLifecycleStage("puzzle-reset", { mode });
   startPuzzle(mode);
   saveProgress();
-  renderPipeline.renderStartupView();
+  renderPipeline.renderPuzzleReset({
+    mode,
+    source: "resetPuzzle",
+  });
 }
 
 function bindLifecycleEvents() {
@@ -4980,18 +5110,25 @@ async function bootstrapApplication() {
     logger: bootLogger,
   });
 
-  renderPipeline = createRenderPipeline({
-    state,
-    elements,
-    renderPuzzleView,
-    renderAuthUI,
-    renderStatsModal,
-    syncPreferenceControls,
-    renderLanguageControl,
-    renderMobileLanguageToggle,
+  modalService = createModalService({
+    registry: getModalRegistry(),
+    onOpen: createModalCallbacks().onOpen,
+    onClose: createModalCallbacks().onClose,
+    onEscape: createModalCallbacks().onEscape,
+    getTopmostModal,
   });
 
-  const dependencies = createStartupDependencies();
+  renderPipeline = createRenderPipeline(createRenderPipelineApi());
+
+  bindings = createBindings(createBindingsApi());
+
+  const dependencies = {
+    ...createStartupDependencies(),
+    modalService,
+    bindings,
+    renderPipeline,
+  };
+
   appShell.attachDependencies(dependencies);
 
   try {
@@ -5032,22 +5169,24 @@ async function bootstrapApplication() {
     initTheme();
 
     markLifecycleStage("hydrate", { step: "controls" });
-    syncPreferenceControls();
-    renderLanguageControl();
-    renderMobileLanguageToggle();
-    renderAuthUI();
+    renderPipeline.renderControls();
+    renderPipeline.renderAuthState("pre-bind");
 
     markLifecycleStage("bind-events");
     bindEvents();
     bindLifecycleEvents();
 
     markLifecycleStage("init-services");
-    initFirebaseAuth();
+    initAuthLifecycle();
 
     markLifecycleStage("render");
     initGame();
 
     appShell.markReady();
+    renderPipeline.renderBootComplete({
+      restored: true,
+      bootReady: true,
+    });
     publishBootSnapshot({ boot: "ready" });
   } catch (error) {
     console.error("Bibdle boot failed:", error);
