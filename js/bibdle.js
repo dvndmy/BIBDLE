@@ -2986,7 +2986,7 @@ function renderPuzzleView() {
 
   if (state.status === "won") {
     renderStatus(
-      `Correct — ${getLocalizedValue(state.currentPuzzle.verse.bookMl, state.currentPuzzle.verse.book)} (${getLocalizedReference(state.currentPuzzle.verse, getCurrentLanguage())}).`,
+      `Correct — ${getLocalizedValue( state.currentPuzzle.verse.book, state.currentPuzzle.verse.bookMl)} (${getLocalizedReference(state.currentPuzzle.verse, getCurrentLanguage())}).`,
     );
     return;
   }
