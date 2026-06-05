@@ -4277,10 +4277,17 @@ function buildShareText() {
     typeof state.preferences?.difficulty === "string"
       ? state.preferences.difficulty.charAt(0).toUpperCase() + state.preferences.difficulty.slice(1)
       : "Normal";
+  const currentStreak = Number.isFinite(state.stats?.daily.currentStreak) ? state.stats.daily.currentStreak : 0;
+  const streakLine =
+    state.mode === "daily" && currentStreak > 0
+      ? `Streak: ${currentStreak} day${currentStreak === 1 ? "" : "s 🔥"}\n`
+      : "";
 
-  return `Bibdle ${modeLabel} ${formatDate()}
+  return `✝️ Catholic Bibdle ✝️
+${formatDate()}
 ${solved ? "Solved" : state.status === "lost" ? "Lost" : "In progress"} in ${state.guesses.length} ${guessWord}
-Difficulty: ${difficultyLabel}
+${difficultyLabel} mode
+${streakLine}
 ${buildShareSummary()}
 Play: https://dvndmy.github.io/BIBDLE`;
 }
