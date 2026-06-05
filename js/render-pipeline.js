@@ -20,7 +20,12 @@ export function createRenderPipeline({
     return !!state && !!elements && typeof renderPuzzleView === "function";
   }
 
-  function renderControls() {
+    function renderControls() {
+    document.documentElement.setAttribute(
+      "data-mode",
+      state?.mode === "practice" ? "practice" : "daily",
+    );
+
     syncPreferenceControls?.();
     renderLanguageControl?.();
     renderMobileLanguageToggle?.();
