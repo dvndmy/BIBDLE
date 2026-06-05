@@ -147,6 +147,11 @@ export function createBindings({
             return;
         }
 
+        if (closest(target, "#postGamePracticeBtn")) {
+            handlers.handlePostGamePracticeStart();
+            return;
+        }
+        
         if (closest(target, "#postGameCloseBtn")) {
             handlers.closePostGamePanel();
             return;
