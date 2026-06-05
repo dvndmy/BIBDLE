@@ -105,6 +105,11 @@ export function createBindings({
             return;
         }
 
+        if (closest(target, "#postGameCopyBtn")) {
+            handlers.copyResult();
+            return;
+        }
+
         if (closest(target, "#shareBtn")) {
             handlers.copyResult();
             return;

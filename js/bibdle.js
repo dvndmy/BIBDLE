@@ -271,6 +271,7 @@ const elements = {
   postGameLeaderboardSection: document.getElementById("postGameLeaderboardSection"),
   postGameLeaderboardRank: document.getElementById("postGameLeaderboardRank"),
   postGameLeaderboardBtn: document.getElementById("postGameLeaderboardBtn"),
+  postGameCopyBtn: document.getElementById("postGameCopyBtn"),
   archiveBtn: document.getElementById("archiveBtn"),
   archiveModal: document.getElementById("archiveModal"),
   closeArchiveBtn: document.getElementById("closeArchiveBtn"),
@@ -2530,6 +2531,7 @@ function syncPreferenceControls() {
 
 function syncActionButtons() {
   showWhen(elements.nextPracticeBtn, state.mode === "practice" && isGameOver());
+  showWhen(elements.shareBtn, state.mode === "daily" && isGameOver());
   showWhen(elements.statsBtn, true);
 }
 
@@ -4249,10 +4251,16 @@ function buildShareText() {
   const solved = state.status === "won";
   const guessWord = state.guesses.length === 1 ? "guess" : "guesses";
   const modeLabel = state.mode === "daily" ? "Daily" : "Practice";
+  const difficultyLabel =
+    typeof state.preferences?.difficulty === "string"
+      ? state.preferences.difficulty.charAt(0).toUpperCase() + state.preferences.difficulty.slice(1)
+      : "Normal";
 
   return `Bibdle ${modeLabel} ${formatDate()}
 ${solved ? "Solved" : state.status === "lost" ? "Lost" : "In progress"} in ${state.guesses.length} ${guessWord}
-${buildShareSummary()}`;
+Difficulty: ${difficultyLabel}
+${buildShareSummary()}
+Play: https://dvndmy.github.io/BIBDLE`;
 }
 
 async function copyResult() {
