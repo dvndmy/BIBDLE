@@ -211,7 +211,7 @@ const elements = {
   settingsBtn: document.getElementById("settingsBtn"),
   statsBtn: document.getElementById("statsBtn"),
   tryPracticeBtn: document.getElementById("tryPracticeBtn"),
-todayBibdleBtn: document.getElementById("todayBibdleBtn"),
+  todayBibdleBtn: document.getElementById("todayBibdleBtn"),
 
   difficultySelect: document.getElementById("difficultySelect"),
   modeSelect: document.getElementById("modeSelect"),
@@ -268,6 +268,8 @@ todayBibdleBtn: document.getElementById("todayBibdleBtn"),
   postGameLeaderboardRank: document.getElementById("postGameLeaderboardRank"),
   postGameLeaderboardBtn: document.getElementById("postGameLeaderboardBtn"),
   postGameCopyBtn: document.getElementById("postGameCopyBtn"),
+  postGamePracticeBtn: document.getElementById("postGamePracticeBtn"),
+
   archiveBtn: document.getElementById("archiveBtn"),
   archiveModal: document.getElementById("archiveModal"),
   closeArchiveBtn: document.getElementById("closeArchiveBtn"),
@@ -1773,9 +1775,24 @@ async function loadPostGameLeaderboardRank() {
   }
 }
 
-function clearSavedProgress() {
+function clearSavedProgress(mode = null) {
   try {
-    localStorage.removeItem(CONFIG.storageKeys.progress);
+    if (!mode) {
+      localStorage.removeItem(CONFIG.storageKeys.progress);
+      return;
+    }
+
+    const buckets = readStoredProgressBuckets();
+    const storageKey = getProgressStorageKey(mode);
+
+    buckets[storageKey] = null;
+
+    if (!buckets.daily && !buckets.practice) {
+      localStorage.removeItem(CONFIG.storageKeys.progress);
+      return;
+    }
+
+    writeStoredProgressBuckets(buckets);
   } catch { }
 }
 
@@ -1807,75 +1824,152 @@ function restoreDraftInput(saved) {
     typeof saved?.inputDraft === "string" ? saved.inputDraft : "";
 }
 
+function getProgressStorageKey(mode) {
+  return mode === "practice" ? "practice" : "daily";
+}
+
+function isProgressBucketShape(value) {
+  return !!value && typeof value === "object" && ("daily" in value || "practice" in value);
+}
+
+function readStoredProgressBuckets() {
+  try {
+    const raw = localStorage.getItem(CONFIG.storageKeys.progress);
+    if (!raw) {
+      return {
+        daily: null,
+        practice: null,
+      };
+    }
+
+    const parsed = JSON.parse(raw);
+
+    if (isProgressBucketShape(parsed)) {
+      return {
+        daily: parsed.daily ?? null,
+        practice: parsed.practice ?? null,
+      };
+    }
+
+    return {
+      daily: parsed ?? null,
+      practice: null,
+    };
+  } catch {
+    return {
+      daily: null,
+      practice: null,
+    };
+  }
+}
+
+function writeStoredProgressBuckets(buckets) {
+  try {
+    localStorage.setItem(
+      CONFIG.storageKeys.progress,
+      JSON.stringify({
+        daily: buckets?.daily ?? null,
+        practice: buckets?.practice ?? null,
+      }),
+    );
+  } catch { }
+}
+
+function restoreProgressPayload(saved) {
+  if (!saved || !saved.currentPuzzle?.id) {
+    return false;
+  }
+
+  const savedPuzzle = getPuzzleById(saved.currentPuzzle.id);
+  if (!savedPuzzle) {
+    return false;
+  }
+
+  const savedStatus = ["playing", "won", "lost"].includes(saved.status)
+    ? saved.status
+    : "playing";
+
+  if (saved.currentPuzzle.mode === "daily") {
+    const todayPuzzle = pickPuzzle("daily");
+    const todayDate = getTodayPuzzleDate();
+    const isMatchingDailyPuzzle =
+      saved.currentPuzzle.date === todayDate &&
+      saved.currentPuzzle.id === todayPuzzle.id;
+
+    if (!isMatchingDailyPuzzle) {
+      return false;
+    }
+
+    state.mode = "daily";
+    applyModeTheme("daily");
+    state.currentPuzzle = {
+      id: savedPuzzle.id,
+      date: saved.currentPuzzle.date,
+      mode: "daily",
+      verse: savedPuzzle,
+    };
+  } else if (canRestoreSavedPracticePuzzle(saved)) {
+    state.mode = "practice";
+    applyModeTheme("practice");
+    state.currentPuzzle = {
+      id: savedPuzzle.id,
+      date: null,
+      mode: "practice",
+      verse: savedPuzzle,
+    };
+  } else {
+    return false;
+  }
+
+  state.guesses = Array.isArray(saved.guesses) ? saved.guesses : [];
+  state.status = savedStatus;
+  restoreDraftInput(saved);
+  resetSuggestionsState();
+  closeSuggestions();
+
+  return true;
+}
+
 function saveProgress() {
   const payload = buildProgressPayload();
   if (!payload) return;
 
-  try {
-    localStorage.setItem(CONFIG.storageKeys.progress, JSON.stringify(payload));
-  } catch { }
+  const buckets = readStoredProgressBuckets();
+  const storageKey = getProgressStorageKey(payload.currentPuzzle?.mode || state.mode);
+
+  buckets[storageKey] = payload;
+  writeStoredProgressBuckets(buckets);
 }
 
-function loadProgress() {
+function loadProgress(mode = state.mode) {
   try {
-    const raw = localStorage.getItem(CONFIG.storageKeys.progress);
-    if (!raw) return false;
+    const buckets = readStoredProgressBuckets();
+    const preferredKey = getProgressStorageKey(mode);
+    const preferredSaved = buckets[preferredKey];
 
-    const saved = JSON.parse(raw);
-    if (!saved || !saved.currentPuzzle?.id) {
-      clearSavedProgress();
-      return false;
+    if (restoreProgressPayload(preferredSaved)) {
+      return true;
     }
 
-    const savedPuzzle = getPuzzleById(saved.currentPuzzle.id);
-    if (!savedPuzzle) {
-      clearSavedProgress();
-      return false;
-    }
-
-    const savedStatus = ["playing", "won", "lost"].includes(saved.status)
-      ? saved.status
-      : "playing";
-
-    if (saved.currentPuzzle.mode === "daily") {
-      const todayPuzzle = pickPuzzle("daily");
-      const todayDate = getTodayPuzzleDate();
-      const isMatchingDailyPuzzle =
-        saved.currentPuzzle.date === todayDate &&
-        saved.currentPuzzle.id === todayPuzzle.id;
-
-      if (!isMatchingDailyPuzzle) {
-        clearSavedProgress();
-        return false;
-      }
-
-      state.mode = "daily";
-      state.currentPuzzle = {
-        id: savedPuzzle.id,
-        date: saved.currentPuzzle.date,
-        mode: "daily",
-        verse: savedPuzzle,
+    if (preferredKey === "daily" && buckets.daily) {
+      const nextBuckets = {
+        ...buckets,
+        daily: null,
       };
-    } else if (canRestoreSavedPracticePuzzle(saved)) {
-      state.mode = "practice";
-      state.currentPuzzle = {
-        id: savedPuzzle.id,
-        date: null,
-        mode: "practice",
-        verse: savedPuzzle,
-      };
-    } else {
-      clearSavedProgress();
+      writeStoredProgressBuckets(nextBuckets);
       return false;
     }
 
-    state.guesses = Array.isArray(saved.guesses) ? saved.guesses : [];
-    state.status = savedStatus;
-    restoreDraftInput(saved);
-    resetSuggestionsState();
-    closeSuggestions();
+    if (preferredKey === "practice" && buckets.practice) {
+      const nextBuckets = {
+        ...buckets,
+        practice: null,
+      };
+      writeStoredProgressBuckets(nextBuckets);
+      return false;
+    }
 
-    return true;
+    return false;
   } catch {
     clearSavedProgress();
     return false;
@@ -2473,6 +2567,26 @@ function getHintLines() {
   return lines;
 }
 
+function isAdjacentSection(guess, target) {
+  if (!guess || !target) return false;
+  if (guess.testament !== target.testament) return false;
+
+  const sectionOrderByTestament = {
+    "Old Testament": ["pentateuch", "historical-books", "wisdom-books", "major-prophets", "minor-prophets"],
+    "New Testament": ["gospels", "historical-books", "pauline-letters", "general-epistles", "revelation"],
+  };
+
+  const order = sectionOrderByTestament[target.testament];
+  if (!order) return false;
+
+  const guessIndex = order.indexOf(guess.sectionKey);
+  const targetIndex = order.indexOf(target.sectionKey);
+
+  if (guessIndex < 0 || targetIndex < 0) return false;
+
+  return Math.abs(guessIndex - targetIndex) === 1;
+}
+
 function compareGuess(guessInput) {
   const language = getCurrentLanguage();
   const target = getBookByName(state.currentPuzzle?.verse.book);
@@ -2500,7 +2614,7 @@ function compareGuess(guessInput) {
       value: getLocalizedSection(guess, language),
       state: isSameSection(guess, target)
         ? "correct"
-        : sameTestament
+        : isAdjacentSection(guess, target)
           ? "partial"
           : "wrong",
     },
@@ -3710,6 +3824,10 @@ function handlePostGameLeaderboardOpen() {
   openLeaderboardModal(trigger);
 }
 
+function handlePostGamePracticeStart() {
+  resetPuzzle("practice");
+}
+
 async function openLeaderboardModal(trigger = document.activeElement) {
   if (!elements.leaderboardModal) return;
 
@@ -4029,8 +4147,11 @@ function renderPostGamePanel() {
   elements.postGameBook.textContent = content.bookName;
   elements.postGameVerse.textContent = content.verseText;
   elements.postGameIntroTitle.textContent = content.introTitle;
-  elements.postGameIntroText.textContent = content.introText || content.explanation || "";
+  elements.postGameIntroText.textContent =
+    content.introText || content.explanation || "";
+
   showWhen(elements.postGameNextBtn, state.mode === "practice");
+  showWhen(elements.postGamePracticeBtn, state.mode === "daily");
 
   renderTriviaSection(content.trivia);
   renderPostGameStats(state.mode);
@@ -4640,7 +4761,6 @@ function handleModeChange(event) {
 
   state.mode = value;
   state.preferences.preferredMode = value;
-  applyModeTheme(value);
   savePreferences();
 
   renderPipeline.renderModeSwitch({
@@ -4652,7 +4772,18 @@ function handleModeChange(event) {
 
 function handleNextPracticePuzzle() {
   if (state.mode !== "practice") return;
-  resetPuzzle("practice");
+
+  markLifecycleStage("puzzle-reset", {
+    mode: "practice",
+    trigger: "next-practice",
+  });
+
+  startPuzzle("practice");
+  saveProgress();
+  renderPipeline.renderPuzzleReset({
+    mode: "practice",
+    source: "next-practice",
+  });
 }
 
 function handleTryPracticeRound() {
@@ -4979,6 +5110,7 @@ function createBindingsApi() {
       closeLeaderboardModal,
       closePostGamePanel,
       handlePostGameLeaderboardOpen,
+      handlePostGamePracticeStart
     },
   };
 }
@@ -5141,7 +5273,7 @@ function initAuthLifecycle() {
 function initGame() {
   markLifecycleStage("hydrate", { step: "progress-restore" });
 
-  const restored = loadProgress();
+  const restored = loadProgress(state.mode);
 
   if (!restored) {
     markLifecycleStage("puzzle-reset", { trigger: "boot", mode: state.mode });
@@ -5190,6 +5322,22 @@ function startPuzzle(mode = state.mode) {
 
 function resetPuzzle(mode = state.mode) {
   markLifecycleStage("puzzle-reset", { mode });
+
+  if (loadProgress(mode)) {
+    renderPipeline.renderPuzzleReset({
+      mode,
+      source: "resetPuzzle-restore",
+    });
+
+    publishBootSnapshot({
+      action: "restore-puzzle",
+      mode,
+      puzzleId: state.currentPuzzle?.id || null,
+    });
+
+    return;
+  }
+
   startPuzzle(mode);
   saveProgress();
   renderPipeline.renderPuzzleReset({
