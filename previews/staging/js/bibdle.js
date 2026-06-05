@@ -271,6 +271,7 @@ const elements = {
   postGameLeaderboardSection: document.getElementById("postGameLeaderboardSection"),
   postGameLeaderboardRank: document.getElementById("postGameLeaderboardRank"),
   postGameLeaderboardBtn: document.getElementById("postGameLeaderboardBtn"),
+  postGameCopyBtn: document.getElementById("postGameCopyBtn"),
   archiveBtn: document.getElementById("archiveBtn"),
   archiveModal: document.getElementById("archiveModal"),
   closeArchiveBtn: document.getElementById("closeArchiveBtn"),
@@ -395,9 +396,9 @@ function publishBootSnapshot(extra = {}) {
     enabled: !!state.auth.enabled,
     user: state.auth.user
       ? {
-          uid: state.auth.user.uid,
-          isAnonymous: !!state.auth.user.isAnonymous,
-        }
+        uid: state.auth.user.uid,
+        isAnonymous: !!state.auth.user.isAnonymous,
+      }
       : null,
     syncing: !!state.auth.syncing,
   });
@@ -2530,6 +2531,7 @@ function syncPreferenceControls() {
 
 function syncActionButtons() {
   showWhen(elements.nextPracticeBtn, state.mode === "practice" && isGameOver());
+  showWhen(elements.shareBtn, state.mode === "daily" && isGameOver());
   showWhen(elements.statsBtn, true);
 }
 
@@ -3573,7 +3575,7 @@ function focusModalEntry(modalBackdrop) {
     dialog;
 
   requestAnimationFrame(() => {
-    autofocusTarget.focus?.();
+    autofocusTarget.focus?.({ preventScroll: true });
   });
 }
 
@@ -4249,10 +4251,16 @@ function buildShareText() {
   const solved = state.status === "won";
   const guessWord = state.guesses.length === 1 ? "guess" : "guesses";
   const modeLabel = state.mode === "daily" ? "Daily" : "Practice";
+  const difficultyLabel =
+    typeof state.preferences?.difficulty === "string"
+      ? state.preferences.difficulty.charAt(0).toUpperCase() + state.preferences.difficulty.slice(1)
+      : "Normal";
 
   return `Bibdle ${modeLabel} ${formatDate()}
 ${solved ? "Solved" : state.status === "lost" ? "Lost" : "In progress"} in ${state.guesses.length} ${guessWord}
-${buildShareSummary()}`;
+Difficulty: ${difficultyLabel}
+${buildShareSummary()}
+Play: https://dvndmy.github.io/BIBDLE`;
 }
 
 async function copyResult() {
@@ -4636,9 +4644,9 @@ async function handleAuthStateChange(user) {
   markLifecycleStage("auth-ready", {
     user: user
       ? {
-          uid: user.uid,
-          isAnonymous: !!user.isAnonymous,
-        }
+        uid: user.uid,
+        isAnonymous: !!user.isAnonymous,
+      }
       : null,
   });
 
@@ -4774,6 +4782,20 @@ function createRenderPipelineApi() {
   };
 }
 
+function resetModalScroll(modalBackdrop) {
+  if (!modalBackdrop) return;
+
+  modalBackdrop.scrollTop = 0;
+
+  const scrollContainers = modalBackdrop.querySelectorAll(
+    ".modal__content, .modal__body, .modal-content, .modal-body, [data-modal-scroll]",
+  );
+
+  scrollContainers.forEach((node) => {
+    node.scrollTop = 0;
+  });
+}
+
 function createModalCallbacks() {
   return {
     onOpen(modalBackdrop, options = {}) {
@@ -4786,6 +4808,7 @@ function createModalCallbacks() {
       rememberModalTrigger(modalBackdrop, trigger);
       pushOpenModal(modalBackdrop);
       syncModalEnvironment();
+      resetModalScroll(modalBackdrop);
       focusModalEntry(modalBackdrop);
       publishBootSnapshot({
         modalAction: "open",
@@ -4915,9 +4938,9 @@ function handleAuthStateSyncStart(user) {
   markLifecycleStage("auth-ready", {
     user: user
       ? {
-          uid: user.uid,
-          isAnonymous: !!user.isAnonymous,
-        }
+        uid: user.uid,
+        isAnonymous: !!user.isAnonymous,
+      }
       : null,
   });
 
@@ -4956,9 +4979,9 @@ function handleAuthStateSyncError({ user, error } = {}) {
   markLifecycleError("auth-ready", error, {
     user: user
       ? {
-          uid: user.uid,
-          isAnonymous: !!user.isAnonymous,
-        }
+        uid: user.uid,
+        isAnonymous: !!user.isAnonymous,
+      }
       : null,
   });
 }
