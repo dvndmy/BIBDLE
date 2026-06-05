@@ -1568,8 +1568,8 @@ function renderCurrentUserRank(rankEntry) {
 
   if (!state.auth.user) {
     elements.leaderboardUserRank.innerHTML = renderEmptyState({
-      title: "Sign in to join the leaderboard",
-      body: "Complete today’s Daily puzzle while signed in to record your placement.",
+      title: "Join the leaderboard",
+      body: "Complete today’s Daily puzzle to record your placement.",
       compact: true,
       showMarker: true,
       tone: "empty",
@@ -2267,6 +2267,11 @@ function applyTheme(theme) {
   state.preferences.theme = theme;
 }
 
+function applyModeTheme(mode = state.mode) {
+  const normalizedMode = mode === "practice" ? "practice" : "daily";
+  document.documentElement.setAttribute("data-mode", normalizedMode);
+}
+
 function renderThemeToggle() {
   const toggle = elements.themeToggle;
   if (!toggle) return;
@@ -2284,6 +2289,7 @@ function renderThemeToggle() {
 
 function initTheme() {
   applyTheme(state.preferences.theme);
+  applyModeTheme(state.mode);
   renderThemeToggle();
 }
 
@@ -4011,6 +4017,7 @@ function closePostGamePanel() {
 
 function renderPuzzleView() {
   applyLanguageToDocument();
+  applyModeTheme(state.mode);
   renderLanguageControl();
   renderMobileLanguageToggle();
   renderPuzzleCard();
@@ -4586,6 +4593,7 @@ function handleModeChange(event) {
 
   state.mode = value;
   state.preferences.preferredMode = value;
+  applyModeTheme(value);
   savePreferences();
 
   renderPipeline.renderModeSwitch({
@@ -5100,6 +5108,7 @@ function initGame() {
 
 function startPuzzle(mode = state.mode) {
   state.mode = mode;
+  applyModeTheme(mode);
   state.currentPuzzle = buildCurrentPuzzle(mode);
   state.guesses = [];
   state.status = "playing";
