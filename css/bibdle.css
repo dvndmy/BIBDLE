@@ -2667,6 +2667,7 @@ html.reduced-motion *::after {
     .header-row,
     .guess-grid {
         grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: var(--space-1);
     }
 
     .rules {
@@ -2723,7 +2724,7 @@ html.reduced-motion *::after {
 
     .guess-card {
         padding: 0.05rem 0.05rem;
-        font-size: clamp(0.72rem, 2.6vw, 0.92rem);
+        font-size: clamp(0.85rem, 2.6vw, 0.95rem);
         line-height: 1.15;
         letter-spacing: -0.02em;
     }
