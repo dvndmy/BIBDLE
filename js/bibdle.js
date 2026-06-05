@@ -73,11 +73,11 @@ const CONFIG = {
   },
   proximityBands: {
     exact: 0,
-    veryClose: 2,
-    near: 4,
+    veryClose: 1,
+    near: 3,
   },
   ui: {
-    maxSuggestions: 8,
+    maxSuggestions: 10,
   },
   daily: {
     epochYear: 2026,
@@ -92,12 +92,6 @@ const CONFIG = {
 };
 
 const FIREBASE_CONFIG = {
-  // SECURITY NOTE:
-  // Firestore Security Rules must restrict reads/writes so a signed-in user
-  // can only access their own document, e.g. users/{uid}/profile/main where
-  // request.auth.uid == uid.
-
-  // TODO: Replace these placeholder values with your real Firebase Web App config.
   apiKey: "AIzaSyC8Mo3GyKwFLvJU5npB_ZwlApJkDqnRrMY",
   authDomain: "bibdle-db7ae.firebaseapp.com",
   projectId: "bibdle-db7ae",
