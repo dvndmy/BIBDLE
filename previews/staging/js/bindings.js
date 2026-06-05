@@ -99,6 +99,18 @@ export function createBindings({
             return;
         }
 
+        if (closest(target, "#todayBibdleBtn")) {
+            event.preventDefault();
+            handlers.handleTryTodaysBibdle();
+            return;
+        }
+
+        if (closest(target, "#tryPracticeBtn")) {
+            event.preventDefault();
+            handlers.handleTryPracticeRound();
+            return;
+        }
+
         if (closest(target, "#postGameLeaderboardBtn")) {
             event.preventDefault();
             handlers.handlePostGameLeaderboardOpen();

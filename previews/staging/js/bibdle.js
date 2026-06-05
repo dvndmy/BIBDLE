@@ -210,6 +210,8 @@ const elements = {
   nextPracticeBtn: document.getElementById("nextPracticeBtn"),
   settingsBtn: document.getElementById("settingsBtn"),
   statsBtn: document.getElementById("statsBtn"),
+  tryPracticeBtn: document.getElementById("tryPracticeBtn"),
+todayBibdleBtn: document.getElementById("todayBibdleBtn"),
 
   difficultySelect: document.getElementById("difficultySelect"),
   modeSelect: document.getElementById("modeSelect"),
@@ -2386,6 +2388,18 @@ function isGameOver() {
   return state.status === "won" || state.status === "lost";
 }
 
+function hasCompletedTodaysDaily() {
+  return state.stats.daily.lastDailySolvedDate === getTodayPuzzleDate();
+}
+
+function isCurrentDailyPuzzle() {
+  return state.currentPuzzle?.mode === "daily";
+}
+
+function isCurrentPracticePuzzle() {
+  return state.currentPuzzle?.mode === "practice";
+}
+
 function canChangeDifficulty() {
   return state.guesses.length === 0 && state.status === "playing";
 }
@@ -2545,9 +2559,35 @@ function syncPreferenceControls() {
 }
 
 function syncActionButtons() {
-  showWhen(elements.nextPracticeBtn, state.mode === "practice" && isGameOver());
-  showWhen(elements.shareBtn, state.mode === "daily" && isGameOver());
+  const gameOver = isGameOver();
+  const inDailyMode = state.mode === "daily";
+  const inPracticeMode = state.mode === "practice";
+  const completedTodaysDaily = hasCompletedTodaysDaily();
+  const completedCurrentDaily = inDailyMode && gameOver;
+  const completedCurrentPractice = inPracticeMode && gameOver;
+
   showWhen(elements.statsBtn, true);
+  showWhen(elements.helpBtn, true);
+
+  showWhen(elements.archiveBtn, inDailyMode);
+  showWhen(elements.leaderboardBtn, completedCurrentDaily);
+
+  showWhen(elements.shareBtn, gameOver);
+
+  showWhen(
+    elements.tryPracticeBtn,
+    completedCurrentDaily,
+  );
+
+  showWhen(
+    elements.nextPracticeBtn,
+    completedCurrentPractice,
+  );
+
+  showWhen(
+    elements.todayBibdleBtn,
+    inPracticeMode && !completedTodaysDaily,
+  );
 }
 
 function renderPuzzleCard() {
@@ -4615,6 +4655,14 @@ function handleNextPracticePuzzle() {
   resetPuzzle("practice");
 }
 
+function handleTryPracticeRound() {
+  resetPuzzle("practice");
+}
+
+function handleTryTodaysBibdle() {
+  resetPuzzle("daily");
+}
+
 function bindBackdropClose(modal, onClose) {
   if (!modal) return;
 
@@ -4914,6 +4962,8 @@ function createBindingsApi() {
       handleSignIn,
       handleSignOut,
       handleNextPracticePuzzle,
+      handleTryPracticeRound,
+      handleTryTodaysBibdle,
       copyResult,
       closeSuggestions,
       bindEmptyStateActions,
