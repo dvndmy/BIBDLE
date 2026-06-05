@@ -601,6 +601,18 @@ function getLocalizedValue(primary, fallback) {
   return getSafeString(primary) || getSafeString(fallback) || "";
 }
 
+function getLocalizedFirstLetter(book, language = getCurrentLanguage()) {
+  if (!book) return "";
+
+  const localizedName = getLocalizedBookName(book, language);
+  const displayName = getSafeString(localizedName).replace(/^[123]\s*/, "").trim();
+
+  if (!displayName) return "";
+
+  const locale = language === "ml" ? "ml-IN" : "en-US";
+  return displayName.charAt(0).toLocaleUpperCase(locale);
+}
+
 function normalizeBookName(value) {
   return String(value ?? "")
     .normalize("NFKC")
@@ -2442,6 +2454,7 @@ function getHintLines() {
 }
 
 function compareGuess(guessInput) {
+  const language = getCurrentLanguage();
   const target = getBookByName(state.currentPuzzle?.verse.book);
   const guess = typeof guessInput === "object" ? guessInput : getBookByName(guessInput);
 
@@ -2450,7 +2463,9 @@ function compareGuess(guessInput) {
   const distance = getBookDistance(target, guess);
   const sameTestament = guess.testament === target.testament;
   const proximity = getProximityLabel(distance, sameTestament);
-  const language = getCurrentLanguage();
+
+  const guessFirstLetter = getLocalizedFirstLetter(guess, language);
+  const targetFirstLetter = getLocalizedFirstLetter(target, language);
 
   return {
     bookId: guess.id,
@@ -2470,8 +2485,8 @@ function compareGuess(guessInput) {
           : "wrong",
     },
     firstLetter: {
-      value: guess.firstLetter,
-      state: guess.firstLetter === target.firstLetter ? "correct" : "wrong",
+      value: guessFirstLetter,
+      state: guessFirstLetter === targetFirstLetter ? "correct" : "wrong",
     },
     bookResult: {
       value: getLocalizedBookName(guess, language),
@@ -2573,13 +2588,19 @@ function renderEmptyGuessRows() {
 
 function renderGuessRow(guess, rowIndex, animate = false) {
   const baseDelay = animate ? rowIndex * 200 : 0;
-  const bookLabel = getDisplayBookNameFromGuess(guess);
+  const language = getCurrentLanguage();
+  const book = getBookById(guess?.bookId);
+
+  const bookLabel = getLocalizedBookName(book, language) || guess?.book || "";
+  const testamentLabel = getLocalizedTestament(book, language) || guess?.testament?.value || "";
+  const sectionLabel = getLocalizedSection(book, language) || guess?.section?.value || "";
+  const firstLetterLabel = getLocalizedFirstLetter(book, language) || guess?.firstLetter?.value || "";
 
   return `
     <div class="guess-grid" aria-label="Guess ${bookLabel}">
-      <div class="guess-card is-book-data ${guess.testament.state}${animate ? " reveal-animate" : ""}" style="--reveal-delay: ${baseDelay}ms">${guess.testament.value}</div>
-      <div class="guess-card is-book-data ${guess.section.state}${animate ? " reveal-animate" : ""}" style="--reveal-delay: ${baseDelay + 180}ms">${guess.section.value}</div>
-      <div class="guess-card ${guess.firstLetter.state}${animate ? " reveal-animate" : ""}" style="--reveal-delay: ${baseDelay + 360}ms">${guess.firstLetter.value}</div>
+      <div class="guess-card is-book-data ${guess.testament.state}${animate ? " reveal-animate" : ""}" style="--reveal-delay: ${baseDelay}ms">${testamentLabel}</div>
+      <div class="guess-card is-book-data ${guess.section.state}${animate ? " reveal-animate" : ""}" style="--reveal-delay: ${baseDelay + 180}ms">${sectionLabel}</div>
+      <div class="guess-card ${guess.firstLetter.state}${animate ? " reveal-animate" : ""}" style="--reveal-delay: ${baseDelay + 360}ms">${firstLetterLabel}</div>
       <div class="guess-card is-book-data ${guess.bookResult.state}${animate ? " reveal-animate" : ""}" style="--reveal-delay: ${baseDelay + 540}ms">${bookLabel}</div>
     </div>
   `;
@@ -4489,9 +4510,26 @@ function setLanguage(language) {
   savePreferences();
 }
 
+function rebuildGuessForCurrentLanguage(savedGuess) {
+  if (!savedGuess?.bookId) return savedGuess;
+
+  return compareGuess(savedGuess.bookId);
+}
+
+function refreshGuessesForCurrentLanguage() {
+  if (!Array.isArray(state.guesses) || !state.guesses.length) return;
+
+  state.guesses = state.guesses
+    .map((guess) => rebuildGuessForCurrentLanguage(guess))
+    .filter(Boolean);
+
+  saveProgress();
+}
+
 function handleLanguageChange(event) {
   const value = event.target.value === "ml" ? "ml" : "en";
   setLanguage(value);
+  refreshGuessesForCurrentLanguage();
   renderPipeline.renderPreferencesChanged({
     reason: "language-change",
   });
@@ -4520,6 +4558,7 @@ function renderMobileLanguageToggle() {
 function handleMobileLanguageToggle() {
   const nextLanguage = getCurrentLanguage() === "en" ? "ml" : "en";
   setLanguage(nextLanguage);
+  refreshGuessesForCurrentLanguage();
   renderPipeline.renderPreferencesChanged({
     reason: "mobile-language-toggle",
   });
