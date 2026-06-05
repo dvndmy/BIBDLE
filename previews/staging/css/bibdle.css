@@ -223,15 +223,14 @@ select {
     color: inherit;
 }
 
-/* Styling the dropdown selects to respect theme variables */
 .control-select {
-    background-color: var(--color-surface-offset); /* Use your defined surface color */
+    background-color: var(--color-surface-offset);
     color: var(--color-text);
     border: 1px solid var(--input-border);
     border-radius: var(--radius-control);
     padding: var(--space-2) var(--space-4);
     cursor: pointer;
-    appearance: none; /* Removes default OS styling so your colors show through */
+    appearance: none;
     transition: background-color var(--transition-interactive), border-color var(--transition-interactive);
 }
 
@@ -883,6 +882,10 @@ input::placeholder {
     border: 1px solid rgba(255, 255, 255, 0.06);
     border-radius: var(--radius-md);
     box-shadow: var(--shadow-card);
+    min-width: 0;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    hyphens: auto;
 }
 
 .correct {
@@ -1038,24 +1041,24 @@ input::placeholder {
     border-color: color-mix(in srgb, var(--color-error) 24%, var(--empty-border));
 }
 
-.modal-layout__header > .postgame-badge {
+.modal-layout__header>.postgame-badge {
     margin-bottom: var(--space-1);
 }
 
-.modal-system__header > .section-shell__meta,
-.modal-system__block-header > .section-shell__meta {
+.modal-system__header>.section-shell__meta,
+.modal-system__block-header>.section-shell__meta {
     max-width: 58ch;
 }
 
-.modal-system__body > .modal-block,
-.modal-system__body > .postgame-section,
-.modal-system__body > .expander {
+.modal-system__body>.modal-block,
+.modal-system__body>.postgame-section,
+.modal-system__body>.expander {
     min-width: 0;
 }
 
-.modal-system__body > .modal-block + .modal-block,
-.modal-system__body > .postgame-section + .postgame-section,
-.modal-system__body > .expander + .expander {
+.modal-system__body>.modal-block+.modal-block,
+.modal-system__body>.postgame-section+.postgame-section,
+.modal-system__body>.expander+.expander {
     margin-top: 0;
 }
 
@@ -1099,14 +1102,14 @@ input::placeholder {
     min-width: 0;
 }
 
-.archive-details > .empty-state,
-.leaderboard-list > .empty-state,
-.leaderboard-summary > .empty-state,
-.leaderboard-user-rank > .empty-state,
-.guess-distribution > .empty-state,
-#statsModalBadges > .empty-state,
-#postGameTriviaChips > .empty-state,
-.autocomplete-list > .empty-state {
+.archive-details>.empty-state,
+.leaderboard-list>.empty-state,
+.leaderboard-summary>.empty-state,
+.leaderboard-user-rank>.empty-state,
+.guess-distribution>.empty-state,
+#statsModalBadges>.empty-state,
+#postGameTriviaChips>.empty-state,
+.autocomplete-list>.empty-state {
     width: 100%;
     border: 0;
     border-radius: 0;
@@ -1114,12 +1117,12 @@ input::placeholder {
     box-shadow: none;
 }
 
-.autocomplete-list > .empty-state .empty-state__content {
+.autocomplete-list>.empty-state .empty-state__content {
     justify-items: start;
 }
 
-.autocomplete-list > .empty-state .empty-state__title,
-.autocomplete-list > .empty-state .empty-state__body {
+.autocomplete-list>.empty-state .empty-state__title,
+.autocomplete-list>.empty-state .empty-state__body {
     text-align: left;
 }
 
@@ -1160,7 +1163,9 @@ input::placeholder {
 }
 
 @keyframes emptyStatePulse {
-    0%, 100% {
+
+    0%,
+    100% {
         transform: scale(1);
         opacity: 0.72;
     }
@@ -1597,14 +1602,12 @@ html.reduced-motion *::after {
     content: "";
     position: absolute;
     inset: 0;
-    background: linear-gradient(
-        90deg,
-        transparent 0%,
-        rgba(255, 255, 255, 0.10) 45%,
-        rgba(255, 255, 255, 0.18) 50%,
-        rgba(255, 255, 255, 0.10) 55%,
-        transparent 100%
-    );
+    background: linear-gradient(90deg,
+            transparent 0%,
+            rgba(255, 255, 255, 0.10) 45%,
+            rgba(255, 255, 255, 0.18) 50%,
+            rgba(255, 255, 255, 0.10) 55%,
+            transparent 100%);
     transform: translateX(-100%);
     animation: loadingSweep 1400ms ease-in-out infinite;
     pointer-events: none;
@@ -2663,7 +2666,7 @@ html.reduced-motion *::after {
 
     .header-row,
     .guess-grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-template-columns: repeat(4, minmax(0, 1fr));
     }
 
     .rules {
@@ -2673,6 +2676,56 @@ html.reduced-motion *::after {
     .guess-card,
     .empty-state {
         min-height: 74px;
+    }
+
+    .guess-card,
+    .guess-card-label,
+    .guess-card-value,
+    .header-cell {
+        min-width: 0;
+    }
+
+    .guess-card,
+    .header-cell {
+        padding-inline: 0.35rem;
+    }
+
+    .guess-card-label,
+    .guess-card-value,
+    .header-cell {
+        overflow-wrap: anywhere;
+        word-break: break-word;
+        hyphens: auto;
+    }
+
+    .guess-card-label,
+    .header-cell {
+        font-size: clamp(0.65rem, 2.4vw, 0.82rem);
+        line-height: 1.15;
+        text-align: center;
+    }
+
+    .guess-card-value {
+        font-size: clamp(0.72rem, 2.7vw, 0.95rem);
+        line-height: 1.2;
+        text-align: center;
+    }
+
+    .header-row>div,
+    .guess-grid>* {
+        min-width: 0;
+    }
+
+    .guess-card,
+    .empty-state {
+        min-height: 74px;
+    }
+
+    .guess-card {
+        padding: 0.55rem 0.35rem;
+        font-size: clamp(0.72rem, 2.6vw, 0.92rem);
+        line-height: 1.15;
+        letter-spacing: -0.02em;
     }
 
     .postgame-modal {
