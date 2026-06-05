@@ -395,9 +395,9 @@ function publishBootSnapshot(extra = {}) {
     enabled: !!state.auth.enabled,
     user: state.auth.user
       ? {
-          uid: state.auth.user.uid,
-          isAnonymous: !!state.auth.user.isAnonymous,
-        }
+        uid: state.auth.user.uid,
+        isAnonymous: !!state.auth.user.isAnonymous,
+      }
       : null,
     syncing: !!state.auth.syncing,
   });
@@ -3573,7 +3573,7 @@ function focusModalEntry(modalBackdrop) {
     dialog;
 
   requestAnimationFrame(() => {
-    autofocusTarget.focus?.();
+    autofocusTarget.focus?.({ preventScroll: true });
   });
 }
 
@@ -4636,9 +4636,9 @@ async function handleAuthStateChange(user) {
   markLifecycleStage("auth-ready", {
     user: user
       ? {
-          uid: user.uid,
-          isAnonymous: !!user.isAnonymous,
-        }
+        uid: user.uid,
+        isAnonymous: !!user.isAnonymous,
+      }
       : null,
   });
 
@@ -4774,6 +4774,20 @@ function createRenderPipelineApi() {
   };
 }
 
+function resetModalScroll(modalBackdrop) {
+  if (!modalBackdrop) return;
+
+  modalBackdrop.scrollTop = 0;
+
+  const scrollContainers = modalBackdrop.querySelectorAll(
+    ".modal__content, .modal__body, .modal-content, .modal-body, [data-modal-scroll]",
+  );
+
+  scrollContainers.forEach((node) => {
+    node.scrollTop = 0;
+  });
+}
+
 function createModalCallbacks() {
   return {
     onOpen(modalBackdrop, options = {}) {
@@ -4786,6 +4800,7 @@ function createModalCallbacks() {
       rememberModalTrigger(modalBackdrop, trigger);
       pushOpenModal(modalBackdrop);
       syncModalEnvironment();
+      resetModalScroll(modalBackdrop);
       focusModalEntry(modalBackdrop);
       publishBootSnapshot({
         modalAction: "open",
@@ -4915,9 +4930,9 @@ function handleAuthStateSyncStart(user) {
   markLifecycleStage("auth-ready", {
     user: user
       ? {
-          uid: user.uid,
-          isAnonymous: !!user.isAnonymous,
-        }
+        uid: user.uid,
+        isAnonymous: !!user.isAnonymous,
+      }
       : null,
   });
 
@@ -4956,9 +4971,9 @@ function handleAuthStateSyncError({ user, error } = {}) {
   markLifecycleError("auth-ready", error, {
     user: user
       ? {
-          uid: user.uid,
-          isAnonymous: !!user.isAnonymous,
-        }
+        uid: user.uid,
+        isAnonymous: !!user.isAnonymous,
+      }
       : null,
   });
 }
