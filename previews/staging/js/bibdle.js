@@ -1528,7 +1528,7 @@ function renderLeaderboardList(entries) {
         <div class="leaderboard-row ${isCurrentUser ? "is-current-user" : ""}">
           <div class="leaderboard-rank">#${entry.rank}</div>
           <div class="leaderboard-name">${escapeHtml(entry.displayName || "Anonymous")}</div>
-          <div class="leaderboard-guesses">${entry.guesses ?? "—"} guesses</div>
+          <div class="leaderboard-guesses">${entry.guesses ?? "—"} ${entry.guesses === 1 ? "guess" : "guesses"}</div>
           <div class="leaderboard-time">${formatLeaderboardTime(entry.completedAt)}</div>
         </div>
       `;
