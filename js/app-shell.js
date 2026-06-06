@@ -60,7 +60,7 @@ export function createBootLogger({ enabled = false, prefix = "[boot]" } = {}) {
 }
 
 export function createAppShell({ name = "App", debug = false, logger = createBootLogger() } = {}) {
-      const shellListeners = new Map();
+  const shellListeners = new Map();
   const snapshot = createBootStateSnapshot();
   snapshot.name = name;
   snapshot.debug = !!debug;
@@ -77,7 +77,7 @@ export function createAppShell({ name = "App", debug = false, logger = createBoo
     });
   }
 
-    function emit(eventName, payload = {}) {
+  function emit(eventName, payload = {}) {
     const listeners = shellListeners.get(eventName) || [];
     listeners.forEach((listener) => {
       try {
@@ -103,7 +103,7 @@ export function createAppShell({ name = "App", debug = false, logger = createBoo
       details,
     });
     logger.log(`stage -> ${stage}`, details);
-        emit("stage", { stage, details, snapshot: getSnapshot() });
+    emit("stage", { stage, details, snapshot: getSnapshot() });
     syncWindowState();
   }
 
@@ -115,7 +115,7 @@ export function createAppShell({ name = "App", debug = false, logger = createBoo
     syncWindowState();
   }
 
-    function setFlag(key, value) {
+  function setFlag(key, value) {
     snapshot.readiness = {
       ...snapshot.readiness,
       [key]: value,
@@ -167,7 +167,7 @@ export function createAppShell({ name = "App", debug = false, logger = createBoo
     snapshot.errors.push(normalizedError);
     pushDiagnostic("error", "failure", normalizedError);
     logger.error(`failure at ${snapshot.stage}`, normalizedError);
-        emit("error", { error: normalizedError, snapshot: getSnapshot() });
+    emit("error", { error: normalizedError, snapshot: getSnapshot() });
     syncWindowState();
   }
 
@@ -180,7 +180,7 @@ export function createAppShell({ name = "App", debug = false, logger = createBoo
       readiness: snapshot.readiness,
     });
     logger.log("boot ready", snapshot.readiness);
-        emit("ready", { snapshot: getSnapshot() });
+    emit("ready", { snapshot: getSnapshot() });
     syncWindowState();
   }
 
@@ -190,7 +190,7 @@ export function createAppShell({ name = "App", debug = false, logger = createBoo
 
   syncWindowState();
 
-    return {
+  return {
     on(eventName, listener) {
       if (!shellListeners.has(eventName)) {
         shellListeners.set(eventName, []);
