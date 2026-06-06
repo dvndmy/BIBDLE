@@ -22,8 +22,8 @@ function resolveModalKey(input, registry) {
 
 export function createModalService({
   registry = {},
-  onOpen = () => {},
-  onClose = () => {},
+  onOpen = () => { },
+  onClose = () => { },
   onEscape = null,
   getTopmostModal = null,
 } = {}) {
