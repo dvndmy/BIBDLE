@@ -108,25 +108,27 @@
       </section>
 
       <section class="controls" aria-label="Guess area">
-        <div class="attempt-line">
-          <p class="subtle-label" id="attemptLabel">Guess again</p>
-          <div class="helper clue-feed clue-feed--compact" id="hintBlock" aria-live="polite" aria-atomic="false"></div>
+        <div id="preGuessPanel">
+          <div class="attempt-line">
+            <p class="subtle-label" id="attemptLabel">You guessed it!</p>
+            <div class="helper clue-feed clue-feed--compact" id="hintBlock" aria-live="polite" aria-atomic="false">
+            </div>
+          </div>
+
+          <form class="input-shell" id="guessForm" autocomplete="off">
+            <svg class="input-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2" aria-hidden="true">
+              <circle cx="11" cy="11" r="7"></circle>
+              <path d="m20 20-3.5-3.5"></path>
+            </svg>
+            <label for="guessInput" class="sr-only">Guess a Bible book</label>
+            <input id="guessInput" class="guess-input" type="text"
+              placeholder="Type to guess a Bible book (e.g. 'Tobit', 'John')..." aria-describedby="statusLine"
+              role="combobox" aria-autocomplete="list" aria-haspopup="listbox" aria-controls="autocomplete"
+              aria-expanded="false" aria-activedescendant="" />
+            <div class="autocomplete-list" id="autocomplete" role="listbox" aria-label="Book suggestions"></div>
+          </form>
         </div>
-
-        <form class="input-shell" id="guessForm" autocomplete="off">
-          <svg class="input-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-            stroke-width="2" aria-hidden="true">
-            <circle cx="11" cy="11" r="7"></circle>
-            <path d="m20 20-3.5-3.5"></path>
-          </svg>
-          <label for="guessInput" class="sr-only">Guess a Bible book</label>
-          <input id="guessInput" class="guess-input" type="text"
-            placeholder="Type to guess a Bible book (e.g. 'Tobit', 'John')..." aria-describedby="statusLine"
-            role="combobox" aria-autocomplete="list" aria-haspopup="listbox" aria-controls="autocomplete"
-            aria-expanded="false" aria-activedescendant="" />
-          <div class="autocomplete-list" id="autocomplete" role="listbox" aria-label="Book suggestions"></div>
-        </form>
-
         <div class="header-row" aria-hidden="true">
           <div>Testament</div>
           <div>Section</div>
@@ -164,135 +166,146 @@
   </main>
 
   <div class="modal-backdrop" id="helpModal" data-open="false" aria-hidden="true">
-  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="helpTitle" tabindex="-1">
-    <section class="section-shell modal-section modal-layout modal-system">
-      <div class="section-shell__header modal-layout__header modal-system__header">
-        <button type="button" class="modal-close-icon-btn" data-modal-close="help" aria-label="Close help modal"
-          title="Close">
-          <span aria-hidden="true">×</span>
-        </button>
-        <h2 id="helpTitle" class="section-shell__title">How to play</h2>
-        <p class="section-shell__meta">Guess the Bible book from the verse. You have 8 guesses in every difficulty.</p>
-      </div>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="helpTitle" tabindex="-1">
+      <section class="section-shell modal-section modal-layout modal-system">
+        <div class="section-shell__header modal-layout__header modal-system__header">
+          <button type="button" class="modal-close-icon-btn" data-modal-close="help" aria-label="Close help modal"
+            title="Close">
+            <span aria-hidden="true">×</span>
+          </button>
+          <h2 id="helpTitle" class="section-shell__title">How to play</h2>
+          <p class="section-shell__meta">Guess the Bible book from the verse. You have 8 guesses in every difficulty.
+          </p>
+        </div>
 
-      <div class="section-shell__body modal-layout__body modal-system__body">
-        <section class="section-shell section-shell--nested modal-block modal-system__block"
-          aria-label="How guessing works">
-          <div class="section-shell__header modal-system__block-header">
-            <p class="subtle-label section-shell__meta">Gameplay</p>
-          </div>
-          <div class="section-shell__body modal-system__block-body">
-            <div class="rules">
-              <article class="rule-card">
-                <h3>Guess books</h3>
-                <p>Enter a Catholic Bible book name and submit your guess. Each guess is checked against the hidden answer.</p>
-              </article>
-              <article class="rule-card">
-                <h3>Read the tiles</h3>
-                <p>The row shows feedback for Testament, Section, First Letter, and Book. Use the colors to narrow the answer.</p>
-              </article>
-              <article class="rule-card">
-                <h3>Watch the clue pills</h3>
-                <p>New clues appear above the input as you play. Locked clue icons show future clues and the guess number when they unlock.</p>
-              </article>
+        <div class="section-shell__body modal-layout__body modal-system__body">
+          <section class="section-shell section-shell--nested modal-block modal-system__block"
+            aria-label="How guessing works">
+            <div class="section-shell__header modal-system__block-header">
+              <p class="subtle-label section-shell__meta">Gameplay</p>
             </div>
-          </div>
-        </section>
-
-        <details class="expander expander--subtle modal-block modal-system__block">
-          <summary class="expander__summary">
-            <span class="expander__summary-text">
-              <span class="expander__title">Feedback colors</span>
-              <span class="expander__meta">Expand to see what each color means.</span>
-            </span>
-            <svg class="expander__icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"
-              aria-hidden="true">
-              <path d="M5 3.5 10 8l-5 4.5"></path>
-            </svg>
-          </summary>
-          <div class="expander__body">
-            <div class="rules">
-              <article class="rule-card">
-                <h3>Green</h3>
-                <p>The clue matches the answer exactly.</p>
-              </article>
-              <article class="rule-card">
-                <h3>Gold</h3>
-                <p>The clue is close but not exact. For the Book tile, gold means your guess is close in canon order.</p>
-              </article>
-              <article class="rule-card">
-                <h3>Red</h3>
-                <p>The clue does not match the answer.</p>
-              </article>
+            <div class="section-shell__body modal-system__block-body">
+              <div class="rules">
+                <article class="rule-card">
+                  <h3>Guess books</h3>
+                  <p>Enter a Catholic Bible book name and submit your guess. Each guess is checked against the hidden
+                    answer.</p>
+                </article>
+                <article class="rule-card">
+                  <h3>Read the tiles</h3>
+                  <p>The row shows feedback for Testament, Section, First Letter, and Book. Use the colors to narrow the
+                    answer.</p>
+                </article>
+                <article class="rule-card">
+                  <h3>Watch the clue pills</h3>
+                  <p>New clues appear above the input as you play. Locked clue icons show future clues and the guess
+                    number when they unlock.</p>
+                </article>
+              </div>
             </div>
-          </div>
-        </details>
+          </section>
 
-        <details class="expander expander--subtle modal-block modal-system__block">
-          <summary class="expander__summary">
-            <span class="expander__summary-text">
-              <span class="expander__title">Clues and difficulty</span>
-              <span class="expander__meta">Expand to see when each clue appears.</span>
-            </span>
-            <svg class="expander__icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"
-              aria-hidden="true">
-              <path d="M5 3.5 10 8l-5 4.5"></path>
-            </svg>
-          </summary>
-          <div class="expander__body">
-            <div class="rules">
-              <article class="rule-card">
-                <h3>Easy</h3>
-                <p>Testament after guess 1, nearest distance after guess 1, Section after guess 3, Reference after guess 4, First Letter after guess 6.</p>
-              </article>
-              <article class="rule-card">
-                <h3>Normal</h3>
-                <p>Testament after guess 1, Section and nearest distance after guess 3, Reference after guess 4, First Letter after guess 7.</p>
-              </article>
-              <article class="rule-card">
-                <h3>Hard</h3>
-                <p>Testament after guess 1, Reference after guess 3, Section after guess 5, First Letter after guess 7. Distance only unlocks after you earn a gold Book tile.</p>
-              </article>
+          <details class="expander expander--subtle modal-block modal-system__block">
+            <summary class="expander__summary">
+              <span class="expander__summary-text">
+                <span class="expander__title">Feedback colors</span>
+                <span class="expander__meta">Expand to see what each color means.</span>
+              </span>
+              <svg class="expander__icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"
+                aria-hidden="true">
+                <path d="M5 3.5 10 8l-5 4.5"></path>
+              </svg>
+            </summary>
+            <div class="expander__body">
+              <div class="rules">
+                <article class="rule-card">
+                  <h3>Green</h3>
+                  <p>The clue matches the answer exactly.</p>
+                </article>
+                <article class="rule-card">
+                  <h3>Gold</h3>
+                  <p>The clue is close but not exact. For the Book tile, gold means your guess is close in canon order.
+                  </p>
+                </article>
+                <article class="rule-card">
+                  <h3>Red</h3>
+                  <p>The clue does not match the answer.</p>
+                </article>
+              </div>
             </div>
-          </div>
-        </details>
+          </details>
 
-        <details class="expander expander--subtle modal-block modal-system__block">
-          <summary class="expander__summary">
-            <span class="expander__summary-text">
-              <span class="expander__title">Extra clue rules</span>
-              <span class="expander__meta">Expand to see how early clue reveals work.</span>
-            </span>
-            <svg class="expander__icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"
-              aria-hidden="true">
-              <path d="M5 3.5 10 8l-5 4.5"></path>
-            </svg>
-          </summary>
-          <div class="expander__body">
-            <div class="rules">
-              <article class="rule-card">
-                <h3>Exact distance</h3>
-                <p>When distance is unlocked, it tells you how many books away your nearest guess is from the correct book.</p>
-              </article>
-              <article class="rule-card">
-                <h3>Earlier clue reveals</h3>
-                <p>If you already identify the Section or First Letter from your guesses, that clue can appear early instead of waiting.</p>
-              </article>
-              <article class="rule-card">
-                <h3>Modes</h3>
-                <p>Daily mode tracks streaks and leaderboard progress. Practice mode lets you keep playing without streak pressure.</p>
-              </article>
+          <details class="expander expander--subtle modal-block modal-system__block">
+            <summary class="expander__summary">
+              <span class="expander__summary-text">
+                <span class="expander__title">Clues and difficulty</span>
+                <span class="expander__meta">Expand to see when each clue appears.</span>
+              </span>
+              <svg class="expander__icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"
+                aria-hidden="true">
+                <path d="M5 3.5 10 8l-5 4.5"></path>
+              </svg>
+            </summary>
+            <div class="expander__body">
+              <div class="rules">
+                <article class="rule-card">
+                  <h3>Easy</h3>
+                  <p>Testament after guess 1, nearest distance after guess 1, Section after guess 3, Reference after
+                    guess 4, First Letter after guess 6.</p>
+                </article>
+                <article class="rule-card">
+                  <h3>Normal</h3>
+                  <p>Testament after guess 1, Section and nearest distance after guess 3, Reference after guess 4, First
+                    Letter after guess 7.</p>
+                </article>
+                <article class="rule-card">
+                  <h3>Hard</h3>
+                  <p>Testament after guess 1, Reference after guess 3, Section after guess 5, First Letter after guess
+                    7. Distance only unlocks after you earn a gold Book tile.</p>
+                </article>
+              </div>
             </div>
-          </div>
-        </details>
-      </div>
+          </details>
 
-      <div class="section-shell__footer modal-layout__footer modal-actions-end modal-system__footer">
-        <button type="button" class="pill-btn primary" id="closeHelpBtn">Close</button>
-      </div>
-    </section>
+          <details class="expander expander--subtle modal-block modal-system__block">
+            <summary class="expander__summary">
+              <span class="expander__summary-text">
+                <span class="expander__title">Extra clue rules</span>
+                <span class="expander__meta">Expand to see how early clue reveals work.</span>
+              </span>
+              <svg class="expander__icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"
+                aria-hidden="true">
+                <path d="M5 3.5 10 8l-5 4.5"></path>
+              </svg>
+            </summary>
+            <div class="expander__body">
+              <div class="rules">
+                <article class="rule-card">
+                  <h3>Exact distance</h3>
+                  <p>When distance is unlocked, it tells you how many books away your nearest guess is from the correct
+                    book.</p>
+                </article>
+                <article class="rule-card">
+                  <h3>Earlier clue reveals</h3>
+                  <p>If you already identify the Section or First Letter from your guesses, that clue can appear early
+                    instead of waiting.</p>
+                </article>
+                <article class="rule-card">
+                  <h3>Modes</h3>
+                  <p>Daily mode tracks streaks and leaderboard progress. Practice mode lets you keep playing without
+                    streak pressure.</p>
+                </article>
+              </div>
+            </div>
+          </details>
+        </div>
+
+        <div class="section-shell__footer modal-layout__footer modal-actions-end modal-system__footer">
+          <button type="button" class="pill-btn primary" id="closeHelpBtn">Close</button>
+        </div>
+      </section>
+    </div>
   </div>
-</div>
 
   <div class="modal-backdrop" id="archiveModal" data-open="false" aria-hidden="true">
     <div class="modal archive-modal" role="dialog" aria-modal="true" aria-labelledby="archiveTitle" tabindex="-1">

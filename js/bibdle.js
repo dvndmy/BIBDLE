@@ -207,6 +207,36 @@ function ensureClueUiState() {
   return state.ui.clues;
 }
 
+function syncEndStateVisibility() {
+  const isComplete = state.status === "won" || state.status === "lost";
+
+  if (elements.preGuessPanel) {
+    elements.preGuessPanel.hidden = isComplete;
+  }
+
+  if (elements.guessForm) {
+    elements.guessForm.hidden = isComplete;
+  }
+
+  if (elements.guessInput) {
+    if (isComplete) {
+      elements.guessInput.blur();
+      elements.guessInput.setAttribute("tabindex", "-1");
+    } else {
+      elements.guessInput.removeAttribute("tabindex");
+    }
+  }
+
+  if (elements.autocomplete) {
+    if (isComplete) {
+      elements.autocomplete.innerHTML = "";
+      elements.autocomplete.hidden = true;
+    } else {
+      elements.autocomplete.hidden = false;
+    }
+  }
+}
+
 const elements = {
   mobileLanguageToggle: document.getElementById("mobileLanguageToggle"),
   mobileLanguageGlyph: document.getElementById("mobileLanguageGlyph"),
@@ -217,6 +247,7 @@ const elements = {
   verseText: document.getElementById("verseText"),
   dateLabel: document.getElementById("dateLabel"),
   countdownTimer: document.getElementById("countdownTimer"),
+  preGuessPanel: document.getElementById("preGuessPanel"),
   attemptLabel: document.getElementById("attemptLabel"),
   hintBlock: document.getElementById("hintBlock"),
   guessForm: document.getElementById("guessForm"),
@@ -4360,28 +4391,36 @@ function renderPuzzleView() {
   renderLanguageControl();
   renderMobileLanguageToggle();
   renderPuzzleCard();
-  renderHintBlock();
-  renderGuessRows();
-  renderProximityLine();
-  syncPreferenceControls();
-  syncActionButtons();
-  renderPostGamePanel();
 
-  if (state.status === "won") {
-    renderStatus(
-      `Correct — ${getLocalizedValue(state.currentPuzzle.verse.book, state.currentPuzzle.verse.bookMl)} (${getLocalizedReference(state.currentPuzzle.verse, getCurrentLanguage())}).`,
-    );
-    publishBootSnapshot({ renderStatus: "won" });
-    return;
-  }
+  if (state.status === "won" || state.status === "lost") {
+    syncEndStateVisibility();
+    renderGuessRows();
+    syncPreferenceControls();
+    syncActionButtons();
+    renderPostGamePanel();
 
-  if (state.status === "lost") {
+    if (state.status === "won") {
+      renderStatus(
+        `Correct — ${getLocalizedValue(state.currentPuzzle.verse.book, state.currentPuzzle.verse.bookMl)} (${getLocalizedReference(state.currentPuzzle.verse, getCurrentLanguage())}).`,
+      );
+      publishBootSnapshot({ renderStatus: "won" });
+      return;
+    }
+
     renderStatus(
       `Out of guesses — the answer was ${getLocalizedValue(state.currentPuzzle.verse.book, state.currentPuzzle.verse.bookMl)} (${getLocalizedReference(state.currentPuzzle.verse, getCurrentLanguage())}).`,
     );
     publishBootSnapshot({ renderStatus: "lost" });
     return;
   }
+
+  syncEndStateVisibility();
+  renderHintBlock();
+  renderGuessRows();
+  renderProximityLine();
+  syncPreferenceControls();
+  syncActionButtons();
+  renderPostGamePanel();
 
   const clueState = buildClueRevealState();
   const newHintCount = clueState.newlyUnlockedKeys.length;
@@ -4525,9 +4564,14 @@ function handleDuplicateGuess(book) {
 }
 
 function refreshAfterGuess(message) {
-  renderHintBlock();
+  syncEndStateVisibility();
+
+  if (state.status !== "won" && state.status !== "lost") {
+    renderHintBlock();
+    renderProximityLine();
+  }
+
   renderGuessRows(true);
-  renderProximityLine();
   syncPreferenceControls();
   syncActionButtons();
   renderStatus(message);
@@ -5516,6 +5560,7 @@ function startPuzzle(mode = state.mode) {
   clueUiState.lastUnlockedKeys = [];
   clueUiState.lastRenderSignature = "";
 
+  syncEndStateVisibility();
   closePostGamePanel();
   resetInput();
   resetSuggestionsState();
