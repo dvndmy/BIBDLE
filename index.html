@@ -139,21 +139,21 @@
         <p class="status-line" id="statusLine" role="status" aria-live="polite"></p>
 
         <div class="controls-panel controls-panel--secondary" aria-label="Game actions">
-          <div class="controls-cluster controls-cluster--browse" aria-label="Reference and progress actions">
-            <div class="pill-actions pill-actions--secondary">
-              <button type="button" class="pill-btn" id="statsBtn">See stats</button>
-              <button type="button" class="pill-btn" id="archiveBtn">Progress</button>
-              <button type="button" class="pill-btn" id="leaderboardBtn">Leaderboard</button>
-              <button type="button" class="pill-btn" id="helpBtn">How to play</button>
-            </div>
-          </div>
-
           <div class="controls-cluster controls-cluster--results" aria-label="Result actions">
             <div class="pill-actions pill-actions--primary">
               <button type="button" class="pill-btn" id="shareBtn">Copy result</button>
               <button type="button" class="pill-btn primary" id="tryPracticeBtn" hidden>Try practice round</button>
               <button type="button" class="pill-btn primary" id="todayBibdleBtn" hidden>Try today’s Bibdle</button>
               <button type="button" class="pill-btn primary" id="nextPracticeBtn" hidden>Next practice puzzle</button>
+            </div>
+          </div>
+
+          <div class="controls-cluster controls-cluster--browse" aria-label="Reference and progress actions">
+            <div class="pill-actions pill-actions--secondary">
+              <button type="button" class="pill-btn" id="statsBtn">See stats</button>
+              <button type="button" class="pill-btn" id="archiveBtn">Progress</button>
+              <button type="button" class="pill-btn" id="leaderboardBtn">Leaderboard</button>
+              <button type="button" class="pill-btn" id="helpBtn">How to play</button>
             </div>
           </div>
         </div>
@@ -168,6 +168,10 @@
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="helpTitle" tabindex="-1">
       <section class="section-shell modal-section modal-layout modal-system">
         <div class="section-shell__header modal-layout__header modal-system__header">
+          <button type="button" class="modal-close-icon-btn" data-modal-close="help" aria-label="Close help modal"
+            title="Close">
+            <span aria-hidden="true">×</span>
+          </button>
           <h2 id="helpTitle" class="section-shell__title">How to play</h2>
           <p class="section-shell__meta">Guess the Bible book from the verse. Use the feedback cards to narrow your
             answer in as few tries as possible.</p>
@@ -240,6 +244,10 @@
     <div class="modal archive-modal" role="dialog" aria-modal="true" aria-labelledby="archiveTitle" tabindex="-1">
       <section class="section-shell modal-section modal-layout modal-system">
         <div class="section-shell__header modal-layout__header modal-system__header">
+          <button type="button" class="modal-close-icon-btn" data-modal-close="archive"
+            aria-label="Close progress modal" title="Close">
+            <span aria-hidden="true">×</span>
+          </button>
           <h2 id="archiveTitle" class="section-shell__title">Progress map</h2>
           <p class="section-shell__meta">Review canon coverage, solved books, and Daily-mode book performance.</p>
         </div>
@@ -288,6 +296,10 @@
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="settingsTitle" tabindex="-1">
       <section class="section-shell modal-section modal-layout modal-system">
         <div class="section-shell__header modal-layout__header modal-system__header">
+          <button type="button" class="modal-close-icon-btn" data-modal-close="settings"
+            aria-label="Close settings modal" title="Close">
+            <span aria-hidden="true">×</span>
+          </button>
           <h2 id="settingsTitle" class="section-shell__title">Accessibility settings</h2>
           <p class="section-shell__meta">Adjust visual and motion preferences. Changes apply immediately.</p>
         </div>
@@ -336,6 +348,10 @@
       aria-describedby="statsBody" tabindex="-1">
       <div class="section-shell modal-section modal-layout modal-system">
         <div class="section-shell__header modal-layout__header modal-system__header">
+          <button type="button" class="modal-close-icon-btn" data-modal-close="stats" aria-label="Close stats modal"
+            title="Close">
+            <span aria-hidden="true">×</span>
+          </button>
           <h2 id="statsTitle" class="section-shell__title">Historical stats</h2>
           <p class="section-shell__meta">Track Daily and Practice performance, including streaks and guess distribution.
           </p>
@@ -441,6 +457,10 @@
       tabindex="-1">
       <section class="section-shell modal-section modal-layout modal-system">
         <div class="section-shell__header modal-layout__header modal-system__header">
+          <button type="button" class="modal-close-icon-btn" data-modal-close="leaderboard"
+            aria-label="Close leaderboard modal" title="Close">
+            <span aria-hidden="true">×</span>
+          </button>
           <h2 id="leaderboardTitle" class="section-shell__title">Global daily stats</h2>
           <p class="section-shell__meta">See today’s worldwide Daily puzzle activity and your current placement.</p>
         </div>
@@ -489,6 +509,10 @@
       aria-describedby="postGameBody" tabindex="-1">
       <div class="section-shell modal-section modal-layout modal-system">
         <div class="section-shell__header modal-layout__header modal-system__header">
+          <button type="button" class="modal-close-icon-btn" data-modal-close="postGame" aria-label="Close result modal"
+            title="Close">
+            <span aria-hidden="true">×</span>
+          </button>
           <div class="postgame-badge" id="postGameBadge">Puzzle complete</div>
           <h2 id="postGameTitle" class="section-shell__title">Result</h2>
         </div>

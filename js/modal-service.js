@@ -119,10 +119,27 @@ export function createModalService({
     close(target);
   }
 
+  function handleDocumentClick(event) {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+
+    const closeButton = target.closest("[data-modal-close]");
+    if (!closeButton) return;
+
+    const modalKey = closeButton.getAttribute("data-modal-close");
+    const modalElement = getElement(modalKey);
+
+    if (!modalElement) return;
+
+    event.preventDefault();
+    close(modalElement);
+  }
+
   function bindGlobalHandlers() {
     if (bound) return;
     document.addEventListener("keydown", handleDocumentKeydown);
     document.addEventListener("mousedown", handleDocumentMouseDown);
+    document.addEventListener("click", handleDocumentClick);
     bound = true;
   }
 

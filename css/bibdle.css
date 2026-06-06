@@ -628,6 +628,49 @@ input::placeholder {
     gap: var(--space-2);
 }
 
+.modal-close-icon-btn {
+  position: absolute;
+  top: var(--space-4, 1rem);
+  right: var(--space-4, 1rem);
+  width: 2.5rem;
+  height: 2.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--color-border, rgba(255, 255, 255, 0.16));
+  border-radius: 999px;
+  background: var(--surface-2, rgba(255, 255, 255, 0.06));
+  color: var(--text-primary, inherit);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.16);
+  cursor: pointer;
+  z-index: 2;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    transform 160ms ease,
+    opacity 160ms ease;
+}
+
+.modal-close-icon-btn:hover {
+  background: var(--surface-3, rgba(255, 255, 255, 0.1));
+  transform: translateY(-1px);
+}
+
+.modal-close-icon-btn:active {
+  transform: translateY(0);
+}
+
+.modal-close-icon-btn:focus-visible {
+  outline: 2px solid var(--accent, currentColor);
+  outline-offset: 2px;
+}
+
+.modal-close-icon-btn > span {
+  font-size: 1.5rem;
+  line-height: 1;
+  font-weight: 600;
+}
+
 .modal-system__body {
     display: grid;
     gap: var(--section-gap-md);
@@ -1671,6 +1714,12 @@ html.reduced-motion *::after {
 .modal-layout__header {
     padding-bottom: var(--space-2);
     border-bottom: 1px solid var(--divider-default);
+}
+
+.modal-layout__header,
+.modal-system__header {
+  position: relative;
+  padding-right: calc(2.5rem + var(--space-6, 1.5rem));
 }
 
 .modal-layout__body {
