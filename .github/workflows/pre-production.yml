@@ -1,0 +1,24 @@
+name: Deploy Pre-Production
+
+on:
+  push:
+    branches:
+      - develop # Triggers when you push to your staging branch
+
+permissions:
+  contents: write # Allows the action to commit files to your gh-pages branch
+
+jobs:
+  deploy-staging:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Deploy to GitHub Pages Sub-directory
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          branch: gh-pages # Deploy to your live pages branch
+          folder: . # Copies your entire root directory (HTML/CSS/JS)
+          target-folder: previews/staging # Places files inside the staging directory
+          clean: false # CRITICAL: Prevents deleting your live production files

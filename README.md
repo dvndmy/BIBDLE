@@ -42,7 +42,7 @@ When English mode is active:
 - Guessed books display in English.
 - Book- and verse-derived content displays in English.
 
-## How to Play
+## How to Play Bibdle
 
 1. Choose Daily or Practice mode.
 2. Choose a difficulty.
