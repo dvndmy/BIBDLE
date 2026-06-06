@@ -139,6 +139,370 @@ const STREAK_BADGES = [
   { id: "streak-30", threshold: 30, label: "30-Day Streak" },
 ];
 
+const STATS_SCHEMA_VERSION = 2;
+
+function createDefaultAchievementCounters() {
+  return {
+    totalCorrect: 0,
+    dailyCorrect: 0,
+    practiceCorrect: 0,
+    firstTryCorrect: 0,
+    consecutiveFirstTryCorrect: 0,
+  };
+}
+
+function createDefaultAchievements() {
+  return {
+    earned: {},
+    counters: createDefaultAchievementCounters(),
+  };
+}
+
+function createDefaultDailyStats() {
+  return {
+    played: 0,
+    won: 0,
+    lost: 0,
+    currentStreak: 0,
+    bestStreak: 0,
+    guessDistribution: {},
+    lastDailySolvedDate: null,
+    earnedBadges: [],
+  };
+}
+
+function createDefaultPracticeStats() {
+  return {
+    played: 0,
+    won: 0,
+    lost: 0,
+    guessDistribution: {},
+  };
+}
+
+function createDefaultStatsState() {
+  return {
+    version: STATS_SCHEMA_VERSION,
+    daily: createDefaultDailyStats(),
+    practice: createDefaultPracticeStats(),
+    bookStats: {},
+    achievements: createDefaultAchievements(),
+    meta: {
+      updatedAt: null,
+    },
+  };
+}
+
+function sanitizeNonNegativeInt(value, fallback = 0) {
+  return Number.isInteger(value) && value >= 0 ? value : fallback;
+}
+
+function sanitizeGuessDistribution(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const output = {};
+  Object.entries(value).forEach(([key, count]) => {
+    const normalizedKey = String(key);
+    output[normalizedKey] = sanitizeNonNegativeInt(count);
+  });
+  return output;
+}
+
+function sanitizeEarnedBadges(value) {
+  if (!Array.isArray(value)) return [];
+  return value.filter((badgeId) =>
+    STREAK_BADGES.some((badge) => badge.id === badgeId),
+  );
+}
+
+function sanitizeBookStats(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+
+  const output = {};
+
+  Object.entries(value).forEach(([key, entry]) => {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) return;
+
+    output[key] = {
+      plays: sanitizeNonNegativeInt(entry.plays),
+      solves: sanitizeNonNegativeInt(entry.solves),
+      bestAttempts:
+        Number.isInteger(entry.bestAttempts) && entry.bestAttempts > 0
+          ? entry.bestAttempts
+          : null,
+      totalAttempts: sanitizeNonNegativeInt(entry.totalAttempts),
+      lastSolvedDate:
+        typeof entry.lastSolvedDate === "string" || entry.lastSolvedDate === null
+          ? entry.lastSolvedDate
+          : null,
+    };
+  });
+
+  return output;
+}
+
+function sanitizeAchievementCounters(value) {
+  const defaults = createDefaultAchievementCounters();
+  const source =
+    value && typeof value === "object" && !Array.isArray(value) ? value : {};
+
+  return {
+    ...defaults,
+    ...Object.fromEntries(
+      Object.keys(defaults).map((key) => [key, sanitizeNonNegativeInt(source[key])]),
+    ),
+  };
+}
+
+function sanitizeAchievementEarned(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return { ...value };
+}
+
+function sanitizeStatsMeta(value) {
+  const source =
+    value && typeof value === "object" && !Array.isArray(value) ? value : {};
+
+  return {
+    ...source,
+    updatedAt:
+      typeof source.updatedAt === "string" || source.updatedAt === null
+        ? source.updatedAt
+        : null,
+  };
+}
+
+function sanitizeDailyStats(value) {
+  const source =
+    value && typeof value === "object" && !Array.isArray(value)
+      ? value
+      : {};
+
+  return {
+    ...createDefaultDailyStats(),
+    ...source,
+    played: sanitizeNonNegativeInt(source.played),
+    won: sanitizeNonNegativeInt(source.won),
+    lost: sanitizeNonNegativeInt(source.lost),
+    currentStreak: sanitizeNonNegativeInt(source.currentStreak),
+    bestStreak: sanitizeNonNegativeInt(source.bestStreak),
+    guessDistribution: sanitizeGuessDistribution(source.guessDistribution),
+    lastDailySolvedDate:
+      typeof source.lastDailySolvedDate === "string" || source.lastDailySolvedDate === null
+        ? source.lastDailySolvedDate
+        : null,
+    earnedBadges: sanitizeEarnedBadges(source.earnedBadges),
+  };
+}
+
+function sanitizePracticeStats(value) {
+  const source =
+    value && typeof value === "object" && !Array.isArray(value)
+      ? value
+      : {};
+
+  return {
+    ...createDefaultPracticeStats(),
+    ...source,
+    played: sanitizeNonNegativeInt(source.played),
+    won: sanitizeNonNegativeInt(source.won),
+    lost: sanitizeNonNegativeInt(source.lost),
+    guessDistribution: sanitizeGuessDistribution(source.guessDistribution),
+  };
+}
+
+function migrateStatsShape(saved) {
+  const defaults = createDefaultStatsState();
+  const source =
+    saved && typeof saved === "object" && !Array.isArray(saved) ? saved : {};
+
+  const hasNestedShape =
+    source?.daily &&
+    typeof source.daily === "object" &&
+    !Array.isArray(source.daily);
+
+  const legacyDailySource = hasNestedShape ? source.daily : source;
+  const legacyPracticeSource =
+    source?.practice && typeof source.practice === "object" && !Array.isArray(source.practice)
+      ? source.practice
+      : null;
+
+  const migrated = {
+    ...defaults,
+    ...source,
+    version: STATS_SCHEMA_VERSION,
+    daily: sanitizeDailyStats(legacyDailySource),
+    practice: sanitizePracticeStats(legacyPracticeSource),
+    bookStats: sanitizeBookStats(source.bookStats),
+    achievements: {
+      ...createDefaultAchievements(),
+      ...(source.achievements && typeof source.achievements === "object" && !Array.isArray(source.achievements)
+        ? source.achievements
+        : {}),
+      earned: sanitizeAchievementEarned(source?.achievements?.earned),
+      counters: sanitizeAchievementCounters(source?.achievements?.counters),
+    },
+    meta: sanitizeStatsMeta(source.meta),
+  };
+
+  if (
+    !hasNestedShape &&
+    Array.isArray(source?.earnedBadges) &&
+    !migrated.daily.earnedBadges.length
+  ) {
+    migrated.daily.earnedBadges = sanitizeEarnedBadges(source.earnedBadges);
+  }
+
+  return migrated;
+}
+
+function getSerializedStatsForSave() {
+  const stats = migrateStatsShape(state.stats);
+  return {
+    ...stats,
+    version: STATS_SCHEMA_VERSION,
+    meta: {
+      ...sanitizeStatsMeta(stats.meta),
+      updatedAt: new Date().toISOString(),
+    },
+  };
+}
+
+function updateAchievementCountersForCompletion(outcome) {
+  const stats = migrateStatsShape(state.stats);
+  const counters = stats.achievements.counters;
+  const isWin = outcome === "won";
+  const isFirstTryWin = isWin && state.guesses.length === 1;
+  const isDaily = state.currentPuzzle?.mode === "daily";
+  const isPractice = state.currentPuzzle?.mode === "practice";
+
+  if (isWin) {
+    counters.totalCorrect += 1;
+
+    if (isDaily) {
+      counters.dailyCorrect += 1;
+    }
+
+    if (isPractice) {
+      counters.practiceCorrect += 1;
+    }
+
+    if (isFirstTryWin) {
+      counters.firstTryCorrect += 1;
+      counters.consecutiveFirstTryCorrect += 1;
+    } else {
+      counters.consecutiveFirstTryCorrect = 0;
+    }
+  } else {
+    counters.consecutiveFirstTryCorrect = 0;
+  }
+
+  state.stats = stats;
+}
+
+function getSharePayload() {
+  const text = buildShareText();
+  const playUrl = "https://dvndmy.github.io/BIBDLE";
+
+  return {
+    text,
+    url: playUrl,
+    title: "Catholic Bibdle",
+  };
+}
+
+function canUseNativeShare(payload) {
+  if (typeof navigator === "undefined" || typeof navigator.share !== "function") {
+    return false;
+  }
+
+  if (typeof navigator.canShare === "function") {
+    try {
+      return navigator.canShare({
+        text: payload.text,
+        url: payload.url,
+      });
+    } catch {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+async function fallbackCopyText(text, options = {}) {
+  const {
+    copiedMessage = "Result copied to clipboard.",
+    unavailableMessage = "Sharing is unavailable in this browser.",
+  } = options;
+
+  try {
+    if (navigator?.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      renderStatus(copiedMessage);
+      return true;
+    }
+  } catch { }
+
+  try {
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.setAttribute("aria-hidden", "true");
+    textarea.style.position = "fixed";
+    textarea.style.top = "-9999px";
+    textarea.style.left = "-9999px";
+    document.body.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+    textarea.setSelectionRange(0, textarea.value.length);
+
+    const copied = document.execCommand("copy");
+    document.body.removeChild(textarea);
+
+    if (copied) {
+      renderStatus(copiedMessage);
+      return true;
+    }
+  } catch { }
+
+  renderStatus(unavailableMessage);
+  return false;
+}
+
+async function shareResult() {
+  const payload = getSharePayload();
+
+  if (canUseNativeShare(payload)) {
+    try {
+      await navigator.share({
+        title: payload.title,
+        text: payload.text,
+        url: payload.url,
+      });
+      renderStatus("Result shared.");
+      return true;
+    } catch (error) {
+      const errorName = error?.name || "";
+      if (errorName === "AbortError") {
+        return fallbackCopyText(payload.text, {
+          copiedMessage: "Share canceled. Result copied to clipboard instead.",
+          unavailableMessage: "Share canceled, and clipboard access is unavailable here.",
+        });
+      }
+
+      return fallbackCopyText(payload.text, {
+        copiedMessage: "Sharing failed, so the result was copied instead.",
+        unavailableMessage: "Sharing is unavailable, and clipboard access is not available here.",
+      });
+    }
+  }
+
+  return fallbackCopyText(payload.text, {
+    copiedMessage: "Native share is unavailable. Result copied to clipboard.",
+    unavailableMessage: "Sharing is unavailable in this browser.",
+  });
+}
+
 const state = {
   mode: "daily",
   currentPuzzle: null,
@@ -953,24 +1317,25 @@ function mergeBookStatsMap(localMap, cloudMap) {
 }
 
 function mergeStatsData(localStats, cloudStats) {
-  if (!cloudStats || typeof cloudStats !== "object") {
-    return JSON.parse(JSON.stringify(localStats));
-  }
+  const safeLocal = migrateStatsShape(localStats);
+  const safeCloud = migrateStatsShape(cloudStats);
 
-  const localDaily = localStats?.daily || {};
-  const cloudDaily = cloudStats?.daily || {};
-  const localPractice = localStats?.practice || {};
-  const cloudPractice = cloudStats?.practice || {};
+  const localDaily = safeLocal.daily || {};
+  const cloudDaily = safeCloud.daily || {};
+  const localPractice = safeLocal.practice || {};
+  const cloudPractice = safeCloud.practice || {};
+  const localAchievements = safeLocal.achievements || {};
+  const cloudAchievements = safeCloud.achievements || {};
+  const localCounters = localAchievements.counters || {};
+  const cloudCounters = cloudAchievements.counters || {};
 
   return {
+    version: STATS_SCHEMA_VERSION,
     daily: {
       played: Math.max(localDaily.played || 0, cloudDaily.played || 0),
       won: Math.max(localDaily.won || 0, cloudDaily.won || 0),
       lost: Math.max(localDaily.lost || 0, cloudDaily.lost || 0),
-      currentStreak: Math.max(
-        localDaily.currentStreak || 0,
-        cloudDaily.currentStreak || 0,
-      ),
+      currentStreak: Math.max(localDaily.currentStreak || 0, cloudDaily.currentStreak || 0),
       bestStreak: Math.max(localDaily.bestStreak || 0, cloudDaily.bestStreak || 0),
       guessDistribution: mergeGuessDistribution(
         localDaily.guessDistribution,
@@ -997,7 +1362,35 @@ function mergeStatsData(localStats, cloudStats) {
         cloudPractice.guessDistribution,
       ),
     },
-    bookStats: mergeBookStatsMap(localStats?.bookStats, cloudStats?.bookStats),
+    bookStats: mergeBookStatsMap(safeLocal.bookStats, safeCloud.bookStats),
+    achievements: {
+      ...createDefaultAchievements(),
+      ...localAchievements,
+      ...cloudAchievements,
+      earned: {
+        ...(localAchievements.earned && typeof localAchievements.earned === "object" ? localAchievements.earned : {}),
+        ...(cloudAchievements.earned && typeof cloudAchievements.earned === "object" ? cloudAchievements.earned : {}),
+      },
+      counters: {
+        totalCorrect: Math.max(localCounters.totalCorrect || 0, cloudCounters.totalCorrect || 0),
+        dailyCorrect: Math.max(localCounters.dailyCorrect || 0, cloudCounters.dailyCorrect || 0),
+        practiceCorrect: Math.max(localCounters.practiceCorrect || 0, cloudCounters.practiceCorrect || 0),
+        firstTryCorrect: Math.max(localCounters.firstTryCorrect || 0, cloudCounters.firstTryCorrect || 0),
+        consecutiveFirstTryCorrect: Math.max(
+          localCounters.consecutiveFirstTryCorrect || 0,
+          cloudCounters.consecutiveFirstTryCorrect || 0,
+        ),
+      },
+    },
+    meta: {
+      ...sanitizeStatsMeta(safeLocal.meta),
+      ...sanitizeStatsMeta(safeCloud.meta),
+      updatedAt:
+        [safeLocal?.meta?.updatedAt, safeCloud?.meta?.updatedAt]
+          .filter(Boolean)
+          .sort()
+          .at(-1) || null,
+    },
   };
 }
 
@@ -2110,32 +2503,8 @@ function loadPreferences() {
 }
 
 function saveStats() {
-  const payload = {
-    daily: {
-      played: state.stats.daily.played,
-      won: state.stats.daily.won,
-      lost: state.stats.daily.lost,
-      currentStreak: state.stats.daily.currentStreak,
-      bestStreak: state.stats.daily.bestStreak,
-      guessDistribution: state.stats.daily.guessDistribution,
-      lastDailySolvedDate: state.stats.daily.lastDailySolvedDate,
-      earnedBadges: Array.isArray(state.stats.daily.earnedBadges)
-        ? state.stats.daily.earnedBadges
-        : [],
-    },
-    practice: {
-      played: state.stats.practice.played,
-      won: state.stats.practice.won,
-      lost: state.stats.practice.lost,
-      guessDistribution: state.stats.practice.guessDistribution,
-    },
-    bookStats:
-      state.stats.bookStats &&
-        typeof state.stats.bookStats === "object" &&
-        !Array.isArray(state.stats.bookStats)
-        ? state.stats.bookStats
-        : {},
-  };
+  const payload = getSerializedStatsForSave();
+  state.stats = payload;
 
   try {
     localStorage.setItem(CONFIG.storageKeys.stats, JSON.stringify(payload));
@@ -2145,135 +2514,18 @@ function saveStats() {
 }
 
 function loadStats() {
-  const defaultDaily = {
-    played: 0,
-    won: 0,
-    lost: 0,
-    currentStreak: 0,
-    bestStreak: 0,
-    guessDistribution: {},
-    lastDailySolvedDate: null,
-    earnedBadges: [],
-  };
-
-  const defaultPractice = {
-    played: 0,
-    won: 0,
-    lost: 0,
-    guessDistribution: {},
-  };
-
-  const sanitizeGuessDistribution = (value) =>
-    value && typeof value === "object" && !Array.isArray(value) ? value : {};
-
-  const sanitizeNonNegativeInt = (value, fallback = 0) =>
-    Number.isInteger(value) && value >= 0 ? value : fallback;
-
-  const sanitizeBookStats = (value) => {
-    if (!value || typeof value !== "object" || Array.isArray(value)) return {};
-
-    const output = {};
-
-    Object.entries(value).forEach(([key, entry]) => {
-      if (!entry || typeof entry !== "object" || Array.isArray(entry)) return;
-
-      output[key] = {
-        plays: sanitizeNonNegativeInt(entry.plays),
-        solves: sanitizeNonNegativeInt(entry.solves),
-        bestAttempts:
-          Number.isInteger(entry.bestAttempts) && entry.bestAttempts > 0
-            ? entry.bestAttempts
-            : null,
-        totalAttempts: sanitizeNonNegativeInt(entry.totalAttempts),
-        lastSolvedDate:
-          typeof entry.lastSolvedDate === "string" || entry.lastSolvedDate === null
-            ? entry.lastSolvedDate
-            : null,
-      };
-    });
-
-    return output;
-  };
-
   try {
     const raw = localStorage.getItem(CONFIG.storageKeys.stats);
 
     if (!raw) {
-      state.stats = {
-        daily: defaultDaily,
-        practice: defaultPractice,
-        bookStats: {},
-      };
+      state.stats = createDefaultStatsState();
       return;
     }
 
     const saved = JSON.parse(raw);
-
-    const hasNestedShape =
-      saved?.daily &&
-      typeof saved.daily === "object" &&
-      saved?.practice &&
-      typeof saved.practice === "object";
-
-    if (hasNestedShape) {
-      state.stats = {
-        daily: {
-          played: sanitizeNonNegativeInt(saved.daily.played),
-          won: sanitizeNonNegativeInt(saved.daily.won),
-          lost: sanitizeNonNegativeInt(saved.daily.lost),
-          currentStreak: sanitizeNonNegativeInt(saved.daily.currentStreak),
-          bestStreak: sanitizeNonNegativeInt(saved.daily.bestStreak),
-          guessDistribution: sanitizeGuessDistribution(saved.daily.guessDistribution),
-          lastDailySolvedDate:
-            typeof saved.daily.lastDailySolvedDate === "string" ||
-              saved.daily.lastDailySolvedDate === null
-              ? saved.daily.lastDailySolvedDate
-              : null,
-          earnedBadges: Array.isArray(saved.daily.earnedBadges)
-            ? saved.daily.earnedBadges.filter((badgeId) =>
-              STREAK_BADGES.some((badge) => badge.id === badgeId),
-            )
-            : [],
-        },
-        practice: {
-          played: sanitizeNonNegativeInt(saved.practice.played),
-          won: sanitizeNonNegativeInt(saved.practice.won),
-          lost: sanitizeNonNegativeInt(saved.practice.lost),
-          guessDistribution: sanitizeGuessDistribution(saved.practice.guessDistribution),
-        },
-        bookStats: sanitizeBookStats(saved.bookStats),
-      };
-      return;
-    }
-
-    state.stats = {
-      daily: {
-        played: sanitizeNonNegativeInt(saved?.played),
-        won: sanitizeNonNegativeInt(saved?.won),
-        lost: sanitizeNonNegativeInt(saved?.lost),
-        currentStreak: sanitizeNonNegativeInt(saved?.currentStreak),
-        bestStreak: sanitizeNonNegativeInt(saved?.bestStreak),
-        guessDistribution: sanitizeGuessDistribution(saved?.guessDistribution),
-        lastDailySolvedDate:
-          typeof saved?.lastDailySolvedDate === "string" ||
-            saved?.lastDailySolvedDate === null
-            ? saved.lastDailySolvedDate
-            : null,
-        earnedBadges: Array.isArray(saved?.earnedBadges)
-          ? saved.earnedBadges.filter((badgeId) =>
-            STREAK_BADGES.some((badge) => badge.id === badgeId),
-          )
-          : [],
-      },
-      practice: defaultPractice,
-      bookStats: sanitizeBookStats(saved?.bookStats),
-    };
+    state.stats = migrateStatsShape(saved);
   } catch {
-    state.stats = {
-      daily: defaultDaily,
-      practice: defaultPractice,
-      bookStats: {},
-    };
+    state.stats = createDefaultStatsState();
   }
 }
 
@@ -2342,6 +2594,8 @@ function updateBookStats(outcome) {
 async function recordPuzzleCompletion(outcome) {
   if (!state.currentPuzzle) return;
 
+  state.stats = migrateStatsShape(state.stats);
+
   if (state.currentPuzzle.mode === "daily") {
     const completionDate = state.currentPuzzle.date;
     if (completionDate && hasRecordedDailyResult(completionDate)) return;
@@ -2381,6 +2635,7 @@ async function recordPuzzleCompletion(outcome) {
       }
     }
 
+    updateAchievementCountersForCompletion(outcome);
     updateBookStats(outcome);
     saveStats();
 
@@ -2407,6 +2662,7 @@ async function recordPuzzleCompletion(outcome) {
       state.stats.practice.lost += 1;
     }
 
+    updateAchievementCountersForCompletion(outcome);
     saveStats();
   }
 }
@@ -4359,6 +4615,14 @@ function renderPostGamePanel() {
   elements.postGameIntroText.textContent =
     content.introText || content.explanation || "";
 
+  if (elements.shareBtn) {
+    elements.shareBtn.textContent = "Share result";
+  }
+
+  if (elements.postGameCopyBtn) {
+    elements.postGameCopyBtn.textContent = "Share result";
+  }
+
   showWhen(elements.postGameNextBtn, state.mode === "practice");
   showWhen(elements.postGamePracticeBtn, state.mode === "daily");
 
@@ -4681,33 +4945,55 @@ function buildShareSummary() {
 
 function buildShareText() {
   const solved = state.status === "won";
-  const guessWord = state.guesses.length === 1 ? "guess" : "guesses";
+  const lost = state.status === "lost";
+  const guessCount = state.guesses.length;
+  const guessWord = guessCount === 1 ? "guess" : "guesses";
   const modeLabel = state.mode === "daily" ? "Daily" : "Practice";
   const difficultyLabel =
     typeof state.preferences?.difficulty === "string"
       ? state.preferences.difficulty.charAt(0).toUpperCase() + state.preferences.difficulty.slice(1)
       : "Normal";
-  const currentStreak = Number.isFinite(state.stats?.daily.currentStreak) ? state.stats.daily.currentStreak : 0;
+  const currentStreak =
+    Number.isFinite(state.stats?.daily?.currentStreak) ? state.stats.daily.currentStreak : 0;
   const streakLine =
     state.mode === "daily" && currentStreak > 0
-      ? `Streak: ${currentStreak} day${currentStreak === 1 ? "" : "s 🔥"}\n`
+      ? `Streak: ${currentStreak} day${currentStreak === 1 ? "" : "s"} 🔥\n`
       : "";
+  const puzzleLabel =
+    state.mode === "daily"
+      ? state.currentPuzzle?.date || getTodayPuzzleDate()
+      : "practice";
+  const resultLabel = solved ? "Solved" : lost ? "Lost" : "In progress";
+  const summary = buildShareSummary();
 
   return `✝️ Catholic Bibdle ✝️
-${state.mode === "daily" ? state.currentPuzzle.date : "practice"}
-${solved ? "Solved" : state.status === "lost" ? "Lost" : "In progress"} in ${state.guesses.length} ${guessWord}
+${modeLabel} · ${puzzleLabel}
+${resultLabel} in ${guessCount} ${guessWord}
 ${difficultyLabel} mode
-${streakLine}
-${buildShareSummary()}
+${streakLine}${summary}
 Play: https://dvndmy.github.io/BIBDLE`;
 }
 
 async function copyResult() {
-  try {
-    await navigator.clipboard.writeText(buildShareText());
-    renderStatus("Result copied to clipboard.");
-  } catch {
-    renderStatus("Clipboard access is unavailable in this browser.");
+  return fallbackCopyText(buildShareText(), {
+    copiedMessage: "Result copied to clipboard.",
+    unavailableMessage: "Clipboard access is unavailable in this browser.",
+  });
+}
+
+function bindShareActions() {
+  if (elements.shareBtn && elements.shareBtn.dataset.shareBound !== "true") {
+    elements.shareBtn.dataset.shareBound = "true";
+    elements.shareBtn.addEventListener("click", () => {
+      shareResult();
+    });
+  }
+
+  if (elements.postGameCopyBtn && elements.postGameCopyBtn.dataset.shareBound !== "true") {
+    elements.postGameCopyBtn.dataset.shareBound = "true";
+    elements.postGameCopyBtn.addEventListener("click", () => {
+      shareResult();
+    });
   }
 }
 
@@ -5542,6 +5828,14 @@ function initGame() {
   if (restored) {
     renderStatus("Progress restored.");
   }
+
+  bindShareActions();
+if (elements.shareBtn) {
+  elements.shareBtn.textContent = "Share result";
+}
+if (elements.postGameCopyBtn) {
+  elements.postGameCopyBtn.textContent = "Share result";
+}
 
   publishBootSnapshot({
     progressRestored: restored,
