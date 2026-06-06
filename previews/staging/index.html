@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Catholic Bibdle</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500;600;700;800&family=Noto+Sans+Malayalam:wght@400;500;600;700;800&display=swap"
+    rel="stylesheet" />
+  <link rel="stylesheet" href="./css/bibdle.css" />
+</head>
+
+<body>
+  <a class="sr-only" href="#game">Skip to game</a>
+
+  <main class="app-shell" id="appShell">
+    <section class="panel" aria-label="Catholic Bibdle game">
+      <div class="topbar">
+        <div class="topbar-toolbar" aria-label="Game toolbar">
+          <div class="topbar-row topbar-row--utilities">
+            <div class="topbar-group topbar-group--icon-tools" aria-label="Quick utility controls">
+              <button class="pill-btn topbar-icon-btn" type="button" id="settingsBtn" aria-label="Open settings"
+                title="Settings">
+                <span class="topbar-icon-btn__icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+                    stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="3.2"></circle>
+                    <path
+                      d="M19.4 15a1 1 0 0 0 .2 1.1l.1.1a2 2 0 0 1 0 2.8 2 2 0 0 1-2.8 0l-.1-.1a1 1 0 0 0-1.1-.2 1 1 0 0 0-.6.9V20a2 2 0 0 1-4 0v-.2a1 1 0 0 0-.7-.9 1 1 0 0 0-1.1.2l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1 1 0 0 0 .2-1.1 1 1 0 0 0-.9-.6H4a2 2 0 0 1 0-4h.2a1 1 0 0 0 .9-.7 1 1 0 0 0-.2-1.1l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1 1 0 0 0 1.1.2h.1a1 1 0 0 0 .6-.9V4a2 2 0 0 1 4 0v.2a1 1 0 0 0 .7.9 1 1 0 0 0 1.1-.2l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1 1 0 0 0-.2 1.1v.1a1 1 0 0 0 .9.6H20a2 2 0 0 1 0 4h-.2a1 1 0 0 0-.9.7Z">
+                    </path>
+                  </svg>
+                </span>
+                <span class="sr-only">Settings</span>
+              </button>
+
+              <button type="button" class="pill-btn topbar-icon-btn" id="mobileLanguageToggle"
+                aria-label="Switch language to Malayalam" title="Switch language">
+                <span class="topbar-icon-btn__icon topbar-language-glyph" id="mobileLanguageGlyph"
+                  aria-hidden="true">അ</span>
+                <span class="sr-only">Language</span>
+              </button>
+
+              <button class="theme-toggle topbar-icon-btn" type="button" data-theme-toggle id="themeToggle"
+                aria-label="Switch theme" title="Theme">
+                <span class="topbar-icon-btn__icon" aria-hidden="true">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                  </svg>
+                </span>
+                <span class="sr-only">Theme</span>
+              </button>
+            </div>
+
+            <div class="topbar-group topbar-group--selectors" aria-label="Puzzle preferences">
+              <div class="control-group control-group--toolbar">
+                <label for="modeSelect" class="subtle-label">Mode</label>
+                <select id="modeSelect" class="control-select" aria-label="Select puzzle mode">
+                  <option value="daily">Daily</option>
+                  <option value="practice">Practice</option>
+                </select>
+              </div>
+
+              <div class="control-group control-group--toolbar">
+                <label for="difficultySelect" class="subtle-label">Difficulty</label>
+                <select id="difficultySelect" class="control-select" aria-label="Select difficulty">
+                  <option value="normal">Normal</option>
+                  <option value="easy">Easy</option>
+                  <option value="hard">Hard</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div class="topbar-row topbar-row--account">
+            <div class="auth-controls auth-controls--toolbar" id="authControls" aria-label="Sign-in controls">
+              <button type="button" class="pill-btn" id="signInBtn">Sign in</button>
+              <button type="button" class="pill-btn" id="signOutBtn" hidden>Sign out</button>
+              <span class="auth-status" id="authStatus">Playing anonymously</span>
+            </div>
+
+            <div class="topbar-language-select sr-only" aria-hidden="true">
+              <label for="languageSelect">Language</label>
+              <select id="languageSelect" class="control-select language-select"
+                aria-label="Select book and verse language">
+                <option value="en">English</option>
+                <option value="ml">Malayalam</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <header class="title-wrap">
+        <div class="logo-row" aria-label="Bibdle logo">
+          <h1 class="wordmark">Catholic Bibdle</h1>
+        </div>
+        <p class="date-label" id="dateLabel">Bible book puzzle</p>
+        <p class="date-label countdown-label" aria-live="polite" aria-atomic="true">
+          <span id="countdownTimer">Next puzzle in…</span>
+        </p>
+      </header>
+
+      <section class="verse-card" aria-live="polite">
+        <p class="verse-text" id="verseText"></p>
+      </section>
+
+      <section class="controls" aria-label="Guess area">
+        <div id="preGuessPanel">
+          <div class="attempt-line">
+            <p class="subtle-label" id="attemptLabel">You guessed it!</p>
+            <div class="helper clue-feed clue-feed--compact" id="hintBlock" aria-live="polite" aria-atomic="false">
+            </div>
+          </div>
+
+          <form class="input-shell" id="guessForm" autocomplete="off">
+            <svg class="input-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2" aria-hidden="true">
+              <circle cx="11" cy="11" r="7"></circle>
+              <path d="m20 20-3.5-3.5"></path>
+            </svg>
+            <label for="guessInput" class="sr-only">Guess a Bible book</label>
+            <input id="guessInput" class="guess-input" type="text"
+              placeholder="Type to guess a Bible book (e.g. 'Tobit', 'John')..." aria-describedby="statusLine"
+              role="combobox" aria-autocomplete="list" aria-haspopup="listbox" aria-controls="autocomplete"
+              aria-expanded="false" aria-activedescendant="" />
+            <div class="autocomplete-list" id="autocomplete" role="listbox" aria-label="Book suggestions"></div>
+          </form>
+        </div>
+        <div class="header-row" aria-hidden="true">
+          <div>Testament</div>
+          <div>Section</div>
+          <div>First Letter</div>
+          <div>Book</div>
+        </div>
+
+        <div id="guessRows"></div>
+        <p class="status-line" id="statusLine" role="status" aria-live="polite"></p>
+
+        <div class="controls-panel controls-panel--secondary" aria-label="Game actions">
+          <div class="controls-cluster controls-cluster--results" aria-label="Result actions">
+            <div class="pill-actions pill-actions--primary">
+              <button type="button" class="pill-btn" id="shareBtn">Copy result</button>
+              <button type="button" class="pill-btn primary" id="tryPracticeBtn" hidden>Try practice round</button>
+              <button type="button" class="pill-btn primary" id="todayBibdleBtn" hidden>Try today’s Bibdle</button>
+              <button type="button" class="pill-btn primary" id="nextPracticeBtn" hidden>Next practice puzzle</button>
+            </div>
+          </div>
+
+          <div class="controls-cluster controls-cluster--browse" aria-label="Reference and progress actions">
+            <div class="pill-actions pill-actions--secondary">
+              <button type="button" class="pill-btn" id="statsBtn">See stats</button>
+              <button type="button" class="pill-btn" id="archiveBtn">Progress</button>
+              <button type="button" class="pill-btn" id="leaderboardBtn">Leaderboard</button>
+              <button type="button" class="pill-btn" id="helpBtn">How to play</button>
+            </div>
+          </div>
+        </div>
+
+        <p class="footer-note">A Wordle-style game that asks you to identify the Bible book from its verse, testament,
+          section, and first-letter clues. Inspired from Bibdle by George Powell & Silent Summit Co.</p>
+      </section>
+    </section>
+  </main>
+
+  <div class="modal-backdrop" id="helpModal" data-open="false" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="helpTitle" tabindex="-1">
+      <section class="section-shell modal-section modal-layout modal-system">
+        <div class="section-shell__header modal-layout__header modal-system__header">
+          <button type="button" class="modal-close-icon-btn" data-modal-close="help" aria-label="Close help modal"
+            title="Close">
+            <span aria-hidden="true">×</span>
+          </button>
+          <h2 id="helpTitle" class="section-shell__title">How to play</h2>
+          <p class="section-shell__meta">Guess the Bible book from the verse. You have 8 guesses in every difficulty.
+          </p>
+        </div>
+
+        <div class="section-shell__body modal-layout__body modal-system__body">
+          <section class="section-shell section-shell--nested modal-block modal-system__block"
+            aria-label="How guessing works">
+            <div class="section-shell__header modal-system__block-header">
+              <p class="subtle-label section-shell__meta">Gameplay</p>
+            </div>
+            <div class="section-shell__body modal-system__block-body">
+              <div class="rules">
+                <article class="rule-card">
+                  <h3>Guess books</h3>
+                  <p>Enter a Catholic Bible book name and submit your guess. Each guess is checked against the hidden
+                    answer.</p>
+                </article>
+                <article class="rule-card">
+                  <h3>Read the tiles</h3>
+                  <p>The row shows feedback for Testament, Section, First Letter, and Book. Use the colors to narrow the
+                    answer.</p>
+                </article>
+                <article class="rule-card">
+                  <h3>Watch the clue pills</h3>
+                  <p>New clues appear above the input as you play. Locked clue icons show future clues and the guess
+                    number when they unlock.</p>
+                </article>
+              </div>
+            </div>
+          </section>
+
+          <details class="expander expander--subtle modal-block modal-system__block">
+            <summary class="expander__summary">
+              <span class="expander__summary-text">
+                <span class="expander__title">Feedback colors</span>
+                <span class="expander__meta">Expand to see what each color means.</span>
+              </span>
+              <svg class="expander__icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"
+                aria-hidden="true">
+                <path d="M5 3.5 10 8l-5 4.5"></path>
+              </svg>
+            </summary>
+            <div class="expander__body">
+              <div class="rules">
+                <article class="rule-card">
+                  <h3>Green</h3>
+                  <p>The clue matches the answer exactly.</p>
+                </article>
+                <article class="rule-card">
+                  <h3>Gold</h3>
+                  <p>The clue is close but not exact. For the Book tile, gold means your guess is close in canon order.
+                  </p>
+                </article>
+                <article class="rule-card">
+                  <h3>Red</h3>
+                  <p>The clue does not match the answer.</p>
+                </article>
+              </div>
+            </div>
+          </details>
+
+          <details class="expander expander--subtle modal-block modal-system__block">
+            <summary class="expander__summary">
+              <span class="expander__summary-text">
+                <span class="expander__title">Clues and difficulty</span>
+                <span class="expander__meta">Expand to see when each clue appears.</span>
+              </span>
+              <svg class="expander__icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"
+                aria-hidden="true">
+                <path d="M5 3.5 10 8l-5 4.5"></path>
+              </svg>
+            </summary>
+            <div class="expander__body">
+              <div class="rules">
+                <article class="rule-card">
+                  <h3>Easy</h3>
+                  <p>Testament after guess 1, nearest distance after guess 1, Section after guess 3, Reference after
+                    guess 4, First Letter after guess 6.</p>
+                </article>
+                <article class="rule-card">
+                  <h3>Normal</h3>
+                  <p>Testament after guess 1, Section and nearest distance after guess 3, Reference after guess 4, First
+                    Letter after guess 7.</p>
+                </article>
+                <article class="rule-card">
+                  <h3>Hard</h3>
+                  <p>Testament after guess 1, Reference after guess 3, Section after guess 5, First Letter after guess
+                    7. Distance only unlocks after you earn a gold Book tile.</p>
+                </article>
+              </div>
+            </div>
+          </details>
+
+          <details class="expander expander--subtle modal-block modal-system__block">
+            <summary class="expander__summary">
+              <span class="expander__summary-text">
+                <span class="expander__title">Extra clue rules</span>
+                <span class="expander__meta">Expand to see how early clue reveals work.</span>
+              </span>
+              <svg class="expander__icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"
+                aria-hidden="true">
+                <path d="M5 3.5 10 8l-5 4.5"></path>
+              </svg>
+            </summary>
+            <div class="expander__body">
+              <div class="rules">
+                <article class="rule-card">
+                  <h3>Exact distance</h3>
+                  <p>When distance is unlocked, it tells you how many books away your nearest guess is from the correct
+                    book.</p>
+                </article>
+                <article class="rule-card">
+                  <h3>Earlier clue reveals</h3>
+                  <p>If you already identify the Section or First Letter from your guesses, that clue can appear early
+                    instead of waiting.</p>
+                </article>
+                <article class="rule-card">
+                  <h3>Modes</h3>
+                  <p>Daily mode tracks streaks and leaderboard progress. Practice mode lets you keep playing without
+                    streak pressure.</p>
+                </article>
+              </div>
+            </div>
+          </details>
+        </div>
+
+        <div class="section-shell__footer modal-layout__footer modal-actions-end modal-system__footer">
+          <button type="button" class="pill-btn primary" id="closeHelpBtn">Close</button>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="archiveModal" data-open="false" aria-hidden="true">
+    <div class="modal archive-modal" role="dialog" aria-modal="true" aria-labelledby="archiveTitle" tabindex="-1">
+      <section class="section-shell modal-section modal-layout modal-system">
+        <div class="section-shell__header modal-layout__header modal-system__header">
+          <button type="button" class="modal-close-icon-btn" data-modal-close="archive"
+            aria-label="Close progress modal" title="Close">
+            <span aria-hidden="true">×</span>
+          </button>
+          <h2 id="archiveTitle" class="section-shell__title">Progress map</h2>
+          <p class="section-shell__meta">Review canon coverage, solved books, and Daily-mode book performance.</p>
+        </div>
+
+        <div class="section-shell__body modal-layout__body modal-system__body">
+          <section class="section-shell section-shell--nested modal-block modal-system__block"
+            aria-label="Archive summary">
+            <div class="section-shell__header modal-system__block-header">
+              <p class="subtle-label section-shell__meta">Overview</p>
+            </div>
+            <div class="section-shell__body modal-system__block-body">
+              <div class="archive-summary" id="archiveSummary"></div>
+            </div>
+          </section>
+
+          <section class="section-shell section-shell--nested modal-block modal-system__block"
+            aria-label="Archive map by canonical order">
+            <div class="section-shell__header modal-system__block-header">
+              <p class="subtle-label section-shell__meta">Bible archive map</p>
+            </div>
+            <div class="section-shell__body modal-system__block-body">
+              <div class="archive-grid" id="archiveGrid" role="list" aria-label="Bible archive map by canonical order">
+              </div>
+            </div>
+          </section>
+
+          <section class="section-shell section-shell--nested modal-block modal-system__block"
+            aria-label="Archive details panel">
+            <div class="section-shell__header modal-system__block-header">
+              <p class="subtle-label section-shell__meta">Book details</p>
+            </div>
+            <div class="section-shell__body modal-system__block-body">
+              <div class="archive-details" id="archiveDetails" aria-live="polite" aria-atomic="true"></div>
+            </div>
+          </section>
+        </div>
+
+        <div class="section-shell__footer modal-layout__footer modal-actions-end modal-system__footer">
+          <button type="button" class="pill-btn primary" id="closeArchiveBtn">Close</button>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="settingsModal" data-open="false" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="settingsTitle" tabindex="-1">
+      <section class="section-shell modal-section modal-layout modal-system">
+        <div class="section-shell__header modal-layout__header modal-system__header">
+          <button type="button" class="modal-close-icon-btn" data-modal-close="settings"
+            aria-label="Close settings modal" title="Close">
+            <span aria-hidden="true">×</span>
+          </button>
+          <h2 id="settingsTitle" class="section-shell__title">Accessibility settings</h2>
+          <p class="section-shell__meta">Adjust visual and motion preferences. Changes apply immediately.</p>
+        </div>
+
+        <div class="section-shell__body modal-layout__body modal-system__body">
+          <section class="section-shell section-shell--nested modal-block modal-system__block"
+            aria-label="Accessibility options">
+            <div class="section-shell__header modal-system__block-header">
+              <p class="subtle-label section-shell__meta">Preferences</p>
+            </div>
+            <div class="section-shell__body modal-system__block-body">
+              <div class="settings-list">
+                <label class="settings-row" for="reducedMotionToggle">
+                  <span>Reduced motion</span>
+                  <input type="checkbox" id="reducedMotionToggle" />
+                </label>
+
+                <label class="settings-row" for="highContrastToggle">
+                  <span>High contrast</span>
+                  <input type="checkbox" id="highContrastToggle" />
+                </label>
+
+                <label class="settings-row" for="largeTextToggle">
+                  <span>Larger text</span>
+                  <input type="checkbox" id="largeTextToggle" />
+                </label>
+
+                <label class="settings-row" for="soundToggle">
+                  <span>Sound</span>
+                  <input type="checkbox" id="soundToggle" />
+                </label>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <div class="section-shell__footer modal-layout__footer modal-actions-end modal-system__footer">
+          <button type="button" class="pill-btn primary" id="closeSettingsBtn">Close</button>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="statsModal" data-open="false" aria-hidden="true">
+    <div class="modal postgame-modal" role="dialog" aria-modal="true" aria-labelledby="statsTitle"
+      aria-describedby="statsBody" tabindex="-1">
+      <div class="section-shell modal-section modal-layout modal-system">
+        <div class="section-shell__header modal-layout__header modal-system__header">
+          <button type="button" class="modal-close-icon-btn" data-modal-close="stats" aria-label="Close stats modal"
+            title="Close">
+            <span aria-hidden="true">×</span>
+          </button>
+          <h2 id="statsTitle" class="section-shell__title">Historical stats</h2>
+          <p class="section-shell__meta">Track Daily and Practice performance, including streaks and guess distribution.
+          </p>
+        </div>
+
+        <div class="section-shell__body postgame-body modal-layout__body modal-system__body" id="statsBody">
+          <section
+            class="postgame-section stats-section section-shell section-shell--nested modal-block modal-system__block"
+            aria-label="Historical stats">
+            <div class="section-shell__header modal-system__block-header">
+              <p class="subtle-label section-shell__meta">Daily mode</p>
+            </div>
+
+            <div class="section-shell__body modal-system__block-body">
+              <div class="stats-grid">
+                <div class="stat-item">
+                  <span class="stat-value" id="statsPlayed">0</span>
+                  <span class="stat-label">Played</span>
+                </div>
+                <div class="stat-item">
+                  <span class="stat-value" id="statsWon">0</span>
+                  <span class="stat-label">Won</span>
+                </div>
+                <div class="stat-item">
+                  <span class="stat-value" id="statsLost">0</span>
+                  <span class="stat-label">Lost</span>
+                </div>
+              </div>
+
+              <div class="stats-grid stats-grid-secondary">
+                <div class="stat-item">
+                  <span class="stat-value" id="statsCurrentStreak">0</span>
+                  <span class="stat-label">Current streak</span>
+                </div>
+                <div class="stat-item">
+                  <span class="stat-value" id="statsBestStreak">0</span>
+                  <span class="stat-label">Best streak</span>
+                </div>
+              </div>
+
+              <div class="guess-distribution" id="statsGuessDistribution" aria-label="Guess distribution"></div>
+            </div>
+          </section>
+
+          <details class="expander expander--subtle modal-block modal-system__block">
+            <summary class="expander__summary">
+              <span class="expander__summary-text">
+                <span class="expander__title">Badges</span>
+                <span class="expander__meta">Review Daily streak badge progress.</span>
+              </span>
+              <svg class="expander__icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"
+                aria-hidden="true">
+                <path d="M5 3.5 10 8l-5 4.5"></path>
+              </svg>
+            </summary>
+            <div class="expander__body">
+              <div class="streak-badges badge-group" id="statsModalBadges"></div>
+            </div>
+          </details>
+
+          <details class="expander expander--subtle modal-block modal-system__block">
+            <summary class="expander__summary">
+              <span class="expander__summary-text">
+                <span class="expander__title">Practice mode</span>
+                <span class="expander__meta">Expand to view Practice history and guess distribution.</span>
+              </span>
+              <svg class="expander__icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"
+                aria-hidden="true">
+                <path d="M5 3.5 10 8l-5 4.5"></path>
+              </svg>
+            </summary>
+            <div class="expander__body">
+              <div class="stats-grid">
+                <div class="stat-item">
+                  <span class="stat-value" id="practiceStatsPlayed">0</span>
+                  <span class="stat-label">Played</span>
+                </div>
+                <div class="stat-item">
+                  <span class="stat-value" id="practiceStatsWon">0</span>
+                  <span class="stat-label">Won</span>
+                </div>
+                <div class="stat-item">
+                  <span class="stat-value" id="practiceStatsLost">0</span>
+                  <span class="stat-label">Lost</span>
+                </div>
+              </div>
+
+              <div class="guess-distribution" id="practiceStatsGuessDistribution"
+                aria-label="Practice guess distribution"></div>
+            </div>
+          </details>
+        </div>
+
+        <div class="section-shell__footer modal-layout__footer postgame-actions modal-system__footer">
+          <button type="button" class="pill-btn primary" id="closeStatsBtn">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="leaderboardModal" data-open="false" aria-hidden="true">
+    <div class="modal leaderboard-modal" role="dialog" aria-modal="true" aria-labelledby="leaderboardTitle"
+      tabindex="-1">
+      <section class="section-shell modal-section modal-layout modal-system">
+        <div class="section-shell__header modal-layout__header modal-system__header">
+          <button type="button" class="modal-close-icon-btn" data-modal-close="leaderboard"
+            aria-label="Close leaderboard modal" title="Close">
+            <span aria-hidden="true">×</span>
+          </button>
+          <h2 id="leaderboardTitle" class="section-shell__title">Global daily stats</h2>
+          <p class="section-shell__meta">See today’s worldwide Daily puzzle activity and your current placement.</p>
+        </div>
+
+        <div class="section-shell__body modal-layout__body modal-system__body">
+          <section class="section-shell section-shell--nested modal-block modal-system__block"
+            aria-label="Leaderboard summary">
+            <div class="section-shell__header modal-system__block-header">
+              <p class="subtle-label section-shell__meta">Daily overview</p>
+            </div>
+            <div class="section-shell__body modal-system__block-body">
+              <div class="leaderboard-summary" id="leaderboardSummary"></div>
+            </div>
+          </section>
+
+          <section class="section-shell section-shell--nested modal-block modal-system__block"
+            aria-label="Leaderboard standings">
+            <div class="section-shell__header modal-system__block-header">
+              <p class="subtle-label section-shell__meta">Top daily scores</p>
+            </div>
+            <div class="section-shell__body modal-system__block-body">
+              <div class="leaderboard-list" id="leaderboardList"></div>
+            </div>
+          </section>
+
+          <section class="section-shell section-shell--nested modal-block modal-system__block"
+            aria-label="Your placement">
+            <div class="section-shell__header modal-system__block-header">
+              <p class="subtle-label section-shell__meta">Your placement</p>
+            </div>
+            <div class="section-shell__body modal-system__block-body">
+              <div class="leaderboard-user-rank" id="leaderboardUserRank"></div>
+            </div>
+          </section>
+        </div>
+
+        <div class="section-shell__footer modal-layout__footer modal-actions-end modal-system__footer">
+          <button type="button" class="pill-btn primary" id="closeLeaderboardBtn">Close</button>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <div class="modal-backdrop postgame-backdrop" id="postGameModal" data-open="false" aria-hidden="true">
+    <div class="modal postgame-modal" role="dialog" aria-modal="true" aria-labelledby="postGameTitle"
+      aria-describedby="postGameBody" tabindex="-1">
+      <div class="section-shell modal-section modal-layout modal-system">
+        <div class="section-shell__header modal-layout__header modal-system__header">
+          <button type="button" class="modal-close-icon-btn" data-modal-close="postGame" aria-label="Close result modal"
+            title="Close">
+            <span aria-hidden="true">×</span>
+          </button>
+          <div class="postgame-badge" id="postGameBadge">Puzzle complete</div>
+          <h2 id="postGameTitle" class="section-shell__title">Result</h2>
+        </div>
+
+        <div class="section-shell__body postgame-body modal-layout__body modal-system__body" id="postGameBody">
+          <section class="postgame-section section-shell section-shell--nested modal-block modal-system__block">
+            <div class="section-shell__header modal-system__block-header">
+              <p class="subtle-label section-shell__meta">Answer</p>
+            </div>
+            <div class="section-shell__body modal-system__block-body">
+              <p class="postgame-reference" id="postGameReference"></p>
+              <p class="postgame-book" id="postGameBook"></p>
+            </div>
+          </section>
+
+          <section class="postgame-section section-shell section-shell--nested modal-block modal-system__block">
+            <div class="section-shell__header modal-system__block-header">
+              <p class="subtle-label section-shell__meta">Verse</p>
+            </div>
+            <div class="section-shell__body modal-system__block-body">
+              <p class="postgame-text" id="postGameVerse"></p>
+            </div>
+          </section>
+
+          <section
+            class="postgame-section stats-section section-shell section-shell--nested modal-block modal-system__block"
+            id="postGameLeaderboardSection" aria-label="Leaderboard placement">
+            <div class="section-shell__header modal-system__block-header">
+              <p class="subtle-label section-shell__meta">Today’s leaderboard</p>
+            </div>
+            <div class="section-shell__body modal-system__block-body">
+              <div class="leaderboard-user-rank leaderboard-user-rank-inline" id="postGameLeaderboardRank"></div>
+            </div>
+            <div class="section-shell__footer modal-actions-end modal-system__block-footer">
+              <button type="button" class="pill-btn" id="postGameCopyBtn">Copy result</button>
+              <button type="button" class="pill-btn" id="postGameLeaderboardBtn">Open leaderboard</button>
+            </div>
+          </section>
+
+          <section class="postgame-section section-shell section-shell--nested modal-block modal-system__block">
+            <div class="section-shell__header modal-system__block-header">
+              <p class="subtle-label section-shell__meta">Book intro</p>
+            </div>
+            <div class="section-shell__body modal-system__block-body">
+              <p class="postgame-intro-title" id="postGameIntroTitle"></p>
+              <p class="postgame-text" id="postGameIntroText"></p>
+            </div>
+          </section>
+
+          <section
+            class="postgame-section trivia-section section-shell section-shell--nested modal-block modal-system__block"
+            id="postGameTriviaSection" hidden>
+            <div class="section-shell__header modal-system__block-header">
+              <p class="subtle-label section-shell__meta">Book trivia</p>
+              <p class="postgame-intro-title section-shell__title-sm" id="postGameTriviaTitle"></p>
+            </div>
+            <div class="section-shell__body modal-system__block-body">
+              <p class="postgame-text" id="postGameTriviaText"></p>
+              <div class="postgame-meta-chips" id="postGameTriviaChips"></div>
+            </div>
+          </section>
+
+          <section
+            class="postgame-section stats-section section-shell section-shell--nested modal-block modal-system__block"
+            aria-label="Mode stats">
+            <div class="section-shell__header modal-system__block-header">
+              <p class="subtle-label section-shell__meta" id="postGameStatsLabel">Stats</p>
+            </div>
+
+            <div class="section-shell__body modal-system__block-body">
+              <div class="stats-grid" id="postGameStatsGridPrimary">
+                <div class="stat-item">
+                  <span class="stat-value" id="postGameStatsPlayed">0</span>
+                  <span class="stat-label">Played</span>
+                </div>
+                <div class="stat-item">
+                  <span class="stat-value" id="postGameStatsWon">0</span>
+                  <span class="stat-label">Won</span>
+                </div>
+                <div class="stat-item">
+                  <span class="stat-value" id="postGameStatsLost">0</span>
+                  <span class="stat-label">Lost</span>
+                </div>
+              </div>
+
+              <div class="stats-grid stats-grid-secondary" id="postGameStatsGridSecondary">
+                <div class="stat-item" id="postGameCurrentStreakItem">
+                  <span class="stat-value" id="postGameStatsCurrentStreak">0</span>
+                  <span class="stat-label">Current streak</span>
+                </div>
+                <div class="stat-item" id="postGameBestStreakItem">
+                  <span class="stat-value" id="postGameStatsBestStreak">0</span>
+                  <span class="stat-label">Best streak</span>
+                </div>
+              </div>
+
+              <div class="guess-distribution" id="postGameGuessDistribution" aria-label="Guess distribution"></div>
+            </div>
+          </section>
+        </div>
+
+        <div class="section-shell__footer modal-layout__footer postgame-actions modal-system__footer">
+          <button type="button" class="pill-btn" id="postGameCloseBtn">Close</button>
+          <button type="button" class="pill-btn primary" id="postGameNextBtn" hidden>Next practice puzzle</button>
+          <button type="button" class="pill-btn primary" id="postGamePracticeBtn" hidden>Try practice round</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="./js/bibdle.js"></script>
+</body>
+
+</html>
