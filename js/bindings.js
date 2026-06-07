@@ -117,13 +117,23 @@ export function createBindings({
             return;
         }
 
-        if (closest(target, "#postGameCopyBtn")) {
-            handlers.shareResult();
+        if (closest(target, "#postGameCopyOnlyBtn")) {
+            handlers.copyResult();
             return;
         }
 
         if (closest(target, "#shareBtn")) {
             handlers.shareResult();
+            return;
+        }
+
+        if (closest(target, "#postGameShareBtn")) {
+            handlers.shareResult();
+            return;
+        }
+
+        if (closest(target, "#copyBtn")) {
+            handlers.copyResult();
             return;
         }
 
