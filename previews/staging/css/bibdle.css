@@ -619,6 +619,12 @@ input::placeholder {
     order: 2;
 }
 
+#copyBtn[hidden],
+#postGameCopyOnlyBtn[hidden],
+#postGameShareBtn[hidden] {
+  display: none !important;
+}
+
 .modal-system {
     gap: var(--section-gap-md);
 }
