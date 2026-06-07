@@ -132,14 +132,361 @@ let modalService = null;
 let bindings = null;
 let authUnsubscribe = null;
 
-const STREAK_BADGES = [
-  { id: "streak-3", threshold: 3, label: "3-Day Streak" },
-  { id: "streak-7", threshold: 7, label: "7-Day Streak" },
-  { id: "streak-14", threshold: 14, label: "14-Day Streak" },
-  { id: "streak-30", threshold: 30, label: "30-Day Streak" },
+const STATS_SCHEMA_VERSION = 2;
+
+const ACHIEVEMENT_CATEGORIES = {
+  streak: "streak",
+  accuracy: "accuracy",
+  bibleKnowledge: "bible-knowledge",
+  rare: "rare",
+};
+
+const ACHIEVEMENT_GROUPS = {
+  streak: "streak",
+  accuracy: "accuracy",
+  oldTestamentKnowledge: "old-testament-knowledge",
+  newTestamentKnowledge: "new-testament-knowledge",
+  rare: "rare",
+  meta: "meta",
+};
+
+const BOOK_GROUP_KEYS = {
+  PENTATEUCH: "pentateuch",
+  HISTORICAL: "historical-books",
+  WISDOM: "wisdom-books",
+  MAJOR_PROPHETS: "major-prophets",
+  MINOR_PROPHETS: "minor-prophets",
+  GOSPELS: "gospels",
+  PAULINE_EPISTLES: "pauline-epistles",
+  GENERAL_EPISTLES: "general-epistles",
+  OLD_TESTAMENT_ALL: "old-testament-all",
+  NEW_TESTAMENT_ALL: "new-testament-all",
+};
+
+const ACHIEVEMENTS = [
+  {
+    id: "first-step",
+    label: "First Step",
+    category: ACHIEVEMENT_CATEGORIES.streak,
+    group: ACHIEVEMENT_GROUPS.streak,
+    family: "streak",
+    description: "Get 1 verse correct.",
+    kind: "total-correct",
+    threshold: 1,
+    imageKey: "first-step",
+  },
+  {
+    id: "daily-bread",
+    label: "Daily Bread",
+    category: ACHIEVEMENT_CATEGORIES.streak,
+    group: ACHIEVEMENT_GROUPS.streak,
+    family: "streak",
+    description: "Get 3 correct days in a row.",
+    kind: "daily-streak",
+    threshold: 3,
+    imageKey: "daily-bread",
+  },
+  {
+    id: "faithful-reader",
+    label: "Faithful Reader",
+    category: ACHIEVEMENT_CATEGORIES.streak,
+    group: ACHIEVEMENT_GROUPS.streak,
+    family: "streak",
+    description: "Reach a 7-day streak.",
+    kind: "daily-streak",
+    threshold: 7,
+    imageKey: "faithful-reader",
+  },
+  {
+    id: "forty-days",
+    label: "Forty Days in the Wilderness",
+    category: ACHIEVEMENT_CATEGORIES.streak,
+    group: ACHIEVEMENT_GROUPS.streak,
+    family: "streak",
+    description: "Reach a 40-day streak.",
+    kind: "daily-streak",
+    threshold: 40,
+    imageKey: "forty-days",
+  },
+  {
+    id: "year-of-wisdom",
+    label: "Year of Wisdom",
+    category: ACHIEVEMENT_CATEGORIES.streak,
+    group: ACHIEVEMENT_GROUPS.streak,
+    family: "streak",
+    description: "Reach a 365-day streak.",
+    kind: "daily-streak",
+    threshold: 365,
+    imageKey: "year-of-wisdom",
+  },
+  {
+    id: "davids-aim",
+    label: "David's Aim",
+    category: ACHIEVEMENT_CATEGORIES.accuracy,
+    group: ACHIEVEMENT_GROUPS.accuracy,
+    family: "accuracy",
+    description: "Guess the correct book on the first try.",
+    kind: "first-try-total",
+    threshold: 1,
+    imageKey: "davids-aim",
+  },
+  {
+    id: "sharp-as-a-sword",
+    label: "Sharp as a Sword",
+    category: ACHIEVEMENT_CATEGORIES.accuracy,
+    group: ACHIEVEMENT_GROUPS.accuracy,
+    family: "accuracy",
+    description: "Get 5 first-try correct answers.",
+    kind: "first-try-total",
+    threshold: 5,
+    imageKey: "sharp-as-a-sword",
+  },
+  {
+    id: "prophet-level-accuracy",
+    label: "Prophet-Level Accuracy",
+    category: ACHIEVEMENT_CATEGORIES.accuracy,
+    group: ACHIEVEMENT_GROUPS.accuracy,
+    family: "accuracy",
+    description: "Get 25 first-try correct answers.",
+    kind: "first-try-total",
+    threshold: 25,
+    imageKey: "prophet-level-accuracy",
+  },
+  {
+    id: "unshaken",
+    label: "Unshaken",
+    category: ACHIEVEMENT_CATEGORIES.accuracy,
+    group: ACHIEVEMENT_GROUPS.accuracy,
+    family: "accuracy",
+    description: "Get 100 first-try correct answers.",
+    kind: "first-try-total",
+    threshold: 100,
+    imageKey: "unshaken",
+  },
+  {
+    id: "student-of-moses",
+    label: "Student of Moses",
+    category: ACHIEVEMENT_CATEGORIES.bibleKnowledge,
+    group: ACHIEVEMENT_GROUPS.oldTestamentKnowledge,
+    family: "knowledge",
+    description: "Correctly identify verses from all five books of the Pentateuch.",
+    kind: "book-group-complete",
+    targetGroup: BOOK_GROUP_KEYS.PENTATEUCH,
+    imageKey: "student-of-moses",
+  },
+  {
+    id: "historian",
+    label: "Historian",
+    category: ACHIEVEMENT_CATEGORIES.bibleKnowledge,
+    group: ACHIEVEMENT_GROUPS.oldTestamentKnowledge,
+    family: "knowledge",
+    description: "Correctly identify verses from all Historical Books.",
+    kind: "book-group-complete",
+    targetGroup: BOOK_GROUP_KEYS.HISTORICAL,
+    imageKey: "historian",
+  },
+  {
+    id: "poet",
+    label: "Poet",
+    category: ACHIEVEMENT_CATEGORIES.bibleKnowledge,
+    group: ACHIEVEMENT_GROUPS.oldTestamentKnowledge,
+    family: "knowledge",
+    description: "Correctly identify verses from all Wisdom Books.",
+    kind: "book-group-complete",
+    targetGroup: BOOK_GROUP_KEYS.WISDOM,
+    imageKey: "poet",
+  },
+  {
+    id: "major-prophet",
+    label: "Major Prophet",
+    category: ACHIEVEMENT_CATEGORIES.bibleKnowledge,
+    group: ACHIEVEMENT_GROUPS.oldTestamentKnowledge,
+    family: "knowledge",
+    description: "Correctly identify verses from all five Major Prophets.",
+    kind: "book-group-complete",
+    targetGroup: BOOK_GROUP_KEYS.MAJOR_PROPHETS,
+    imageKey: "major-prophet",
+  },
+  {
+    id: "minor-prophet",
+    label: "Minor Prophet",
+    category: ACHIEVEMENT_CATEGORIES.bibleKnowledge,
+    group: ACHIEVEMENT_GROUPS.oldTestamentKnowledge,
+    family: "knowledge",
+    description: "Correctly identify verses from all twelve Minor Prophets.",
+    kind: "book-group-complete",
+    targetGroup: BOOK_GROUP_KEYS.MINOR_PROPHETS,
+    imageKey: "minor-prophet",
+  },
+  {
+    id: "gospel-expert",
+    label: "Gospel Expert",
+    category: ACHIEVEMENT_CATEGORIES.bibleKnowledge,
+    group: ACHIEVEMENT_GROUPS.newTestamentKnowledge,
+    family: "knowledge",
+    description: "Correctly identify verses from all four Gospels.",
+    kind: "book-group-complete",
+    targetGroup: BOOK_GROUP_KEYS.GOSPELS,
+    imageKey: "gospel-expert",
+  },
+  {
+    id: "acts-specialist",
+    label: "Acts Specialist",
+    category: ACHIEVEMENT_CATEGORIES.bibleKnowledge,
+    group: ACHIEVEMENT_GROUPS.newTestamentKnowledge,
+    family: "knowledge",
+    description: "Correctly identify 3 verses from the Book of Acts.",
+    kind: "book-count",
+    targetBookId: "acts",
+    threshold: 3,
+    imageKey: "acts-specialist",
+  },
+  {
+    id: "pauls-apprentice",
+    label: "Paul's Apprentice",
+    category: ACHIEVEMENT_CATEGORIES.bibleKnowledge,
+    group: ACHIEVEMENT_GROUPS.newTestamentKnowledge,
+    family: "knowledge",
+    description: "Correctly identify verses from all thirteen Pauline Epistles.",
+    kind: "book-group-complete",
+    targetGroup: BOOK_GROUP_KEYS.PAULINE_EPISTLES,
+    imageKey: "pauls-apprentice",
+  },
+  {
+    id: "general-epistle-scholar",
+    label: "General Epistle Scholar",
+    category: ACHIEVEMENT_CATEGORIES.bibleKnowledge,
+    group: ACHIEVEMENT_GROUPS.newTestamentKnowledge,
+    family: "knowledge",
+    description: "Correctly identify verses from all seven General Epistles.",
+    kind: "book-group-complete",
+    targetGroup: BOOK_GROUP_KEYS.GENERAL_EPISTLES,
+    imageKey: "general-epistle-scholar",
+  },
+  {
+    id: "apocalypse-survivor",
+    label: "Apocalypse Survivor",
+    category: ACHIEVEMENT_CATEGORIES.bibleKnowledge,
+    group: ACHIEVEMENT_GROUPS.newTestamentKnowledge,
+    family: "knowledge",
+    description: "Correctly identify 3 verses from Revelation.",
+    kind: "book-count",
+    targetBookId: "revelation",
+    threshold: 3,
+    imageKey: "apocalypse-survivor",
+  },
+  {
+    id: "biblical-scholar",
+    label: "Biblical Scholar",
+    category: ACHIEVEMENT_CATEGORIES.rare,
+    group: ACHIEVEMENT_GROUPS.meta,
+    family: "rare",
+    description: "Earn every Bible Knowledge achievement.",
+    kind: "meta-knowledge-complete",
+    imageKey: "biblical-scholar",
+  },
+  {
+    id: "walking-encyclopedia",
+    label: "Walking Encyclopedia",
+    category: ACHIEVEMENT_CATEGORIES.rare,
+    group: ACHIEVEMENT_GROUPS.rare,
+    family: "rare",
+    description: "Get 100 correct answers.",
+    kind: "total-correct",
+    threshold: 100,
+    imageKey: "walking-encyclopedia",
+  },
+  {
+    id: "inspired",
+    label: "Inspired",
+    category: ACHIEVEMENT_CATEGORIES.rare,
+    group: ACHIEVEMENT_GROUPS.rare,
+    family: "rare",
+    description: "Get 10 first-try correct answers in a row.",
+    kind: "consecutive-first-try",
+    threshold: 10,
+    imageKey: "inspired",
+  },
+  {
+    id: "the-scribe",
+    label: "The Scribe",
+    category: ACHIEVEMENT_CATEGORIES.rare,
+    group: ACHIEVEMENT_GROUPS.rare,
+    family: "rare",
+    description: "Get 500 correct answers.",
+    kind: "total-correct",
+    threshold: 500,
+    imageKey: "the-scribe",
+  },
+  {
+    id: "scholar-of-the-scriptures",
+    label: "Scholar of the Scriptures",
+    category: ACHIEVEMENT_CATEGORIES.rare,
+    group: ACHIEVEMENT_GROUPS.rare,
+    family: "rare",
+    description: "Get 1,000 correct answers.",
+    kind: "total-correct",
+    threshold: 1000,
+    imageKey: "scholar-of-the-scriptures",
+  },
+  {
+    id: "covenant-keeper",
+    label: "Covenant Keeper",
+    category: ACHIEVEMENT_CATEGORIES.rare,
+    group: ACHIEVEMENT_GROUPS.rare,
+    family: "knowledge",
+    description: "Correctly identify verses from every Old Testament book.",
+    kind: "book-group-complete",
+    targetGroup: BOOK_GROUP_KEYS.OLD_TESTAMENT_ALL,
+    imageKey: "covenant-keeper",
+  },
+  {
+    id: "witness-of-the-word",
+    label: "Witness of the Word",
+    category: ACHIEVEMENT_CATEGORIES.rare,
+    group: ACHIEVEMENT_GROUPS.rare,
+    family: "knowledge",
+    description: "Correctly identify verses from every New Testament book.",
+    kind: "book-group-complete",
+    targetGroup: BOOK_GROUP_KEYS.NEW_TESTAMENT_ALL,
+    imageKey: "witness-of-the-word",
+  },
 ];
 
-const STATS_SCHEMA_VERSION = 2;
+const ACHIEVEMENT_MAP = ACHIEVEMENTS.reduce((acc, achievement) => {
+  acc[achievement.id] = achievement;
+  return acc;
+}, {});
+
+const KNOWLEDGE_ACHIEVEMENT_IDS = ACHIEVEMENTS.filter(
+  (achievement) => achievement.category === ACHIEVEMENT_CATEGORIES.bibleKnowledge,
+).map((achievement) => achievement.id);
+
+const LEGACY_STREAK_BADGE_ID_MAP = {
+  "streak-1": "first-step",
+  "streak-3": "daily-bread",
+  "streak-7": "faithful-reader",
+  "streak-40": "forty-days",
+  "streak-365": "year-of-wisdom",
+  firstStep: "first-step",
+  dailyBread: "daily-bread",
+  faithfulReader: "faithful-reader",
+  fortyDays: "forty-days",
+  yearOfWisdom: "year-of-wisdom",
+  "first-step": "first-step",
+  "daily-bread": "daily-bread",
+  "faithful-reader": "faithful-reader",
+  "forty-days": "forty-days",
+  "year-of-wisdom": "year-of-wisdom",
+};
+
+const STREAK_BADGES = [
+  { id: "first-step", label: "First Step", streak: 1 },
+  { id: "daily-bread", label: "Daily Bread", streak: 3 },
+  { id: "faithful-reader", label: "Faithful Reader", streak: 7 },
+  { id: "forty-days", label: "Forty Days in the Wilderness", streak: 40 },
+  { id: "year-of-wisdom", label: "Year of Wisdom", streak: 365 },
+];
 
 function createDefaultDailyStats() {
   return {
@@ -175,8 +522,10 @@ function createDefaultAchievementCounters() {
 
 function createDefaultAchievements() {
   return {
+    version: 2,
     earned: {},
     counters: createDefaultAchievementCounters(),
+    lastAwarded: [],
   };
 }
 
@@ -256,6 +605,191 @@ function sanitizeBookStats(value) {
   return output;
 }
 
+function normalizeBookIdentifier(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "-");
+}
+
+function getBookAchievementId(book) {
+  if (!book) return "";
+  return normalizeBookIdentifier(
+    book.id || book.slug || book.key || getBookStatsKey?.(book) || book.name || book.book,
+  );
+}
+
+function buildAchievementBookIndex() {
+  const index = {};
+
+  (Array.isArray(books) ? books : []).forEach((book) => {
+    const id = getBookAchievementId(book);
+    if (!id) return;
+    index[id] = book;
+  });
+
+  return index;
+}
+
+function getAchievementBookIndex() {
+  if (!state.ui) state.ui = {};
+  if (!state.ui.achievementBookIndex) {
+    state.ui.achievementBookIndex = buildAchievementBookIndex();
+  }
+  return state.ui.achievementBookIndex;
+}
+
+function getAchievementBookById(bookId) {
+  return getAchievementBookIndex()[normalizeBookIdentifier(bookId)] || null;
+}
+
+function getBookSectionLabel(book) {
+  return String(book?.section || book?.division || book?.category || "")
+    .trim()
+    .toLowerCase();
+}
+
+function isPaulineBook(book) {
+  const id = getBookAchievementId(book);
+  return [
+    "romans",
+    "1-corinthians",
+    "2-corinthians",
+    "galatians",
+    "ephesians",
+    "philippians",
+    "colossians",
+    "1-thessalonians",
+    "2-thessalonians",
+    "1-timothy",
+    "2-timothy",
+    "titus",
+    "philemon",
+  ].includes(id);
+}
+
+function isGeneralEpistleBook(book) {
+  const id = getBookAchievementId(book);
+  return [
+    "hebrews",
+    "james",
+    "1-peter",
+    "2-peter",
+    "1-john",
+    "2-john",
+    "3-john",
+    "jude",
+  ].includes(id);
+}
+
+function isBookInGroup(book, groupKey) {
+  if (!book) return false;
+
+  const testament = String(book.testament || "").trim().toLowerCase();
+  const section = getBookSectionLabel(book);
+  const id = getBookAchievementId(book);
+
+  switch (groupKey) {
+    case BOOK_GROUP_KEYS.PENTATEUCH:
+      return testament === "old" && section === "pentateuch";
+    case BOOK_GROUP_KEYS.HISTORICAL:
+      return testament === "old" && (
+        section === "historical" ||
+        section === "historical books" ||
+        section === "history"
+      );
+    case BOOK_GROUP_KEYS.WISDOM:
+      return testament === "old" && (
+        section === "wisdom" ||
+        section === "wisdom books" ||
+        section === "poetry"
+      );
+    case BOOK_GROUP_KEYS.MAJOR_PROPHETS:
+      return testament === "old" && (
+        section === "major prophets" ||
+        section === "major prophet"
+      );
+    case BOOK_GROUP_KEYS.MINOR_PROPHETS:
+      return testament === "old" && (
+        section === "minor prophets" ||
+        section === "minor prophet"
+      );
+    case BOOK_GROUP_KEYS.GOSPELS:
+      return testament === "new" && (
+        section === "gospels" ||
+        ["matthew", "mark", "luke", "john"].includes(id)
+      );
+    case BOOK_GROUP_KEYS.PAULINE_EPISTLES:
+      return testament === "new" && isPaulineBook(book);
+    case BOOK_GROUP_KEYS.GENERAL_EPISTLES:
+      return testament === "new" && isGeneralEpistleBook(book);
+    case BOOK_GROUP_KEYS.OLD_TESTAMENT_ALL:
+      return testament === "old";
+    case BOOK_GROUP_KEYS.NEW_TESTAMENT_ALL:
+      return testament === "new";
+    default:
+      return false;
+  }
+}
+
+function getBooksForAchievementGroup(groupKey) {
+  return (Array.isArray(books) ? books : []).filter((book) =>
+    isBookInGroup(book, groupKey),
+  );
+}
+
+function getSolvedBookIds() {
+  const bookStats = ensureStatsSchema().bookStats || {};
+  const solvedIds = new Set();
+
+  Object.entries(bookStats).forEach(([key, entry]) => {
+    if ((entry?.solves || 0) > 0) {
+      solvedIds.add(normalizeBookIdentifier(key));
+    }
+  });
+
+  return solvedIds;
+}
+
+function getSolvedBookCount(bookId) {
+  const stats = ensureStatsSchema();
+  const normalizedId = normalizeBookIdentifier(bookId);
+  const entry = stats.bookStats?.[normalizedId];
+  return sanitizeNonNegativeInt(entry?.solves, 0);
+}
+
+function getAchievementProgressSnapshot() {
+  const stats = ensureStatsSchema();
+  const solvedBookIds = getSolvedBookIds();
+  const solvedGroups = {};
+
+  Object.values(BOOK_GROUP_KEYS).forEach((groupKey) => {
+    const groupBookIds = getBooksForAchievementGroup(groupKey).map((book) =>
+      getBookAchievementId(book),
+    );
+    solvedGroups[groupKey] = {
+      total: groupBookIds.length,
+      solved: groupBookIds.filter((id) => solvedBookIds.has(id)).length,
+      solvedIds: groupBookIds.filter((id) => solvedBookIds.has(id)),
+      requiredIds: groupBookIds,
+    };
+  });
+
+  return {
+    totalCorrect: stats.achievements.counters.totalCorrect || 0,
+    dailyCorrect: stats.achievements.counters.dailyCorrect || 0,
+    practiceCorrect: stats.achievements.counters.practiceCorrect || 0,
+    firstTryCorrect: stats.achievements.counters.firstTryCorrect || 0,
+    consecutiveFirstTryCorrect:
+      stats.achievements.counters.consecutiveFirstTryCorrect || 0,
+    currentDailyStreak: stats.daily.currentStreak || 0,
+    solvedBookIds,
+    solvedGroups,
+    actsSolvedCount: getSolvedBookCount("acts"),
+    revelationSolvedCount: getSolvedBookCount("revelation"),
+  };
+}
+
 function sanitizeAchievementCounters(value) {
   const defaults = createDefaultAchievementCounters();
   const source =
@@ -278,15 +812,64 @@ function sanitizeAchievements(value) {
   const source =
     value && typeof value === "object" && !Array.isArray(value) ? value : {};
 
-  const earned =
+  const rawEarned =
     source.earned && typeof source.earned === "object" && !Array.isArray(source.earned)
-      ? { ...source.earned }
-      : defaults.earned;
+      ? source.earned
+      : {};
+
+  const earned = Object.entries(rawEarned).reduce((acc, [id, entry]) => {
+    const normalizedId = LEGACY_STREAK_BADGE_ID_MAP[id] || id;
+    const achievement = ACHIEVEMENT_MAP[normalizedId];
+    if (!achievement) return acc;
+
+    const safeEntry =
+      entry && typeof entry === "object" && !Array.isArray(entry) ? entry : {};
+
+    acc[normalizedId] = {
+      earnedAt: sanitizeSerializableTimestamp(safeEntry.earnedAt) || null,
+      mode:
+        safeEntry.mode === "daily" || safeEntry.mode === "practice"
+          ? safeEntry.mode
+          : null,
+      source: typeof safeEntry.source === "string" ? safeEntry.source : null,
+      context:
+        safeEntry.context && typeof safeEntry.context === "object" && !Array.isArray(safeEntry.context)
+          ? { ...safeEntry.context }
+          : {},
+    };
+
+    return acc;
+  }, {});
+
+  const lastAwarded = Array.isArray(source.lastAwarded)
+    ? source.lastAwarded
+        .map((item) => {
+          const normalizedId =
+            LEGACY_STREAK_BADGE_ID_MAP[item?.id] || item?.id || null;
+          const achievement = normalizedId ? ACHIEVEMENT_MAP[normalizedId] : null;
+          if (!achievement) return null;
+
+          return {
+            id: normalizedId,
+            earnedAt: sanitizeSerializableTimestamp(item.earnedAt) || null,
+            mode:
+              item.mode === "daily" || item.mode === "practice" ? item.mode : null,
+            source: typeof item.source === "string" ? item.source : null,
+            context:
+              item.context && typeof item.context === "object" && !Array.isArray(item.context)
+                ? { ...item.context }
+                : {},
+          };
+        })
+        .filter(Boolean)
+    : [];
 
   return {
     ...source,
+    version: sanitizeNonNegativeInt(source.version, defaults.version) || defaults.version,
     earned,
     counters: sanitizeAchievementCounters(source.counters),
+    lastAwarded,
   };
 }
 
@@ -343,11 +926,6 @@ function normalizeStatsShape(saved) {
       ? source.practice
       : defaults.practice;
 
-  const legacyAchievementEarned =
-    source.earnedBadges && !hasNestedShape
-      ? { dailyStreakBadges: sanitizeEarnedBadges(source.earnedBadges) }
-      : source.achievements?.earned || {};
-
   const normalized = {
     ...defaults,
     ...source,
@@ -355,15 +933,7 @@ function normalizeStatsShape(saved) {
     daily: sanitizeDailyStats(legacyDailySource),
     practice: sanitizePracticeStats(legacyPracticeSource),
     bookStats: sanitizeBookStats(source.bookStats),
-    achievements: sanitizeAchievements({
-      ...source.achievements,
-      earned:
-        source.achievements?.earned &&
-        typeof source.achievements.earned === "object" &&
-        !Array.isArray(source.achievements.earned)
-          ? { ...legacyAchievementEarned, ...source.achievements.earned }
-          : legacyAchievementEarned,
-    }),
+    achievements: sanitizeAchievements(source.achievements),
     meta: {
       ...(source.meta && typeof source.meta === "object" && !Array.isArray(source.meta)
         ? source.meta
@@ -372,7 +942,44 @@ function normalizeStatsShape(saved) {
     },
   };
 
-  normalized.daily.earnedBadges = sanitizeEarnedBadges(normalized.daily.earnedBadges);
+  const legacyEarnedBadges = [
+    ...(Array.isArray(source.earnedBadges) ? source.earnedBadges : []),
+    ...(Array.isArray(source.daily?.earnedBadges) ? source.daily.earnedBadges : []),
+    ...(Array.isArray(normalized.daily.earnedBadges) ? normalized.daily.earnedBadges : []),
+  ];
+
+  legacyEarnedBadges.forEach((legacyId) => {
+    const normalizedId = LEGACY_STREAK_BADGE_ID_MAP[legacyId];
+    if (!normalizedId || normalized.achievements.earned[normalizedId]) return;
+
+    normalized.achievements.earned[normalizedId] = {
+      earnedAt: null,
+      mode: "daily",
+      source: "legacy-streak-badge",
+      context: {},
+    };
+  });
+
+  normalized.daily.earnedBadges = Array.from(
+    new Set(
+      Object.keys(normalized.achievements.earned)
+        .filter((id) => ACHIEVEMENT_MAP[id]?.family === "streak")
+        .concat(
+          legacyEarnedBadges
+            .map((legacyId) => LEGACY_STREAK_BADGE_ID_MAP[legacyId] || legacyId)
+            .filter((id) => ACHIEVEMENT_MAP[id]?.family === "streak"),
+        ),
+    ),
+  );
+
+  normalized.achievements.version = 2;
+  normalized.achievements.counters = sanitizeAchievementCounters(
+    normalized.achievements.counters,
+  );
+  normalized.achievements.lastAwarded = Array.isArray(normalized.achievements.lastAwarded)
+    ? normalized.achievements.lastAwarded
+    : [];
+
   return normalized;
 }
 
@@ -389,6 +996,270 @@ function touchStatsMeta(stats) {
 function ensureStatsSchema() {
   state.stats = normalizeStatsShape(state.stats);
   return state.stats;
+}
+
+function syncLegacyBadgeFieldsFromAchievements() {
+  const stats = ensureStatsSchema();
+  stats.daily.earnedBadges = Array.from(
+    new Set(
+      Object.keys(stats.achievements.earned).filter(
+        (id) => ACHIEVEMENT_MAP[id]?.family === "streak",
+      ),
+    ),
+  );
+}
+
+function getAchievementById(id) {
+  return ACHIEVEMENT_MAP[id] || null;
+}
+
+function getEarnedAchievementsMap() {
+  return ensureStatsSchema().achievements.earned || {};
+}
+
+function hasEarnedAchievement(id) {
+  return !!getEarnedAchievementsMap()[id];
+}
+
+function getEarnedAchievementIds() {
+  return Object.keys(getEarnedAchievementsMap());
+}
+
+function getAchievementDefinitionList(ids = []) {
+  return ids
+    .map((id) => getAchievementById(id))
+    .filter(Boolean);
+}
+
+function buildAchievementAwardRecord(achievement, context = {}) {
+  return {
+    earnedAt: new Date().toISOString(),
+    mode: state.mode === "daily" || state.mode === "practice" ? state.mode : null,
+    source: "achievement-engine",
+    context: { ...context },
+  };
+}
+
+function recordAchievementEarned(achievement, context = {}) {
+  const stats = ensureStatsSchema();
+  if (!achievement || hasEarnedAchievement(achievement.id)) return null;
+
+  const record = buildAchievementAwardRecord(achievement, context);
+  stats.achievements.earned[achievement.id] = record;
+  stats.achievements.lastAwarded = Array.isArray(stats.achievements.lastAwarded)
+    ? stats.achievements.lastAwarded
+    : [];
+  stats.achievements.lastAwarded.push({
+    id: achievement.id,
+    ...record,
+  });
+
+  syncLegacyBadgeFieldsFromAchievements();
+  return {
+    ...achievement,
+    earned: true,
+    ...record,
+  };
+}
+
+function evaluateAchievementCompletion(achievement, snapshot) {
+  if (!achievement) return { complete: false, progress: 0, target: 0, context: {} };
+
+  switch (achievement.kind) {
+    case "daily-streak": {
+      const current = snapshot.currentDailyStreak || 0;
+      const target = achievement.threshold || 0;
+      return {
+        complete: current >= target,
+        progress: current,
+        target,
+        context: { streakLength: current },
+      };
+    }
+
+    case "first-try-total": {
+      const current = snapshot.firstTryCorrect || 0;
+      const target = achievement.threshold || 0;
+      return {
+        complete: current >= target,
+        progress: current,
+        target,
+        context: { firstTryCorrect: current },
+      };
+    }
+
+    case "total-correct": {
+      const current = snapshot.totalCorrect || 0;
+      const target = achievement.threshold || 0;
+      return {
+        complete: current >= target,
+        progress: current,
+        target,
+        context: { totalCorrect: current },
+      };
+    }
+
+    case "consecutive-first-try": {
+      const current = snapshot.consecutiveFirstTryCorrect || 0;
+      const target = achievement.threshold || 0;
+      return {
+        complete: current >= target,
+        progress: current,
+        target,
+        context: { consecutiveFirstTryCorrect: current },
+      };
+    }
+
+    case "book-group-complete": {
+      const group = snapshot.solvedGroups[achievement.targetGroup] || {
+        solved: 0,
+        total: 0,
+        solvedIds: [],
+        requiredIds: [],
+      };
+
+      return {
+        complete: group.total > 0 && group.solved >= group.total,
+        progress: group.solved,
+        target: group.total,
+        context: {
+          group: achievement.targetGroup,
+          solved: group.solved,
+          total: group.total,
+          solvedIds: group.solvedIds,
+        },
+      };
+    }
+
+    case "book-count": {
+      const current =
+        achievement.targetBookId === "acts"
+          ? snapshot.actsSolvedCount
+          : achievement.targetBookId === "revelation"
+            ? snapshot.revelationSolvedCount
+            : getSolvedBookCount(achievement.targetBookId);
+      const target = achievement.threshold || 0;
+
+      return {
+        complete: current >= target,
+        progress: current,
+        target,
+        context: {
+          bookId: achievement.targetBookId,
+          solves: current,
+        },
+      };
+    }
+
+    case "meta-knowledge-complete": {
+      const earnedKnowledgeCount = KNOWLEDGE_ACHIEVEMENT_IDS.filter((id) =>
+        hasEarnedAchievement(id),
+      ).length;
+
+      return {
+        complete: earnedKnowledgeCount >= KNOWLEDGE_ACHIEVEMENT_IDS.length,
+        progress: earnedKnowledgeCount,
+        target: KNOWLEDGE_ACHIEVEMENT_IDS.length,
+        context: {
+          earnedKnowledgeCount,
+          requiredKnowledgeCount: KNOWLEDGE_ACHIEVEMENT_IDS.length,
+        },
+      };
+    }
+
+    default:
+      return { complete: false, progress: 0, target: 0, context: {} };
+  }
+}
+
+function computeAchievementsToAward() {
+  const snapshot = getAchievementProgressSnapshot();
+  const newlyEarned = [];
+
+  ACHIEVEMENTS.forEach((achievement) => {
+    if (hasEarnedAchievement(achievement.id)) return;
+
+    const evaluation = evaluateAchievementCompletion(achievement, snapshot);
+    if (!evaluation.complete) return;
+
+    const awarded = recordAchievementEarned(achievement, evaluation.context);
+    if (awarded) {
+      newlyEarned.push(awarded);
+    }
+  });
+
+  if (newlyEarned.length) {
+    syncLegacyBadgeFieldsFromAchievements();
+  }
+
+  return newlyEarned;
+}
+
+function getLastAwardedAchievements() {
+  const stats = ensureStatsSchema();
+  const list = Array.isArray(stats.achievements.lastAwarded)
+    ? stats.achievements.lastAwarded
+    : [];
+
+  return list
+    .map((item) => {
+      const achievement = getAchievementById(item.id);
+      if (!achievement) return null;
+      return {
+        ...achievement,
+        earned: true,
+        earnedAt: item.earnedAt || null,
+        mode: item.mode || null,
+        source: item.source || null,
+        context:
+          item.context && typeof item.context === "object" && !Array.isArray(item.context)
+            ? { ...item.context }
+            : {},
+      };
+    })
+    .filter(Boolean);
+}
+
+function clearLastAwardedAchievements() {
+  const stats = ensureStatsSchema();
+  stats.achievements.lastAwarded = [];
+}
+
+function getNewlyEarnedAchievements(options = {}) {
+  const family = options.family || null;
+  const list = getLastAwardedAchievements();
+
+  return family
+    ? list.filter((achievement) => achievement.family === family)
+    : list;
+}
+
+function getAchievementsByFamily(family) {
+  return ACHIEVEMENTS.filter((achievement) => achievement.family === family);
+}
+
+function getEarnedBadgeIds() {
+  return getEarnedAchievementIds().filter(
+    (id) => getAchievementById(id)?.family === "streak",
+  );
+}
+
+function awardStreakBadges() {
+  return computeAchievementsToAward().filter(
+    (achievement) => achievement.family === "streak",
+  );
+}
+
+function computeNewlyEarnedBadges() {
+  return getNewlyEarnedAchievements({ family: "streak" }).map(toLegacyBadgeShape);
+}
+
+function toLegacyBadgeShape(achievement) {
+  return {
+    id: achievement.id,
+    label: achievement.label,
+    earned: true,
+  };
 }
 
 function updateAchievementCountersForCompletion(outcome, mode, guessCount) {
@@ -2543,43 +3414,6 @@ function hasRecordedDailyResult(date) {
   return state.stats.daily.lastDailySolvedDate === date;
 }
 
-function getEarnedBadgeIds() {
-  return Array.isArray(state.stats?.daily?.earnedBadges)
-    ? state.stats.daily.earnedBadges
-    : [];
-}
-
-function computeNewlyEarnedBadges() {
-  const earnedBadgeIds = new Set(getEarnedBadgeIds());
-  const currentStreak =
-    Number.isInteger(state.stats?.daily?.currentStreak) &&
-      state.stats.daily.currentStreak >= 0
-      ? state.stats.daily.currentStreak
-      : 0;
-
-  return STREAK_BADGES.filter(
-    (badge) => currentStreak >= badge.threshold && !earnedBadgeIds.has(badge.id),
-  );
-}
-
-function awardStreakBadges() {
-  const existing = [...getEarnedBadgeIds()];
-  const existingSet = new Set(existing);
-  const newlyEarned = computeNewlyEarnedBadges();
-
-  if (!newlyEarned.length) return [];
-
-  newlyEarned.forEach((badge) => {
-    if (!existingSet.has(badge.id)) {
-      existing.push(badge.id);
-      existingSet.add(badge.id);
-    }
-  });
-
-  state.stats.daily.earnedBadges = existing;
-  return newlyEarned;
-}
-
 function updateBookStats(outcome) {
   if (!state.currentPuzzle || state.currentPuzzle.mode !== "daily") return;
 
@@ -2605,6 +3439,7 @@ async function recordPuzzleCompletion(outcome) {
   if (!state.currentPuzzle) return;
 
   ensureStatsSchema();
+  clearLastAwardedAchievements();
 
   const mode = state.currentPuzzle.mode;
   const guessCount = state.guesses.length;
@@ -2636,8 +3471,6 @@ async function recordPuzzleCompletion(outcome) {
 
         state.stats.daily.lastDailySolvedDate = completionDate;
       }
-
-      awardStreakBadges();
     } else if (outcome === "lost") {
       state.stats.daily.lost += 1;
 
@@ -2649,6 +3482,12 @@ async function recordPuzzleCompletion(outcome) {
 
     updateAchievementCountersForCompletion(outcome, "daily", guessCount);
     updateBookStats(outcome);
+
+    if (outcome === "won") {
+      computeAchievementsToAward();
+    }
+
+    syncLegacyBadgeFieldsFromAchievements();
     saveStats();
 
     await submitDailyResultToLeaderboard({
@@ -2674,6 +3513,13 @@ async function recordPuzzleCompletion(outcome) {
     }
 
     updateAchievementCountersForCompletion(outcome, "practice", guessCount);
+
+    if (outcome === "won") {
+      updateBookStats(outcome);
+      computeAchievementsToAward();
+    }
+
+    syncLegacyBadgeFieldsFromAchievements();
     saveStats();
   }
 }
@@ -4523,11 +5369,9 @@ function renderStatsModal() {
 }
 
 function getDailyStreakBadges() {
-  const earnedIds = new Set(getEarnedBadgeIds());
-
   return STREAK_BADGES.map((badge) => ({
     ...badge,
-    earned: earnedIds.has(badge.id),
+    earned: hasEarnedAchievement(badge.id),
   }));
 }
 
@@ -4624,6 +5468,11 @@ function renderPostGamePanel() {
 
   renderTriviaSection(content.trivia);
   renderPostGameStats(state.mode);
+
+  if (elements.postGameBadges) {
+    const newlyEarnedStreakBadges = computeNewlyEarnedBadges().map(toLegacyBadgeShape);
+    renderPostGameBadges(elements.postGameBadges, newlyEarnedStreakBadges);
+  }
 
   if (state.mode === "daily") {
     showWhen(elements.postGameLeaderboardSection, true);
