@@ -467,8 +467,8 @@
           <details class="expander expander--subtle modal-block modal-system__block">
             <summary class="expander__summary">
               <span class="expander__summary-text">
-                <span class="expander__title">Badges</span>
-                <span class="expander__meta">Review Daily streak badge progress.</span>
+                <span class="expander__title">Achievements</span>
+                <span class="expander__meta">Review achievement progress and earned milestones.</span>
               </span>
               <svg class="expander__icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"
                 aria-hidden="true">
@@ -476,7 +476,7 @@
               </svg>
             </summary>
             <div class="expander__body">
-              <div class="streak-badges badge-group" id="statsModalBadges"></div>
+              <div class="achievement-list" id="statsModalAchievements"></div>
             </div>
           </details>
 
@@ -643,7 +643,25 @@
               <div class="postgame-meta-chips" id="postGameTriviaChips"></div>
             </div>
           </section>
+          <section class="postgame-section section-shell section-shell--nested modal-block modal-system__block"
+            id="postGameNewAchievementsSection" aria-label="New achievements unlocked" hidden>
+            <div class="section-shell__header modal-system__block-header">
+              <p class="subtle-label section-shell__meta">New achievements unlocked</p>
+            </div>
+            <div class="section-shell__body modal-system__block-body">
+              <div class="achievement-list achievement-list--celebration" id="postGameNewAchievements"></div>
+            </div>
+          </section>
 
+          <section class="postgame-section section-shell section-shell--nested modal-block modal-system__block"
+            id="postGameClosestAchievementsSection" aria-label="Closest achievements" hidden>
+            <div class="section-shell__header modal-system__block-header">
+              <p class="subtle-label section-shell__meta">Achievements progress</p>
+            </div>
+            <div class="section-shell__body modal-system__block-body">
+              <div class="achievement-list achievement-list--postgame" id="postGameClosestAchievements"></div>
+            </div>
+          </section>
           <section
             class="postgame-section stats-section section-shell section-shell--nested modal-block modal-system__block"
             aria-label="Mode stats">
