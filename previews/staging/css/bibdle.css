@@ -3046,6 +3046,15 @@ html.reduced-motion *::after {
     line-height: 1;
 }
 
+.achievement-card__image {
+    display: block;
+    width: 100%;
+    height: 100%;
+    aspect-ratio: 1 / 1;
+    object-fit: contain;
+    object-position: center;
+}
+
 .achievement-card__progress {
     grid-area: progress;
     display: grid;

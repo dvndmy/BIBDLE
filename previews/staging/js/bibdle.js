@@ -1040,6 +1040,12 @@ function hasEarnedAchievement(id) {
   return !!getEarnedAchievementsMap()[id];
 }
 
+function getAchievementImagePath(achievement) {
+  const imageKey = achievement?.imageKey || achievement?.id;
+  if (!imageKey) return "";
+  return `assets/achievements/${imageKey}.png`;
+}
+
 function getEarnedAchievementIds() {
   return Object.keys(getEarnedAchievementsMap());
 }
@@ -1409,11 +1415,16 @@ function buildAchievementCardMarkup(achievement, options = {}) {
   const ariaValueNow = progressState.target > 0
     ? Math.min(progressState.progress, progressState.target)
     : progressState.progress;
+  const imagePath = getAchievementImagePath(achievement);
 
   return `
     <article class="achievement-card ${isEarned ? "is-earned" : "is-locked"}" ${isEarned ? "" : 'aria-disabled="true"'}>
       <div class="achievement-card__media" aria-hidden="true">
-        <div class="achievement-card__media-slot">Badge image</div>
+        ${
+          imagePath
+            ? `<img class="achievement-card__image" src="${escapeHtml(imagePath)}" alt="">`
+            : `<div class="achievement-card__media-slot">Badge image</div>`
+        }
       </div>
       <div class="achievement-card__content">
         <h3 class="achievement-card__title">${escapeHtml(title)}</h3>
@@ -1438,7 +1449,6 @@ function buildAchievementCardMarkup(achievement, options = {}) {
     </article>
   `;
 }
-
 function getClosestIncompleteAchievements(limit = 3) {
   return ACHIEVEMENTS
     .map((achievement) => {
