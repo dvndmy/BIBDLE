@@ -132,12 +132,1616 @@ let modalService = null;
 let bindings = null;
 let authUnsubscribe = null;
 
-const STREAK_BADGES = [
-  { id: "streak-3", threshold: 3, label: "3-Day Streak" },
-  { id: "streak-7", threshold: 7, label: "7-Day Streak" },
-  { id: "streak-14", threshold: 14, label: "14-Day Streak" },
-  { id: "streak-30", threshold: 30, label: "30-Day Streak" },
+const STATS_SCHEMA_VERSION = 2;
+
+const ACHIEVEMENT_CATEGORIES = {
+  streak: "streak",
+  accuracy: "accuracy",
+  bibleKnowledge: "bible-knowledge",
+  rare: "rare",
+};
+
+const ACHIEVEMENT_GROUPS = {
+  streak: "streak",
+  accuracy: "accuracy",
+  oldTestamentKnowledge: "old-testament-knowledge",
+  newTestamentKnowledge: "new-testament-knowledge",
+  rare: "rare",
+  meta: "meta",
+};
+
+const BOOK_GROUP_KEYS = {
+  PENTATEUCH: "pentateuch",
+  HISTORICAL: "historical-books",
+  WISDOM: "wisdom-books",
+  MAJOR_PROPHETS: "major-prophets",
+  MINOR_PROPHETS: "minor-prophets",
+  GOSPELS: "gospels",
+  PAULINE_EPISTLES: "pauline-epistles",
+  GENERAL_EPISTLES: "general-epistles",
+  OLD_TESTAMENT_ALL: "old-testament-all",
+  NEW_TESTAMENT_ALL: "new-testament-all",
+};
+
+const ACHIEVEMENTS = [
+  {
+    id: "first-step",
+    label: "First Step",
+    category: ACHIEVEMENT_CATEGORIES.streak,
+    group: ACHIEVEMENT_GROUPS.streak,
+    family: "streak",
+    description: "Get 1 verse correct.",
+    kind: "total-correct",
+    threshold: 1,
+    imageKey: "first-step",
+  },
+  {
+    id: "daily-bread",
+    label: "Daily Bread",
+    category: ACHIEVEMENT_CATEGORIES.streak,
+    group: ACHIEVEMENT_GROUPS.streak,
+    family: "streak",
+    description: "Get 3 correct days in a row.",
+    kind: "daily-streak",
+    threshold: 3,
+    imageKey: "daily-bread",
+  },
+  {
+    id: "faithful-reader",
+    label: "Faithful Reader",
+    category: ACHIEVEMENT_CATEGORIES.streak,
+    group: ACHIEVEMENT_GROUPS.streak,
+    family: "streak",
+    description: "Reach a 7-day streak.",
+    kind: "daily-streak",
+    threshold: 7,
+    imageKey: "faithful-reader",
+  },
+  {
+    id: "forty-days",
+    label: "Forty Days in the Wilderness",
+    category: ACHIEVEMENT_CATEGORIES.streak,
+    group: ACHIEVEMENT_GROUPS.streak,
+    family: "streak",
+    description: "Reach a 40-day streak.",
+    kind: "daily-streak",
+    threshold: 40,
+    imageKey: "forty-days",
+  },
+  {
+    id: "year-of-wisdom",
+    label: "Year of Wisdom",
+    category: ACHIEVEMENT_CATEGORIES.streak,
+    group: ACHIEVEMENT_GROUPS.streak,
+    family: "streak",
+    description: "Reach a 365-day streak.",
+    kind: "daily-streak",
+    threshold: 365,
+    imageKey: "year-of-wisdom",
+  },
+  {
+    id: "davids-aim",
+    label: "David's Aim",
+    category: ACHIEVEMENT_CATEGORIES.accuracy,
+    group: ACHIEVEMENT_GROUPS.accuracy,
+    family: "accuracy",
+    description: "Guess the correct book on the first try.",
+    kind: "first-try-total",
+    threshold: 1,
+    imageKey: "davids-aim",
+  },
+  {
+    id: "sharp-as-a-sword",
+    label: "Sharp as a Sword",
+    category: ACHIEVEMENT_CATEGORIES.accuracy,
+    group: ACHIEVEMENT_GROUPS.accuracy,
+    family: "accuracy",
+    description: "Get 5 first-try correct answers.",
+    kind: "first-try-total",
+    threshold: 5,
+    imageKey: "sharp-as-a-sword",
+  },
+  {
+    id: "prophet-level-accuracy",
+    label: "Prophet-Level Accuracy",
+    category: ACHIEVEMENT_CATEGORIES.accuracy,
+    group: ACHIEVEMENT_GROUPS.accuracy,
+    family: "accuracy",
+    description: "Get 25 first-try correct answers.",
+    kind: "first-try-total",
+    threshold: 25,
+    imageKey: "prophet-level-accuracy",
+  },
+  {
+    id: "unshaken",
+    label: "Unshaken",
+    category: ACHIEVEMENT_CATEGORIES.accuracy,
+    group: ACHIEVEMENT_GROUPS.accuracy,
+    family: "accuracy",
+    description: "Get 100 first-try correct answers.",
+    kind: "first-try-total",
+    threshold: 100,
+    imageKey: "unshaken",
+  },
+  {
+    id: "student-of-moses",
+    label: "Student of Moses",
+    category: ACHIEVEMENT_CATEGORIES.bibleKnowledge,
+    group: ACHIEVEMENT_GROUPS.oldTestamentKnowledge,
+    family: "knowledge",
+    description: "Correctly identify verses from all five books of the Pentateuch.",
+    kind: "book-group-complete",
+    targetGroup: BOOK_GROUP_KEYS.PENTATEUCH,
+    imageKey: "student-of-moses",
+  },
+  {
+    id: "historian",
+    label: "Historian",
+    category: ACHIEVEMENT_CATEGORIES.bibleKnowledge,
+    group: ACHIEVEMENT_GROUPS.oldTestamentKnowledge,
+    family: "knowledge",
+    description: "Correctly identify verses from all Historical Books.",
+    kind: "book-group-complete",
+    targetGroup: BOOK_GROUP_KEYS.HISTORICAL,
+    imageKey: "historian",
+  },
+  {
+    id: "poet",
+    label: "Poet",
+    category: ACHIEVEMENT_CATEGORIES.bibleKnowledge,
+    group: ACHIEVEMENT_GROUPS.oldTestamentKnowledge,
+    family: "knowledge",
+    description: "Correctly identify verses from all Wisdom Books.",
+    kind: "book-group-complete",
+    targetGroup: BOOK_GROUP_KEYS.WISDOM,
+    imageKey: "poet",
+  },
+  {
+    id: "major-prophet",
+    label: "Major Prophet",
+    category: ACHIEVEMENT_CATEGORIES.bibleKnowledge,
+    group: ACHIEVEMENT_GROUPS.oldTestamentKnowledge,
+    family: "knowledge",
+    description: "Correctly identify verses from all five Major Prophets.",
+    kind: "book-group-complete",
+    targetGroup: BOOK_GROUP_KEYS.MAJOR_PROPHETS,
+    imageKey: "major-prophet",
+  },
+  {
+    id: "minor-prophet",
+    label: "Minor Prophet",
+    category: ACHIEVEMENT_CATEGORIES.bibleKnowledge,
+    group: ACHIEVEMENT_GROUPS.oldTestamentKnowledge,
+    family: "knowledge",
+    description: "Correctly identify verses from all twelve Minor Prophets.",
+    kind: "book-group-complete",
+    targetGroup: BOOK_GROUP_KEYS.MINOR_PROPHETS,
+    imageKey: "minor-prophet",
+  },
+  {
+    id: "gospel-expert",
+    label: "Gospel Expert",
+    category: ACHIEVEMENT_CATEGORIES.bibleKnowledge,
+    group: ACHIEVEMENT_GROUPS.newTestamentKnowledge,
+    family: "knowledge",
+    description: "Correctly identify verses from all four Gospels.",
+    kind: "book-group-complete",
+    targetGroup: BOOK_GROUP_KEYS.GOSPELS,
+    imageKey: "gospel-expert",
+  },
+  {
+    id: "acts-specialist",
+    label: "Acts Specialist",
+    category: ACHIEVEMENT_CATEGORIES.bibleKnowledge,
+    group: ACHIEVEMENT_GROUPS.newTestamentKnowledge,
+    family: "knowledge",
+    description: "Correctly identify 3 verses from the Book of Acts.",
+    kind: "book-count",
+    targetBookId: "acts",
+    threshold: 3,
+    imageKey: "acts-specialist",
+  },
+  {
+    id: "pauls-apprentice",
+    label: "Paul's Apprentice",
+    category: ACHIEVEMENT_CATEGORIES.bibleKnowledge,
+    group: ACHIEVEMENT_GROUPS.newTestamentKnowledge,
+    family: "knowledge",
+    description: "Correctly identify verses from all thirteen Pauline Epistles.",
+    kind: "book-group-complete",
+    targetGroup: BOOK_GROUP_KEYS.PAULINE_EPISTLES,
+    imageKey: "pauls-apprentice",
+  },
+  {
+    id: "general-epistle-scholar",
+    label: "General Epistle Scholar",
+    category: ACHIEVEMENT_CATEGORIES.bibleKnowledge,
+    group: ACHIEVEMENT_GROUPS.newTestamentKnowledge,
+    family: "knowledge",
+    description: "Correctly identify verses from all seven General Epistles.",
+    kind: "book-group-complete",
+    targetGroup: BOOK_GROUP_KEYS.GENERAL_EPISTLES,
+    imageKey: "general-epistle-scholar",
+  },
+  {
+    id: "apocalypse-survivor",
+    label: "Apocalypse Survivor",
+    category: ACHIEVEMENT_CATEGORIES.bibleKnowledge,
+    group: ACHIEVEMENT_GROUPS.newTestamentKnowledge,
+    family: "knowledge",
+    description: "Correctly identify 3 verses from Revelation.",
+    kind: "book-count",
+    targetBookId: "revelation",
+    threshold: 3,
+    imageKey: "apocalypse-survivor",
+  },
+  {
+    id: "biblical-scholar",
+    label: "Biblical Scholar",
+    category: ACHIEVEMENT_CATEGORIES.rare,
+    group: ACHIEVEMENT_GROUPS.meta,
+    family: "rare",
+    description: "Earn every Bible Knowledge achievement.",
+    kind: "meta-knowledge-complete",
+    imageKey: "biblical-scholar",
+  },
+  {
+    id: "walking-encyclopedia",
+    label: "Walking Encyclopedia",
+    category: ACHIEVEMENT_CATEGORIES.rare,
+    group: ACHIEVEMENT_GROUPS.rare,
+    family: "rare",
+    description: "Get 100 correct answers.",
+    kind: "total-correct",
+    threshold: 100,
+    imageKey: "walking-encyclopedia",
+  },
+  {
+    id: "inspired",
+    label: "Inspired",
+    category: ACHIEVEMENT_CATEGORIES.rare,
+    group: ACHIEVEMENT_GROUPS.rare,
+    family: "rare",
+    description: "Get 10 first-try correct answers in a row.",
+    kind: "consecutive-first-try",
+    threshold: 10,
+    imageKey: "inspired",
+  },
+  {
+    id: "the-scribe",
+    label: "The Scribe",
+    category: ACHIEVEMENT_CATEGORIES.rare,
+    group: ACHIEVEMENT_GROUPS.rare,
+    family: "rare",
+    description: "Get 500 correct answers.",
+    kind: "total-correct",
+    threshold: 500,
+    imageKey: "the-scribe",
+  },
+  {
+    id: "scholar-of-the-scriptures",
+    label: "Scholar of the Scriptures",
+    category: ACHIEVEMENT_CATEGORIES.rare,
+    group: ACHIEVEMENT_GROUPS.rare,
+    family: "rare",
+    description: "Get 1,000 correct answers.",
+    kind: "total-correct",
+    threshold: 1000,
+    imageKey: "scholar-of-the-scriptures",
+  },
+  {
+    id: "covenant-keeper",
+    label: "Covenant Keeper",
+    category: ACHIEVEMENT_CATEGORIES.rare,
+    group: ACHIEVEMENT_GROUPS.rare,
+    family: "knowledge",
+    description: "Correctly identify verses from every Old Testament book.",
+    kind: "book-group-complete",
+    targetGroup: BOOK_GROUP_KEYS.OLD_TESTAMENT_ALL,
+    imageKey: "covenant-keeper",
+  },
+  {
+    id: "witness-of-the-word",
+    label: "Witness of the Word",
+    category: ACHIEVEMENT_CATEGORIES.rare,
+    group: ACHIEVEMENT_GROUPS.rare,
+    family: "knowledge",
+    description: "Correctly identify verses from every New Testament book.",
+    kind: "book-group-complete",
+    targetGroup: BOOK_GROUP_KEYS.NEW_TESTAMENT_ALL,
+    imageKey: "witness-of-the-word",
+  },
 ];
+
+const ACHIEVEMENT_MAP = ACHIEVEMENTS.reduce((acc, achievement) => {
+  acc[achievement.id] = achievement;
+  return acc;
+}, {});
+
+const KNOWLEDGE_ACHIEVEMENT_IDS = ACHIEVEMENTS.filter(
+  (achievement) => achievement.category === ACHIEVEMENT_CATEGORIES.bibleKnowledge,
+).map((achievement) => achievement.id);
+
+const LEGACY_STREAK_BADGE_ID_MAP = {
+  "streak-1": "first-step",
+  "streak-3": "daily-bread",
+  "streak-7": "faithful-reader",
+  "streak-40": "forty-days",
+  "streak-365": "year-of-wisdom",
+  firstStep: "first-step",
+  dailyBread: "daily-bread",
+  faithfulReader: "faithful-reader",
+  fortyDays: "forty-days",
+  yearOfWisdom: "year-of-wisdom",
+  "first-step": "first-step",
+  "daily-bread": "daily-bread",
+  "faithful-reader": "faithful-reader",
+  "forty-days": "forty-days",
+  "year-of-wisdom": "year-of-wisdom",
+};
+
+const STREAK_BADGES = [
+  { id: "first-step", label: "First Step", streak: 1 },
+  { id: "daily-bread", label: "Daily Bread", streak: 3 },
+  { id: "faithful-reader", label: "Faithful Reader", streak: 7 },
+  { id: "forty-days", label: "Forty Days in the Wilderness", streak: 40 },
+  { id: "year-of-wisdom", label: "Year of Wisdom", streak: 365 },
+];
+
+function createDefaultDailyStats() {
+  return {
+    played: 0,
+    won: 0,
+    lost: 0,
+    currentStreak: 0,
+    bestStreak: 0,
+    guessDistribution: {},
+    lastDailySolvedDate: null,
+    earnedBadges: [],
+  };
+}
+
+function createDefaultPracticeStats() {
+  return {
+    played: 0,
+    won: 0,
+    lost: 0,
+    guessDistribution: {},
+  };
+}
+
+function createDefaultAchievementCounters() {
+  return {
+    totalCorrect: 0,
+    dailyCorrect: 0,
+    practiceCorrect: 0,
+    firstTryCorrect: 0,
+    consecutiveFirstTryCorrect: 0,
+  };
+}
+
+function createDefaultAchievements() {
+  return {
+    version: 2,
+    earned: {},
+    counters: createDefaultAchievementCounters(),
+    lastAwarded: [],
+  };
+}
+
+function createDefaultStats() {
+  return {
+    version: STATS_SCHEMA_VERSION,
+    daily: createDefaultDailyStats(),
+    practice: createDefaultPracticeStats(),
+    bookStats: {},
+    achievements: createDefaultAchievements(),
+    meta: {
+      updatedAt: null,
+    },
+  };
+}
+
+function deepClone(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+function sanitizeNonNegativeInt(value, fallback = 0) {
+  return Number.isInteger(value) && value >= 0 ? value : fallback;
+}
+
+function sanitizeSerializableTimestamp(value) {
+  return typeof value === "string" && value.trim() ? value : null;
+}
+
+function sanitizeGuessDistribution(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+
+  const output = {};
+
+  Object.entries(value).forEach(([key, count]) => {
+    const safeCount = sanitizeNonNegativeInt(count, 0);
+    if (safeCount > 0) {
+      output[key] = safeCount;
+    }
+  });
+
+  return output;
+}
+
+function sanitizeEarnedBadges(value) {
+  if (!Array.isArray(value)) return [];
+
+  return value.filter((badgeId) =>
+    STREAK_BADGES.some((badge) => badge.id === badgeId),
+  );
+}
+
+function sanitizeBookStats(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+
+  const output = {};
+
+  Object.entries(value).forEach(([key, entry]) => {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) return;
+
+    output[key] = {
+      plays: sanitizeNonNegativeInt(entry.plays),
+      solves: sanitizeNonNegativeInt(entry.solves),
+      bestAttempts:
+        Number.isInteger(entry.bestAttempts) && entry.bestAttempts > 0
+          ? entry.bestAttempts
+          : null,
+      totalAttempts: sanitizeNonNegativeInt(entry.totalAttempts),
+      lastSolvedDate:
+        typeof entry.lastSolvedDate === "string" || entry.lastSolvedDate === null
+          ? entry.lastSolvedDate
+          : null,
+    };
+  });
+
+  return output;
+}
+
+function normalizeBookIdentifier(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "-");
+}
+
+function getBookAchievementId(book) {
+  if (!book) return "";
+  return normalizeBookIdentifier(
+    book.id || book.slug || book.key || getBookStatsKey?.(book) || book.name || book.book,
+  );
+}
+
+function buildAchievementBookIndex() {
+  const index = {};
+
+  (Array.isArray(books) ? books : []).forEach((book) => {
+    const id = getBookAchievementId(book);
+    if (!id) return;
+    index[id] = book;
+  });
+
+  return index;
+}
+
+function getAchievementBookIndex() {
+  if (!state.ui) state.ui = {};
+  if (!state.ui.achievementBookIndex) {
+    state.ui.achievementBookIndex = buildAchievementBookIndex();
+  }
+  return state.ui.achievementBookIndex;
+}
+
+function getAchievementBookById(bookId) {
+  return getAchievementBookIndex()[normalizeBookIdentifier(bookId)] || null;
+}
+
+function getBookSectionLabel(book) {
+  return String(book?.section || book?.division || book?.category || "")
+    .trim()
+    .toLowerCase();
+}
+
+function isPaulineBook(book) {
+  const id = getBookAchievementId(book);
+  return [
+    "romans",
+    "1-corinthians",
+    "2-corinthians",
+    "galatians",
+    "ephesians",
+    "philippians",
+    "colossians",
+    "1-thessalonians",
+    "2-thessalonians",
+    "1-timothy",
+    "2-timothy",
+    "titus",
+    "philemon",
+  ].includes(id);
+}
+
+function isGeneralEpistleBook(book) {
+  const id = getBookAchievementId(book);
+  return [
+    "hebrews",
+    "james",
+    "1-peter",
+    "2-peter",
+    "1-john",
+    "2-john",
+    "3-john",
+    "jude",
+  ].includes(id);
+}
+
+function isBookInGroup(book, groupKey) {
+  if (!book) return false;
+
+  const testament = String(book.testament || "")
+    .trim()
+    .toLowerCase();
+
+  const section = getBookSectionLabel(book);
+  const id = getBookAchievementId(book);
+
+  const isOldTestament =
+    testament === "old" || testament === "old testament";
+
+  const isNewTestament =
+    testament === "new" || testament === "new testament";
+
+  switch (groupKey) {
+    case BOOK_GROUP_KEYS.PENTATEUCH:
+      return isOldTestament && section === "pentateuch";
+
+    case BOOK_GROUP_KEYS.HISTORICAL:
+      return isOldTestament && (
+        section === "historical" ||
+        section === "historical books" ||
+        section === "history"
+      );
+
+    case BOOK_GROUP_KEYS.WISDOM:
+      return isOldTestament && (
+        section === "wisdom" ||
+        section === "wisdom books" ||
+        section === "poetry"
+      );
+
+    case BOOK_GROUP_KEYS.MAJOR_PROPHETS:
+      return isOldTestament && (
+        section === "major prophets" ||
+        section === "major prophet"
+      );
+
+    case BOOK_GROUP_KEYS.MINOR_PROPHETS:
+      return isOldTestament && (
+        section === "minor prophets" ||
+        section === "minor prophet"
+      );
+
+    case BOOK_GROUP_KEYS.GOSPELS:
+      return isNewTestament && (
+        section === "gospels" ||
+        ["matthew", "mark", "luke", "john"].includes(id)
+      );
+
+    case BOOK_GROUP_KEYS.PAULINE_EPISTLES:
+      return isNewTestament && isPaulineBook(book);
+
+    case BOOK_GROUP_KEYS.GENERAL_EPISTLES:
+      return isNewTestament && isGeneralEpistleBook(book);
+
+    case BOOK_GROUP_KEYS.OLD_TESTAMENT_ALL:
+      return isOldTestament;
+
+    case BOOK_GROUP_KEYS.NEW_TESTAMENT_ALL:
+      return isNewTestament;
+
+    default:
+      return false;
+  }
+}
+
+function getBooksForAchievementGroup(groupKey) {
+  return (Array.isArray(books) ? books : []).filter((book) =>
+    isBookInGroup(book, groupKey),
+  );
+}
+
+function getSolvedBookIds() {
+  const bookStats = ensureStatsSchema().bookStats || {};
+  const solvedIds = new Set();
+
+  Object.entries(bookStats).forEach(([key, entry]) => {
+    if ((entry?.solves || 0) > 0) {
+      solvedIds.add(normalizeBookIdentifier(key));
+    }
+  });
+
+  return solvedIds;
+}
+
+function getSolvedBookCount(bookId) {
+  const stats = ensureStatsSchema();
+  const normalizedId = normalizeBookIdentifier(bookId);
+  const entry = stats.bookStats?.[normalizedId];
+  return sanitizeNonNegativeInt(entry?.solves, 0);
+}
+
+function getAchievementProgressSnapshot() {
+  const stats = ensureStatsSchema();
+  const solvedBookIds = getSolvedBookIds();
+  const solvedGroups = {};
+
+  Object.values(BOOK_GROUP_KEYS).forEach((groupKey) => {
+    const groupBookIds = getBooksForAchievementGroup(groupKey).map((book) =>
+      getBookAchievementId(book),
+    );
+    solvedGroups[groupKey] = {
+      total: groupBookIds.length,
+      solved: groupBookIds.filter((id) => solvedBookIds.has(id)).length,
+      solvedIds: groupBookIds.filter((id) => solvedBookIds.has(id)),
+      requiredIds: groupBookIds,
+    };
+  });
+
+  return {
+    totalCorrect: stats.achievements.counters.totalCorrect || 0,
+    dailyCorrect: stats.achievements.counters.dailyCorrect || 0,
+    practiceCorrect: stats.achievements.counters.practiceCorrect || 0,
+    firstTryCorrect: stats.achievements.counters.firstTryCorrect || 0,
+    consecutiveFirstTryCorrect:
+      stats.achievements.counters.consecutiveFirstTryCorrect || 0,
+    currentDailyStreak: stats.daily.currentStreak || 0,
+    solvedBookIds,
+    solvedGroups,
+    actsSolvedCount: getSolvedBookCount("acts"),
+    revelationSolvedCount: getSolvedBookCount("revelation"),
+  };
+}
+
+function sanitizeAchievementCounters(value) {
+  const defaults = createDefaultAchievementCounters();
+  const source =
+    value && typeof value === "object" && !Array.isArray(value) ? value : {};
+
+  return {
+    totalCorrect: sanitizeNonNegativeInt(source.totalCorrect, defaults.totalCorrect),
+    dailyCorrect: sanitizeNonNegativeInt(source.dailyCorrect, defaults.dailyCorrect),
+    practiceCorrect: sanitizeNonNegativeInt(source.practiceCorrect, defaults.practiceCorrect),
+    firstTryCorrect: sanitizeNonNegativeInt(source.firstTryCorrect, defaults.firstTryCorrect),
+    consecutiveFirstTryCorrect: sanitizeNonNegativeInt(
+      source.consecutiveFirstTryCorrect,
+      defaults.consecutiveFirstTryCorrect,
+    ),
+  };
+}
+
+function sanitizeAchievements(value) {
+  const defaults = createDefaultAchievements();
+  const source =
+    value && typeof value === "object" && !Array.isArray(value) ? value : {};
+
+  const rawEarned =
+    source.earned && typeof source.earned === "object" && !Array.isArray(source.earned)
+      ? source.earned
+      : {};
+
+  const earned = Object.entries(rawEarned).reduce((acc, [id, entry]) => {
+    const normalizedId = LEGACY_STREAK_BADGE_ID_MAP[id] || id;
+    const achievement = ACHIEVEMENT_MAP[normalizedId];
+    if (!achievement) return acc;
+
+    const safeEntry =
+      entry && typeof entry === "object" && !Array.isArray(entry) ? entry : {};
+
+    acc[normalizedId] = {
+      earnedAt: sanitizeSerializableTimestamp(safeEntry.earnedAt) || null,
+      mode:
+        safeEntry.mode === "daily" || safeEntry.mode === "practice"
+          ? safeEntry.mode
+          : null,
+      source: typeof safeEntry.source === "string" ? safeEntry.source : null,
+      context:
+        safeEntry.context && typeof safeEntry.context === "object" && !Array.isArray(safeEntry.context)
+          ? { ...safeEntry.context }
+          : {},
+    };
+
+    return acc;
+  }, {});
+
+  const lastAwarded = Array.isArray(source.lastAwarded)
+    ? source.lastAwarded
+      .map((item) => {
+        const normalizedId =
+          LEGACY_STREAK_BADGE_ID_MAP[item?.id] || item?.id || null;
+        const achievement = normalizedId ? ACHIEVEMENT_MAP[normalizedId] : null;
+        if (!achievement) return null;
+
+        return {
+          id: normalizedId,
+          earnedAt: sanitizeSerializableTimestamp(item.earnedAt) || null,
+          mode:
+            item.mode === "daily" || item.mode === "practice" ? item.mode : null,
+          source: typeof item.source === "string" ? item.source : null,
+          context:
+            item.context && typeof item.context === "object" && !Array.isArray(item.context)
+              ? { ...item.context }
+              : {},
+        };
+      })
+      .filter(Boolean)
+    : [];
+
+  return {
+    ...source,
+    version: sanitizeNonNegativeInt(source.version, defaults.version) || defaults.version,
+    earned,
+    counters: sanitizeAchievementCounters(source.counters),
+    lastAwarded,
+  };
+}
+
+function sanitizeDailyStats(value) {
+  const defaults = createDefaultDailyStats();
+  const source =
+    value && typeof value === "object" && !Array.isArray(value) ? value : {};
+
+  return {
+    ...defaults,
+    ...source,
+    played: sanitizeNonNegativeInt(source.played, defaults.played),
+    won: sanitizeNonNegativeInt(source.won, defaults.won),
+    lost: sanitizeNonNegativeInt(source.lost, defaults.lost),
+    currentStreak: sanitizeNonNegativeInt(source.currentStreak, defaults.currentStreak),
+    bestStreak: sanitizeNonNegativeInt(source.bestStreak, defaults.bestStreak),
+    guessDistribution: sanitizeGuessDistribution(source.guessDistribution),
+    lastDailySolvedDate:
+      typeof source.lastDailySolvedDate === "string" || source.lastDailySolvedDate === null
+        ? source.lastDailySolvedDate
+        : defaults.lastDailySolvedDate,
+    earnedBadges: sanitizeEarnedBadges(source.earnedBadges),
+  };
+}
+
+function sanitizePracticeStats(value) {
+  const defaults = createDefaultPracticeStats();
+  const source =
+    value && typeof value === "object" && !Array.isArray(value) ? value : {};
+
+  return {
+    ...defaults,
+    ...source,
+    played: sanitizeNonNegativeInt(source.played, defaults.played),
+    won: sanitizeNonNegativeInt(source.won, defaults.won),
+    lost: sanitizeNonNegativeInt(source.lost, defaults.lost),
+    guessDistribution: sanitizeGuessDistribution(source.guessDistribution),
+  };
+}
+
+function normalizeStatsShape(saved) {
+  const defaults = createDefaultStats();
+  const source =
+    saved && typeof saved === "object" && !Array.isArray(saved) ? deepClone(saved) : {};
+
+  const hasNestedShape =
+    source.daily &&
+    typeof source.daily === "object" &&
+    !Array.isArray(source.daily);
+
+  const legacyDailySource = hasNestedShape ? source.daily : source;
+  const legacyPracticeSource =
+    source.practice && typeof source.practice === "object" && !Array.isArray(source.practice)
+      ? source.practice
+      : defaults.practice;
+
+  const normalized = {
+    ...defaults,
+    ...source,
+    version: STATS_SCHEMA_VERSION,
+    daily: sanitizeDailyStats(legacyDailySource),
+    practice: sanitizePracticeStats(legacyPracticeSource),
+    bookStats: sanitizeBookStats(source.bookStats),
+    achievements: sanitizeAchievements(source.achievements),
+    meta: {
+      ...(source.meta && typeof source.meta === "object" && !Array.isArray(source.meta)
+        ? source.meta
+        : defaults.meta),
+      updatedAt: sanitizeSerializableTimestamp(source.meta?.updatedAt),
+    },
+  };
+
+  const legacyEarnedBadges = [
+    ...(Array.isArray(source.earnedBadges) ? source.earnedBadges : []),
+    ...(Array.isArray(source.daily?.earnedBadges) ? source.daily.earnedBadges : []),
+    ...(Array.isArray(normalized.daily.earnedBadges) ? normalized.daily.earnedBadges : []),
+  ];
+
+  legacyEarnedBadges.forEach((legacyId) => {
+    const normalizedId = LEGACY_STREAK_BADGE_ID_MAP[legacyId];
+    if (!normalizedId || normalized.achievements.earned[normalizedId]) return;
+
+    normalized.achievements.earned[normalizedId] = {
+      earnedAt: null,
+      mode: "daily",
+      source: "legacy-streak-badge",
+      context: {},
+    };
+  });
+
+  normalized.daily.earnedBadges = Array.from(
+    new Set(
+      Object.keys(normalized.achievements.earned)
+        .filter((id) => ACHIEVEMENT_MAP[id]?.family === "streak")
+        .concat(
+          legacyEarnedBadges
+            .map((legacyId) => LEGACY_STREAK_BADGE_ID_MAP[legacyId] || legacyId)
+            .filter((id) => ACHIEVEMENT_MAP[id]?.family === "streak"),
+        ),
+    ),
+  );
+
+  normalized.achievements.version = 2;
+  normalized.achievements.counters = sanitizeAchievementCounters(
+    normalized.achievements.counters,
+  );
+  normalized.achievements.lastAwarded = Array.isArray(normalized.achievements.lastAwarded)
+    ? normalized.achievements.lastAwarded
+    : [];
+
+  return normalized;
+}
+
+function touchStatsMeta(stats) {
+  if (!stats.meta || typeof stats.meta !== "object" || Array.isArray(stats.meta)) {
+    stats.meta = { updatedAt: null };
+  }
+
+  stats.meta.updatedAt = new Date().toISOString();
+  stats.version = STATS_SCHEMA_VERSION;
+  return stats;
+}
+
+function ensureStatsSchema() {
+  state.stats = normalizeStatsShape(state.stats);
+  return state.stats;
+}
+
+function syncLegacyBadgeFieldsFromAchievements() {
+  const stats = ensureStatsSchema();
+  stats.daily.earnedBadges = Array.from(
+    new Set(
+      Object.keys(stats.achievements.earned).filter(
+        (id) => ACHIEVEMENT_MAP[id]?.family === "streak",
+      ),
+    ),
+  );
+}
+
+function getAchievementById(id) {
+  return ACHIEVEMENT_MAP[id] || null;
+}
+
+function getEarnedAchievementsMap() {
+  return ensureStatsSchema().achievements.earned || {};
+}
+
+function hasEarnedAchievement(id) {
+  return !!getEarnedAchievementsMap()[id];
+}
+
+function getAchievementImagePath(achievement) {
+  const imageKey = achievement?.imageKey || achievement?.id;
+  if (!imageKey) return "";
+  return `assets/achievements/${imageKey}.png`;
+}
+
+function getEarnedAchievementIds() {
+  return Object.keys(getEarnedAchievementsMap());
+}
+
+function getAchievementDefinitionList(ids = []) {
+  return ids
+    .map((id) => getAchievementById(id))
+    .filter(Boolean);
+}
+
+function buildAchievementAwardRecord(achievement, context = {}) {
+  return {
+    earnedAt: new Date().toISOString(),
+    mode: state.mode === "daily" || state.mode === "practice" ? state.mode : null,
+    source: "achievement-engine",
+    context: { ...context },
+  };
+}
+
+function recordAchievementEarned(achievement, context = {}) {
+  if (!achievement) return null;
+
+  if (!state.stats || typeof state.stats !== "object") {
+    state.stats = createDefaultStats();
+  }
+
+  if (!state.stats.achievements || typeof state.stats.achievements !== "object") {
+    state.stats.achievements = createDefaultAchievements();
+  }
+
+  if (!state.stats.achievements.earned || typeof state.stats.achievements.earned !== "object") {
+    state.stats.achievements.earned = {};
+  }
+
+  if (!Array.isArray(state.stats.achievements.lastAwarded)) {
+    state.stats.achievements.lastAwarded = [];
+  }
+
+  if (state.stats.achievements.earned[achievement.id]) {
+    return null;
+  }
+
+  const record = buildAchievementAwardRecord(achievement, context);
+  state.stats.achievements.earned[achievement.id] = record;
+  state.stats.achievements.lastAwarded.push({
+    id: achievement.id,
+    ...record,
+  });
+
+  syncLegacyBadgeFieldsFromAchievements();
+
+  return {
+    ...achievement,
+    earned: true,
+    ...record,
+  };
+}
+
+function evaluateAchievementCompletion(achievement, snapshot) {
+  if (!achievement) return { complete: false, progress: 0, target: 0, context: {} };
+
+  switch (achievement.kind) {
+    case "daily-streak": {
+      const current = snapshot.currentDailyStreak || 0;
+      const target = achievement.threshold || 0;
+      return {
+        complete: current >= target,
+        progress: current,
+        target,
+        context: { streakLength: current },
+      };
+    }
+
+    case "first-try-total": {
+      const current = snapshot.firstTryCorrect || 0;
+      const target = achievement.threshold || 0;
+      return {
+        complete: current >= target,
+        progress: current,
+        target,
+        context: { firstTryCorrect: current },
+      };
+    }
+
+    case "total-correct": {
+      const current = snapshot.totalCorrect || 0;
+      const target = achievement.threshold || 0;
+      return {
+        complete: current >= target,
+        progress: current,
+        target,
+        context: { totalCorrect: current },
+      };
+    }
+
+    case "consecutive-first-try": {
+      const current = snapshot.consecutiveFirstTryCorrect || 0;
+      const target = achievement.threshold || 0;
+      return {
+        complete: current >= target,
+        progress: current,
+        target,
+        context: { consecutiveFirstTryCorrect: current },
+      };
+    }
+
+    case "book-group-complete": {
+      const group = snapshot.solvedGroups[achievement.targetGroup] || {
+        solved: 0,
+        total: 0,
+        solvedIds: [],
+        requiredIds: [],
+      };
+
+      return {
+        complete: group.total > 0 && group.solved >= group.total,
+        progress: group.solved,
+        target: group.total,
+        context: {
+          group: achievement.targetGroup,
+          solved: group.solved,
+          total: group.total,
+          solvedIds: group.solvedIds,
+        },
+      };
+    }
+
+    case "book-count": {
+      const current =
+        achievement.targetBookId === "acts"
+          ? snapshot.actsSolvedCount
+          : achievement.targetBookId === "revelation"
+            ? snapshot.revelationSolvedCount
+            : getSolvedBookCount(achievement.targetBookId);
+      const target = achievement.threshold || 0;
+
+      return {
+        complete: current >= target,
+        progress: current,
+        target,
+        context: {
+          bookId: achievement.targetBookId,
+          solves: current,
+        },
+      };
+    }
+
+    case "meta-knowledge-complete": {
+      const earnedKnowledgeCount = KNOWLEDGE_ACHIEVEMENT_IDS.filter((id) =>
+        hasEarnedAchievement(id),
+      ).length;
+
+      return {
+        complete: earnedKnowledgeCount >= KNOWLEDGE_ACHIEVEMENT_IDS.length,
+        progress: earnedKnowledgeCount,
+        target: KNOWLEDGE_ACHIEVEMENT_IDS.length,
+        context: {
+          earnedKnowledgeCount,
+          requiredKnowledgeCount: KNOWLEDGE_ACHIEVEMENT_IDS.length,
+        },
+      };
+    }
+
+    default:
+      return { complete: false, progress: 0, target: 0, context: {} };
+  }
+}
+
+function computeAchievementsToAward() {
+  const snapshot = getAchievementProgressSnapshot();
+  const newlyEarned = [];
+
+  const orderedAchievements = [...ACHIEVEMENTS].sort((a, b) => {
+    if (a.family === b.family) {
+      const aThreshold = Number.isFinite(a.threshold) ? a.threshold : Number.MAX_SAFE_INTEGER;
+      const bThreshold = Number.isFinite(b.threshold) ? b.threshold : Number.MAX_SAFE_INTEGER;
+
+      if (aThreshold !== bThreshold) {
+        return aThreshold - bThreshold;
+      }
+
+      return a.label.localeCompare(b.label);
+    }
+
+    return a.family.localeCompare(b.family);
+  });
+
+  orderedAchievements.forEach((achievement) => {
+    if (hasEarnedAchievement(achievement.id)) return;
+
+    const evaluation = evaluateAchievementCompletion(achievement, snapshot);
+    if (!evaluation.complete) return;
+
+    const awarded = recordAchievementEarned(achievement, evaluation.context);
+    if (awarded) {
+      newlyEarned.push(awarded);
+    }
+  });
+
+  if (newlyEarned.length) {
+    syncLegacyBadgeFieldsFromAchievements();
+  }
+
+  return newlyEarned;
+}
+
+function getLastAwardedAchievements() {
+  const stats = ensureStatsSchema();
+  const list = Array.isArray(stats.achievements.lastAwarded)
+    ? stats.achievements.lastAwarded
+    : [];
+
+  return list
+    .map((item) => {
+      const achievement = getAchievementById(item.id);
+      if (!achievement) return null;
+      return {
+        ...achievement,
+        earned: true,
+        earnedAt: item.earnedAt || null,
+        mode: item.mode || null,
+        source: item.source || null,
+        context:
+          item.context && typeof item.context === "object" && !Array.isArray(item.context)
+            ? { ...item.context }
+            : {},
+      };
+    })
+    .filter(Boolean);
+}
+
+function clearLastAwardedAchievements() {
+  if (!state.stats || typeof state.stats !== "object") {
+    state.stats = createDefaultStats();
+  }
+
+  if (!state.stats.achievements || typeof state.stats.achievements !== "object") {
+    state.stats.achievements = createDefaultAchievements();
+  }
+
+  state.stats.achievements.lastAwarded = [];
+}
+
+function getNewlyEarnedAchievements(options = {}) {
+  const family = options.family || null;
+  const list = getLastAwardedAchievements();
+
+  return family
+    ? list.filter((achievement) => achievement.family === family)
+    : list;
+}
+
+function getAchievementsByFamily(family) {
+  return ACHIEVEMENTS.filter((achievement) => achievement.family === family);
+}
+
+function clampAchievementProgress(progress, target) {
+  const safeProgress = Number.isFinite(progress) ? Math.max(0, progress) : 0;
+  const safeTarget = Number.isFinite(target) ? Math.max(0, target) : 0;
+  const isComplete = safeTarget > 0 && safeProgress >= safeTarget;
+
+  return {
+    progress: safeProgress,
+    target: safeTarget,
+    percent: safeTarget > 0 ? Math.max(0, Math.min(100, (safeProgress / safeTarget) * 100)) : 0,
+    remaining: safeTarget > 0 ? Math.max(0, safeTarget - safeProgress) : Number.POSITIVE_INFINITY,
+    isComplete,
+  };
+}
+
+function getAchievementEvaluation(achievement) {
+  return evaluateAchievementCompletion(
+    achievement,
+    getAchievementProgressSnapshot(),
+  );
+}
+
+function shouldTreatAchievementAsEarned(achievement, evaluation = null) {
+  const computedEvaluation = evaluation || getAchievementEvaluation(achievement);
+  return hasEarnedAchievement(achievement.id) || computedEvaluation.complete;
+}
+
+function getAchievementStatusCopy(achievement, evaluation = null) {
+  if (shouldTreatAchievementAsEarned(achievement, evaluation)) {
+    return {
+      icon: "✓",
+      label: "Earned",
+    };
+  }
+
+  return {
+    icon: "🔒",
+    label: "Locked",
+  };
+}
+
+function getAchievementDescriptionForUi(achievement) {
+  if (!achievement) return "";
+
+  if (achievement.kind === "book-group-complete") {
+    return "Complete one verse from each required book.";
+  }
+
+  if (achievement.kind === "meta-knowledge-complete") {
+    return "Earn every Bible Knowledge achievement.";
+  }
+
+  return achievement.description || "";
+}
+
+function formatAchievementProgressText(achievement, evaluation) {
+  if (!achievement || !evaluation) return "";
+
+  const clamped = clampAchievementProgress(evaluation.progress, evaluation.target);
+  const progress = Math.min(clamped.progress, clamped.target || clamped.progress);
+  const target = clamped.target;
+
+  switch (achievement.kind) {
+    case "daily-streak":
+      return `${progress}/${target} days`;
+
+    case "first-try-total":
+      return `${progress}/${target} first-try wins`;
+
+    case "total-correct":
+      return `${progress}/${target} correct`;
+
+    case "consecutive-first-try":
+      return `${progress}/${target} in a row`;
+
+    case "book-group-complete":
+      return `${progress}/${target} books completed`;
+
+    case "book-count": {
+      const book = getAchievementBookById(achievement.targetBookId);
+      const fallbackLabel = achievement.targetBookId
+        ? achievement.targetBookId
+          .split("-")
+          .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+          .join(" ")
+        : "Book";
+      const bookLabel = book?.name || fallbackLabel;
+      return `${progress}/${target} ${bookLabel} verses`;
+    }
+
+    case "meta-knowledge-complete":
+      return `${progress}/${target} knowledge achievements`;
+
+    default:
+      return target > 0 ? `${progress}/${target}` : "";
+  }
+}
+
+function buildAchievementCardMarkup(achievement, options = {}) {
+  if (!achievement) return "";
+
+  const evaluation = options.evaluation || getAchievementEvaluation(achievement);
+  const progressState = clampAchievementProgress(evaluation.progress, evaluation.target);
+  const isEarned = options.isEarned === true || shouldTreatAchievementAsEarned(achievement, evaluation);
+  const title = options.title || achievement.label || "";
+  const description = options.description || getAchievementDescriptionForUi(achievement);
+  const progressText = options.progressText || formatAchievementProgressText(achievement, evaluation);
+  const status = options.status || getAchievementStatusCopy(achievement, evaluation);
+  const progressLabel = title
+    ? `${title} progress: ${progressText || "No progress yet"}`
+    : progressText || "No progress yet";
+  const ariaValueNow = progressState.target > 0
+    ? Math.min(progressState.progress, progressState.target)
+    : progressState.progress;
+  const imagePath = getAchievementImagePath(achievement);
+
+  return `
+    <article class="achievement-card ${isEarned ? "is-earned" : "is-locked"}" ${isEarned ? "" : 'aria-disabled="true"'}>
+      <div class="achievement-card__media" aria-hidden="true">
+        ${
+          imagePath
+            ? `<img class="achievement-card__image" src="${escapeHtml(imagePath)}" alt="">`
+            : `<div class="achievement-card__media-slot">Badge image</div>`
+        }
+      </div>
+      <div class="achievement-card__content">
+        <h3 class="achievement-card__title">${escapeHtml(title)}</h3>
+        ${description ? `<p class="achievement-card__description">${escapeHtml(description)}</p>` : ""}
+        ${progressText ? `<p class="achievement-card__progress-text">${escapeHtml(progressText)}</p>` : ""}
+        <div class="achievement-card__status" aria-label="${escapeHtml(status.label)}">
+          <span class="achievement-card__status-icon" aria-hidden="true">${escapeHtml(status.icon)}</span>
+          <span class="achievement-card__status-text">${escapeHtml(status.label)}</span>
+        </div>
+      </div>
+      <div class="achievement-card__progress">
+        <div
+          class="achievement-progress__track"
+          role="progressbar"
+          aria-label="${escapeHtml(progressLabel)}"
+          aria-valuemin="0"
+          aria-valuenow="${ariaValueNow}"
+          aria-valuemax="${progressState.target > 0 ? progressState.target : Math.max(progressState.progress, 1)}">
+          <span class="achievement-progress__fill" style="width: ${progressState.percent}%;"></span>
+        </div>
+      </div>
+    </article>
+  `;
+}
+function getClosestIncompleteAchievements(limit = 3) {
+  return ACHIEVEMENTS
+    .map((achievement) => {
+      const evaluation = getAchievementEvaluation(achievement);
+      const progressState = clampAchievementProgress(evaluation.progress, evaluation.target);
+
+      return {
+        achievement,
+        evaluation,
+        isEarned: shouldTreatAchievementAsEarned(achievement, evaluation),
+        remaining: progressState.remaining,
+        ratio: progressState.target > 0 ? progressState.progress / progressState.target : 0,
+        target: progressState.target,
+      };
+    })
+    .filter((entry) => !entry.isEarned && entry.target > 0)
+    .sort((a, b) => {
+      if (a.remaining !== b.remaining) return a.remaining - b.remaining;
+      if (b.ratio !== a.ratio) return b.ratio - a.ratio;
+      if (a.target !== b.target) return a.target - b.target;
+      return a.achievement.label.localeCompare(b.achievement.label);
+    })
+    .slice(0, limit);
+}
+
+function getAchievementCategoryLabel(category) {
+  switch (category) {
+    case ACHIEVEMENT_CATEGORIES.streak:
+      return "Streak";
+    case ACHIEVEMENT_CATEGORIES.accuracy:
+      return "Accuracy";
+    case ACHIEVEMENT_CATEGORIES.bibleKnowledge:
+      return "Bible knowledge";
+    case ACHIEVEMENT_CATEGORIES.rare:
+      return "Rare and meta";
+    default:
+      return "Achievements";
+  }
+}
+
+function getAchievementCategoryDescription(category) {
+  switch (category) {
+    case ACHIEVEMENT_CATEGORIES.streak:
+      return "Daily streak and consistency milestones.";
+    case ACHIEVEMENT_CATEGORIES.accuracy:
+      return "First-try and precision-based milestones.";
+    case ACHIEVEMENT_CATEGORIES.bibleKnowledge:
+      return "Book, section, and testament coverage milestones.";
+    case ACHIEVEMENT_CATEGORIES.rare:
+      return "Long-term and special completion milestones.";
+    default:
+      return "";
+  }
+}
+
+function getAchievementCategoryOrder(category) {
+  switch (category) {
+    case ACHIEVEMENT_CATEGORIES.streak:
+      return 1;
+    case ACHIEVEMENT_CATEGORIES.accuracy:
+      return 2;
+    case ACHIEVEMENT_CATEGORIES.bibleKnowledge:
+      return 3;
+    case ACHIEVEMENT_CATEGORIES.rare:
+      return 4;
+    default:
+      return 99;
+  }
+}
+
+function compareAchievementsForStatsModal(a, b) {
+  const aEarned = shouldTreatAchievementAsEarned(a, getAchievementEvaluation(a));
+  const bEarned = shouldTreatAchievementAsEarned(b, getAchievementEvaluation(b));
+
+  if (aEarned !== bEarned) {
+    return aEarned ? -1 : 1;
+  }
+
+  const aThreshold = Number.isFinite(a.threshold) ? a.threshold : Number.MAX_SAFE_INTEGER;
+  const bThreshold = Number.isFinite(b.threshold) ? b.threshold : Number.MAX_SAFE_INTEGER;
+
+  if (aThreshold !== bThreshold) {
+    return aThreshold - bThreshold;
+  }
+
+  return a.label.localeCompare(b.label);
+}
+
+function buildAchievementCategoryGroupMarkup(category, achievements) {
+  if (!isNonEmptyArray(achievements)) return "";
+
+  const title = getAchievementCategoryLabel(category);
+  const description = getAchievementCategoryDescription(category);
+
+  const cardsMarkup = achievements
+    .sort(compareAchievementsForStatsModal)
+    .map((achievement) =>
+      buildAchievementCardMarkup(achievement, {
+        evaluation: getAchievementEvaluation(achievement),
+      }),
+    )
+    .join("");
+
+  return `
+    <section class="achievement-group" aria-labelledby="achievement-group-${escapeHtml(category)}">
+      <div class="achievement-group__header">
+        <h3 class="achievement-group__title" id="achievement-group-${escapeHtml(category)}">${escapeHtml(title)}</h3>
+        ${description ? `<p class="achievement-group__meta">${escapeHtml(description)}</p>` : ""}
+      </div>
+      <div class="achievement-group__list">
+        ${cardsMarkup}
+      </div>
+    </section>
+  `;
+}
+
+function reconcileAchievementsWithStats() {
+  const stats = ensureStatsSchema();
+  const reconciledEarned = {
+    ...(stats.achievements?.earned && typeof stats.achievements.earned === "object"
+      ? stats.achievements.earned
+      : {}),
+  };
+
+  const awardedIds = [];
+
+  const orderedAchievements = [...ACHIEVEMENTS].sort((a, b) => {
+    if (a.family === b.family) {
+      const aThreshold = Number.isFinite(a.threshold) ? a.threshold : Number.MAX_SAFE_INTEGER;
+      const bThreshold = Number.isFinite(b.threshold) ? b.threshold : Number.MAX_SAFE_INTEGER;
+
+      if (aThreshold !== bThreshold) {
+        return aThreshold - bThreshold;
+      }
+
+      return a.label.localeCompare(b.label);
+    }
+
+    return a.family.localeCompare(b.family);
+  });
+
+  orderedAchievements.forEach((achievement) => {
+    const evaluation = evaluateAchievementCompletion(achievement, getAchievementProgressSnapshot());
+
+    if (!evaluation.complete) {
+      return;
+    }
+
+    if (!reconciledEarned[achievement.id]) {
+      reconciledEarned[achievement.id] = {
+        earnedAt: new Date().toISOString(),
+        mode: null,
+        source: "achievement-reconcile",
+        context: { ...evaluation.context },
+      };
+      awardedIds.push(achievement.id);
+    }
+  });
+
+  stats.achievements.earned = reconciledEarned;
+  syncLegacyBadgeFieldsFromAchievements();
+
+  return awardedIds;
+}
+
+function getEarnedBadgeIds() {
+  return getEarnedAchievementIds().filter(
+    (id) => getAchievementById(id)?.family === "streak",
+  );
+}
+
+function awardStreakBadges() {
+  return computeAchievementsToAward().filter(
+    (achievement) => achievement.family === "streak",
+  );
+}
+
+function computeNewlyEarnedBadges() {
+  return getNewlyEarnedAchievements({ family: "streak" }).map(toLegacyBadgeShape);
+}
+
+function toLegacyBadgeShape(achievement) {
+  return {
+    id: achievement.id,
+    label: achievement.label,
+    earned: true,
+  };
+}
+
+function updateAchievementCountersForCompletion(outcome, mode, guessCount) {
+  const stats = ensureStatsSchema();
+  const counters = stats.achievements.counters;
+  const isWin = outcome === "won";
+  const isFirstTryWin = isWin && guessCount === 1;
+
+  if (isWin) {
+    counters.totalCorrect += 1;
+
+    if (mode === "daily") {
+      counters.dailyCorrect += 1;
+    } else if (mode === "practice") {
+      counters.practiceCorrect += 1;
+    }
+
+    if (isFirstTryWin) {
+      counters.firstTryCorrect += 1;
+      counters.consecutiveFirstTryCorrect += 1;
+    } else {
+      counters.consecutiveFirstTryCorrect = 0;
+    }
+
+    return;
+  }
+
+  if (outcome === "lost") {
+    counters.consecutiveFirstTryCorrect = 0;
+  }
+}
+
+function canUseClipboardWrite() {
+  return !!navigator.clipboard?.writeText && !!window.isSecureContext;
+}
+
+async function copyTextToClipboard(text) {
+  if (!canUseClipboardWrite()) {
+    throw new Error("clipboard-unavailable");
+  }
+
+  await navigator.clipboard.writeText(text);
+}
+
+function getShareUrl() {
+  return "https://dvndmy.github.io/BIBDLE";
+}
+
+function getSharePayload() {
+  const text = buildShareText();
+  return {
+    title: "Catholic Bibdle",
+    text,
+  };
+}
+
+function canUseNativeShare(payload = getSharePayload()) {
+  if (typeof navigator.share !== "function") {
+    return false;
+  }
+
+  if (typeof navigator.canShare === "function") {
+    try {
+      return navigator.canShare({
+        title: payload.title,
+        text: payload.text,
+      });
+    } catch {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function bindShareActions() {
+  if (state.ui?.shareActionsBound) {
+    return;
+  }
+
+  if (elements.shareBtn) {
+    elements.shareBtn.addEventListener("click", shareResult);
+  }
+
+  if (elements.copyBtn) {
+    elements.copyBtn.addEventListener("click", copyResult);
+  }
+
+  if (elements.postGameShareBtn) {
+    elements.postGameShareBtn.addEventListener("click", shareResult);
+  }
+
+  if (elements.postGameCopyOnlyBtn) {
+    elements.postGameCopyOnlyBtn.addEventListener("click", copyResult);
+  }
+
+  if (
+    elements.postGameCopyBtn &&
+    !elements.postGameShareBtn &&
+    !elements.postGameCopyOnlyBtn
+  ) {
+    elements.postGameCopyBtn.addEventListener("click", shareResult);
+  }
+
+  state.ui.shareActionsBound = true;
+}
 
 const state = {
   mode: "daily",
@@ -159,25 +1763,7 @@ const state = {
     highContrast: false,
     largeText: false,
   },
-  stats: {
-    daily: {
-      played: 0,
-      won: 0,
-      lost: 0,
-      currentStreak: 0,
-      bestStreak: 0,
-      guessDistribution: {},
-      lastDailySolvedDate: null,
-      earnedBadges: [],
-    },
-    practice: {
-      played: 0,
-      won: 0,
-      lost: 0,
-      guessDistribution: {},
-    },
-    bookStats: {},
-  },
+  stats: createDefaultStats(),
   auth: {
     ready: false,
     enabled: false,
@@ -207,6 +1793,36 @@ function ensureClueUiState() {
   return state.ui.clues;
 }
 
+function syncEndStateVisibility() {
+  const isComplete = state.status === "won" || state.status === "lost";
+
+  if (elements.preGuessPanel) {
+    elements.preGuessPanel.hidden = isComplete;
+  }
+
+  if (elements.guessForm) {
+    elements.guessForm.hidden = isComplete;
+  }
+
+  if (elements.guessInput) {
+    if (isComplete) {
+      elements.guessInput.blur();
+      elements.guessInput.setAttribute("tabindex", "-1");
+    } else {
+      elements.guessInput.removeAttribute("tabindex");
+    }
+  }
+
+  if (elements.autocomplete) {
+    if (isComplete) {
+      elements.autocomplete.innerHTML = "";
+      elements.autocomplete.hidden = true;
+    } else {
+      elements.autocomplete.hidden = false;
+    }
+  }
+}
+
 const elements = {
   mobileLanguageToggle: document.getElementById("mobileLanguageToggle"),
   mobileLanguageGlyph: document.getElementById("mobileLanguageGlyph"),
@@ -217,6 +1833,7 @@ const elements = {
   verseText: document.getElementById("verseText"),
   dateLabel: document.getElementById("dateLabel"),
   countdownTimer: document.getElementById("countdownTimer"),
+  preGuessPanel: document.getElementById("preGuessPanel"),
   attemptLabel: document.getElementById("attemptLabel"),
   hintBlock: document.getElementById("hintBlock"),
   guessForm: document.getElementById("guessForm"),
@@ -227,6 +1844,7 @@ const elements = {
 
   helpBtn: document.getElementById("helpBtn"),
   shareBtn: document.getElementById("shareBtn"),
+  copyBtn: document.getElementById("copyBtn"),
   nextPracticeBtn: document.getElementById("nextPracticeBtn"),
   settingsBtn: document.getElementById("settingsBtn"),
   statsBtn: document.getElementById("statsBtn"),
@@ -255,7 +1873,11 @@ const elements = {
   statsCurrentStreak: document.getElementById("statsCurrentStreak"),
   statsBestStreak: document.getElementById("statsBestStreak"),
   statsGuessDistribution: document.getElementById("statsGuessDistribution"),
-  statsModalBadges: document.getElementById("statsModalBadges"),
+  statsModalAchievements: document.getElementById("statsModalAchievements"),
+  postGameNewAchievementsSection: document.getElementById("postGameNewAchievementsSection"),
+  postGameNewAchievements: document.getElementById("postGameNewAchievements"),
+  postGameClosestAchievementsSection: document.getElementById("postGameClosestAchievementsSection"),
+  postGameClosestAchievements: document.getElementById("postGameClosestAchievements"),
   practiceStatsPlayed: document.getElementById("practiceStatsPlayed"),
   practiceStatsWon: document.getElementById("practiceStatsWon"),
   practiceStatsLost: document.getElementById("practiceStatsLost"),
@@ -287,6 +1909,8 @@ const elements = {
   postGameLeaderboardSection: document.getElementById("postGameLeaderboardSection"),
   postGameLeaderboardRank: document.getElementById("postGameLeaderboardRank"),
   postGameLeaderboardBtn: document.getElementById("postGameLeaderboardBtn"),
+  postGameShareBtn: document.getElementById("postGameShareBtn"),
+  postGameCopyOnlyBtn: document.getElementById("postGameCopyOnlyBtn"),
   postGameCopyBtn: document.getElementById("postGameCopyBtn"),
   postGamePracticeBtn: document.getElementById("postGamePracticeBtn"),
 
@@ -922,24 +2546,25 @@ function mergeBookStatsMap(localMap, cloudMap) {
 }
 
 function mergeStatsData(localStats, cloudStats) {
-  if (!cloudStats || typeof cloudStats !== "object") {
-    return JSON.parse(JSON.stringify(localStats));
-  }
+  const local = normalizeStatsShape(localStats);
+  const cloud = normalizeStatsShape(cloudStats);
 
-  const localDaily = localStats?.daily || {};
-  const cloudDaily = cloudStats?.daily || {};
-  const localPractice = localStats?.practice || {};
-  const cloudPractice = cloudStats?.practice || {};
+  const localDaily = local.daily || {};
+  const cloudDaily = cloud.daily || {};
+  const localPractice = local.practice || {};
+  const cloudPractice = cloud.practice || {};
+  const localAchievements = local.achievements || {};
+  const cloudAchievements = cloud.achievements || {};
+  const localCounters = localAchievements.counters || {};
+  const cloudCounters = cloudAchievements.counters || {};
 
   return {
+    version: STATS_SCHEMA_VERSION,
     daily: {
       played: Math.max(localDaily.played || 0, cloudDaily.played || 0),
       won: Math.max(localDaily.won || 0, cloudDaily.won || 0),
       lost: Math.max(localDaily.lost || 0, cloudDaily.lost || 0),
-      currentStreak: Math.max(
-        localDaily.currentStreak || 0,
-        cloudDaily.currentStreak || 0,
-      ),
+      currentStreak: Math.max(localDaily.currentStreak || 0, cloudDaily.currentStreak || 0),
       bestStreak: Math.max(localDaily.bestStreak || 0, cloudDaily.bestStreak || 0),
       guessDistribution: mergeGuessDistribution(
         localDaily.guessDistribution,
@@ -966,7 +2591,36 @@ function mergeStatsData(localStats, cloudStats) {
         cloudPractice.guessDistribution,
       ),
     },
-    bookStats: mergeBookStatsMap(localStats?.bookStats, cloudStats?.bookStats),
+    bookStats: mergeBookStatsMap(local.bookStats, cloud.bookStats),
+    achievements: {
+      ...localAchievements,
+      ...cloudAchievements,
+      earned: {
+        ...(localAchievements.earned && typeof localAchievements.earned === "object"
+          ? localAchievements.earned
+          : {}),
+        ...(cloudAchievements.earned && typeof cloudAchievements.earned === "object"
+          ? cloudAchievements.earned
+          : {}),
+      },
+      counters: {
+        totalCorrect: Math.max(localCounters.totalCorrect || 0, cloudCounters.totalCorrect || 0),
+        dailyCorrect: Math.max(localCounters.dailyCorrect || 0, cloudCounters.dailyCorrect || 0),
+        practiceCorrect: Math.max(localCounters.practiceCorrect || 0, cloudCounters.practiceCorrect || 0),
+        firstTryCorrect: Math.max(localCounters.firstTryCorrect || 0, cloudCounters.firstTryCorrect || 0),
+        consecutiveFirstTryCorrect: Math.max(
+          localCounters.consecutiveFirstTryCorrect || 0,
+          cloudCounters.consecutiveFirstTryCorrect || 0,
+        ),
+      },
+    },
+    meta: {
+      updatedAt:
+        [local.meta?.updatedAt, cloud.meta?.updatedAt]
+          .filter(Boolean)
+          .sort()
+          .at(-1) || null,
+    },
   };
 }
 
@@ -2079,31 +3733,38 @@ function loadPreferences() {
 }
 
 function saveStats() {
+  const normalized = touchStatsMeta(ensureStatsSchema());
+
   const payload = {
+    version: normalized.version,
     daily: {
-      played: state.stats.daily.played,
-      won: state.stats.daily.won,
-      lost: state.stats.daily.lost,
-      currentStreak: state.stats.daily.currentStreak,
-      bestStreak: state.stats.daily.bestStreak,
-      guessDistribution: state.stats.daily.guessDistribution,
-      lastDailySolvedDate: state.stats.daily.lastDailySolvedDate,
-      earnedBadges: Array.isArray(state.stats.daily.earnedBadges)
-        ? state.stats.daily.earnedBadges
+      played: normalized.daily.played,
+      won: normalized.daily.won,
+      lost: normalized.daily.lost,
+      currentStreak: normalized.daily.currentStreak,
+      bestStreak: normalized.daily.bestStreak,
+      guessDistribution: normalized.daily.guessDistribution,
+      lastDailySolvedDate: normalized.daily.lastDailySolvedDate,
+      earnedBadges: Array.isArray(normalized.daily.earnedBadges)
+        ? normalized.daily.earnedBadges
         : [],
     },
     practice: {
-      played: state.stats.practice.played,
-      won: state.stats.practice.won,
-      lost: state.stats.practice.lost,
-      guessDistribution: state.stats.practice.guessDistribution,
+      played: normalized.practice.played,
+      won: normalized.practice.won,
+      lost: normalized.practice.lost,
+      guessDistribution: normalized.practice.guessDistribution,
     },
     bookStats:
-      state.stats.bookStats &&
-        typeof state.stats.bookStats === "object" &&
-        !Array.isArray(state.stats.bookStats)
-        ? state.stats.bookStats
+      normalized.bookStats &&
+        typeof normalized.bookStats === "object" &&
+        !Array.isArray(normalized.bookStats)
+        ? normalized.bookStats
         : {},
+    achievements: sanitizeAchievements(normalized.achievements),
+    meta: {
+      updatedAt: normalized.meta?.updatedAt || null,
+    },
   };
 
   try {
@@ -2114,177 +3775,26 @@ function saveStats() {
 }
 
 function loadStats() {
-  const defaultDaily = {
-    played: 0,
-    won: 0,
-    lost: 0,
-    currentStreak: 0,
-    bestStreak: 0,
-    guessDistribution: {},
-    lastDailySolvedDate: null,
-    earnedBadges: [],
-  };
-
-  const defaultPractice = {
-    played: 0,
-    won: 0,
-    lost: 0,
-    guessDistribution: {},
-  };
-
-  const sanitizeGuessDistribution = (value) =>
-    value && typeof value === "object" && !Array.isArray(value) ? value : {};
-
-  const sanitizeNonNegativeInt = (value, fallback = 0) =>
-    Number.isInteger(value) && value >= 0 ? value : fallback;
-
-  const sanitizeBookStats = (value) => {
-    if (!value || typeof value !== "object" || Array.isArray(value)) return {};
-
-    const output = {};
-
-    Object.entries(value).forEach(([key, entry]) => {
-      if (!entry || typeof entry !== "object" || Array.isArray(entry)) return;
-
-      output[key] = {
-        plays: sanitizeNonNegativeInt(entry.plays),
-        solves: sanitizeNonNegativeInt(entry.solves),
-        bestAttempts:
-          Number.isInteger(entry.bestAttempts) && entry.bestAttempts > 0
-            ? entry.bestAttempts
-            : null,
-        totalAttempts: sanitizeNonNegativeInt(entry.totalAttempts),
-        lastSolvedDate:
-          typeof entry.lastSolvedDate === "string" || entry.lastSolvedDate === null
-            ? entry.lastSolvedDate
-            : null,
-      };
-    });
-
-    return output;
-  };
-
   try {
     const raw = localStorage.getItem(CONFIG.storageKeys.stats);
 
     if (!raw) {
-      state.stats = {
-        daily: defaultDaily,
-        practice: defaultPractice,
-        bookStats: {},
-      };
+      state.stats = createDefaultStats();
+      reconcileAchievementsWithStats();
       return;
     }
 
     const saved = JSON.parse(raw);
-
-    const hasNestedShape =
-      saved?.daily &&
-      typeof saved.daily === "object" &&
-      saved?.practice &&
-      typeof saved.practice === "object";
-
-    if (hasNestedShape) {
-      state.stats = {
-        daily: {
-          played: sanitizeNonNegativeInt(saved.daily.played),
-          won: sanitizeNonNegativeInt(saved.daily.won),
-          lost: sanitizeNonNegativeInt(saved.daily.lost),
-          currentStreak: sanitizeNonNegativeInt(saved.daily.currentStreak),
-          bestStreak: sanitizeNonNegativeInt(saved.daily.bestStreak),
-          guessDistribution: sanitizeGuessDistribution(saved.daily.guessDistribution),
-          lastDailySolvedDate:
-            typeof saved.daily.lastDailySolvedDate === "string" ||
-              saved.daily.lastDailySolvedDate === null
-              ? saved.daily.lastDailySolvedDate
-              : null,
-          earnedBadges: Array.isArray(saved.daily.earnedBadges)
-            ? saved.daily.earnedBadges.filter((badgeId) =>
-              STREAK_BADGES.some((badge) => badge.id === badgeId),
-            )
-            : [],
-        },
-        practice: {
-          played: sanitizeNonNegativeInt(saved.practice.played),
-          won: sanitizeNonNegativeInt(saved.practice.won),
-          lost: sanitizeNonNegativeInt(saved.practice.lost),
-          guessDistribution: sanitizeGuessDistribution(saved.practice.guessDistribution),
-        },
-        bookStats: sanitizeBookStats(saved.bookStats),
-      };
-      return;
-    }
-
-    state.stats = {
-      daily: {
-        played: sanitizeNonNegativeInt(saved?.played),
-        won: sanitizeNonNegativeInt(saved?.won),
-        lost: sanitizeNonNegativeInt(saved?.lost),
-        currentStreak: sanitizeNonNegativeInt(saved?.currentStreak),
-        bestStreak: sanitizeNonNegativeInt(saved?.bestStreak),
-        guessDistribution: sanitizeGuessDistribution(saved?.guessDistribution),
-        lastDailySolvedDate:
-          typeof saved?.lastDailySolvedDate === "string" ||
-            saved?.lastDailySolvedDate === null
-            ? saved.lastDailySolvedDate
-            : null,
-        earnedBadges: Array.isArray(saved?.earnedBadges)
-          ? saved.earnedBadges.filter((badgeId) =>
-            STREAK_BADGES.some((badge) => badge.id === badgeId),
-          )
-          : [],
-      },
-      practice: defaultPractice,
-      bookStats: sanitizeBookStats(saved?.bookStats),
-    };
+    state.stats = normalizeStatsShape(saved);
+    reconcileAchievementsWithStats();
   } catch {
-    state.stats = {
-      daily: defaultDaily,
-      practice: defaultPractice,
-      bookStats: {},
-    };
+    state.stats = createDefaultStats();
+    reconcileAchievementsWithStats();
   }
 }
 
 function hasRecordedDailyResult(date) {
   return state.stats.daily.lastDailySolvedDate === date;
-}
-
-function getEarnedBadgeIds() {
-  return Array.isArray(state.stats?.daily?.earnedBadges)
-    ? state.stats.daily.earnedBadges
-    : [];
-}
-
-function computeNewlyEarnedBadges() {
-  const earnedBadgeIds = new Set(getEarnedBadgeIds());
-  const currentStreak =
-    Number.isInteger(state.stats?.daily?.currentStreak) &&
-      state.stats.daily.currentStreak >= 0
-      ? state.stats.daily.currentStreak
-      : 0;
-
-  return STREAK_BADGES.filter(
-    (badge) => currentStreak >= badge.threshold && !earnedBadgeIds.has(badge.id),
-  );
-}
-
-function awardStreakBadges() {
-  const existing = [...getEarnedBadgeIds()];
-  const existingSet = new Set(existing);
-  const newlyEarned = computeNewlyEarnedBadges();
-
-  if (!newlyEarned.length) return [];
-
-  newlyEarned.forEach((badge) => {
-    if (!existingSet.has(badge.id)) {
-      existing.push(badge.id);
-      existingSet.add(badge.id);
-    }
-  });
-
-  state.stats.daily.earnedBadges = existing;
-  return newlyEarned;
 }
 
 function updateBookStats(outcome) {
@@ -2311,7 +3821,13 @@ function updateBookStats(outcome) {
 async function recordPuzzleCompletion(outcome) {
   if (!state.currentPuzzle) return;
 
-  if (state.currentPuzzle.mode === "daily") {
+  ensureStatsSchema();
+  clearLastAwardedAchievements();
+
+  const mode = state.currentPuzzle.mode;
+  const guessCount = state.guesses.length;
+
+  if (mode === "daily") {
     const completionDate = state.currentPuzzle.date;
     if (completionDate && hasRecordedDailyResult(completionDate)) return;
 
@@ -2320,7 +3836,6 @@ async function recordPuzzleCompletion(outcome) {
     if (outcome === "won") {
       state.stats.daily.won += 1;
 
-      const guessCount = state.guesses.length;
       state.stats.daily.guessDistribution[guessCount] =
         (state.stats.daily.guessDistribution[guessCount] ?? 0) + 1;
 
@@ -2339,8 +3854,6 @@ async function recordPuzzleCompletion(outcome) {
 
         state.stats.daily.lastDailySolvedDate = completionDate;
       }
-
-      awardStreakBadges();
     } else if (outcome === "lost") {
       state.stats.daily.lost += 1;
 
@@ -2350,12 +3863,19 @@ async function recordPuzzleCompletion(outcome) {
       }
     }
 
+    updateAchievementCountersForCompletion(outcome, "daily", guessCount);
     updateBookStats(outcome);
+
+    if (outcome === "won") {
+      computeAchievementsToAward();
+    }
+
+    syncLegacyBadgeFieldsFromAchievements();
     saveStats();
 
     await submitDailyResultToLeaderboard({
       result: outcome,
-      guesses: outcome === "won" ? state.guesses.length : null,
+      guesses: outcome === "won" ? guessCount : null,
       dateKey: completionDate || getDailyDateKey(),
       puzzleId: getDailyPuzzleId(),
     });
@@ -2363,19 +3883,26 @@ async function recordPuzzleCompletion(outcome) {
     return;
   }
 
-  if (state.currentPuzzle.mode === "practice") {
+  if (mode === "practice") {
     state.stats.practice.played += 1;
 
     if (outcome === "won") {
       state.stats.practice.won += 1;
 
-      const guessCount = state.guesses.length;
       state.stats.practice.guessDistribution[guessCount] =
         (state.stats.practice.guessDistribution[guessCount] ?? 0) + 1;
     } else if (outcome === "lost") {
       state.stats.practice.lost += 1;
     }
 
+    updateAchievementCountersForCompletion(outcome, "practice", guessCount);
+
+    if (outcome === "won") {
+      updateBookStats(outcome);
+      computeAchievementsToAward();
+    }
+
+    syncLegacyBadgeFieldsFromAchievements();
     saveStats();
   }
 }
@@ -2834,21 +4361,14 @@ function syncActionButtons() {
   showWhen(elements.leaderboardBtn, completedCurrentDaily);
 
   showWhen(elements.shareBtn, gameOver);
+  showWhen(elements.copyBtn, gameOver);
+  showWhen(elements.postGameShareBtn, gameOver);
+  showWhen(elements.postGameCopyOnlyBtn, gameOver);
+  showWhen(elements.postGameCopyBtn, false);
 
-  showWhen(
-    elements.tryPracticeBtn,
-    completedCurrentDaily,
-  );
-
-  showWhen(
-    elements.nextPracticeBtn,
-    completedCurrentPractice,
-  );
-
-  showWhen(
-    elements.todayBibdleBtn,
-    inPracticeMode && !completedTodaysDaily,
-  );
+  showWhen(elements.tryPracticeBtn, completedCurrentDaily);
+  showWhen(elements.nextPracticeBtn, completedCurrentPractice);
+  showWhen(elements.todayBibdleBtn, inPracticeMode && !completedTodaysDaily);
 }
 
 function renderPuzzleCard() {
@@ -4213,8 +5733,8 @@ function renderStatsModal() {
   if (elements.statsGuessDistribution) {
     renderStatsSection(dailyStats, elements.statsGuessDistribution);
   }
-  if (elements.statsModalBadges) {
-    renderEarnedBadges(elements.statsModalBadges);
+  if (elements.statsModalAchievements) {
+    renderStatsModalBadges();
   }
 
   if (elements.practiceStatsPlayed) {
@@ -4232,80 +5752,115 @@ function renderStatsModal() {
 }
 
 function getDailyStreakBadges() {
-  const earnedIds = new Set(getEarnedBadgeIds());
-
   return STREAK_BADGES.map((badge) => ({
     ...badge,
-    earned: earnedIds.has(badge.id),
+    earned: hasEarnedAchievement(badge.id),
   }));
 }
 
 function renderStatsModalBadges() {
-  if (!elements.statsModalBadges) return;
+  if (!elements.statsModalAchievements) return;
 
-  const badges = getDailyStreakBadges();
+  const groupedAchievements = ACHIEVEMENTS.reduce((acc, achievement) => {
+    const category = achievement.category || "uncategorized";
 
-  if (!isNonEmptyArray(badges)) {
-    renderInto(
-      elements.statsModalBadges,
-      renderEmptyState({
-        title: "No badges yet",
-        body: "Keep a Daily streak going to unlock badge milestones here.",
-        compact: true,
-        showMarker: true,
-        tone: "empty",
-      }),
-    );
-    bindEmptyStateActions(elements.statsModalBadges);
-    return;
-  }
+    if (!acc[category]) {
+      acc[category] = [];
+    }
 
-  const markup = badges
-    .map((badge) => {
-      const earned = badge.earned;
-      return `
-        <span class="streak-badge ${earned ? "is-earned" : "is-locked"}">
-          <span class="streak-badge-text">${badge.label}</span>
-          <span class="streak-badge-state">${earned ? "Earned" : "Locked"}</span>
-        </span>
-      `;
-    })
-    .join("");
+    acc[category].push(achievement);
+    return acc;
+  }, {});
 
-  renderInto(elements.statsModalBadges, markup);
+  const orderedCategories = Object.keys(groupedAchievements).sort(
+    (a, b) => getAchievementCategoryOrder(a) - getAchievementCategoryOrder(b),
+  );
+
+  const markup = `
+    <div class="achievement-groups">
+      ${orderedCategories
+      .map((category) =>
+        buildAchievementCategoryGroupMarkup(category, groupedAchievements[category]),
+      )
+      .join("")}
+    </div>
+  `;
+
+  renderInto(elements.statsModalAchievements, markup, {
+    visible: hasRenderableMarkup(markup),
+  });
 }
 
-function renderPostGameBadges(container, badges) {
+function renderPostGameNewAchievements(container, achievements) {
   if (!container) return;
 
-  if (!isNonEmptyArray(badges)) {
-    renderInto(
-      container,
-      renderEmptyState({
-        title: "No new badge this round",
-        body: "Keep building your Daily streak to unlock badge milestones.",
-        compact: true,
-        showMarker: true,
-        tone: "empty",
-      }),
-    );
-    bindEmptyStateActions(container);
+  if (!isNonEmptyArray(achievements)) {
+    renderInto(container, "", {
+      visible: false,
+    });
     return;
   }
 
-  const markup = badges
-    .map((badge) => {
-      const earned = badge.earned !== false;
-      return `
-        <span class="streak-badge ${earned ? "is-earned" : "is-locked"}">
-          <span class="streak-badge-text">${badge.label}</span>
-          <span class="streak-badge-state">${earned ? "Earned" : "Locked"}</span>
-        </span>
-      `;
-    })
+  const markup = achievements
+    .map((achievement) =>
+      buildAchievementCardMarkup(achievement, {
+        evaluation: getAchievementEvaluation(achievement),
+        isEarned: true,
+      }),
+    )
     .join("");
 
-  renderInto(container, markup);
+  renderInto(container, markup, {
+    visible: hasRenderableMarkup(markup),
+  });
+}
+
+function renderPostGameClosestAchievements(container, achievements) {
+  if (!container) return;
+
+  if (!isNonEmptyArray(achievements)) {
+    renderInto(container, "", {
+      visible: false,
+    });
+    return;
+  }
+
+  const markup = achievements
+    .map((entry) =>
+      buildAchievementCardMarkup(entry.achievement, {
+        evaluation: entry.evaluation,
+        isEarned: false,
+      }),
+    )
+    .join("");
+
+  renderInto(container, markup, {
+    visible: hasRenderableMarkup(markup),
+  });
+}
+
+function renderPostGameBadges(container, achievements) {
+  if (!container) return;
+
+  if (!isNonEmptyArray(achievements)) {
+    renderInto(container, "", {
+      visible: false,
+    });
+    return;
+  }
+
+  const markup = achievements
+    .map((entry) =>
+      buildAchievementCardMarkup(entry.achievement || entry, {
+        evaluation: entry.evaluation || getAchievementEvaluation(entry.achievement || entry),
+        isEarned: false,
+      }),
+    )
+    .join("");
+
+  renderInto(container, markup, {
+    visible: hasRenderableMarkup(markup),
+  });
 }
 
 function renderPostGamePanel() {
@@ -4334,6 +5889,42 @@ function renderPostGamePanel() {
   renderTriviaSection(content.trivia);
   renderPostGameStats(state.mode);
 
+  if (elements.postGameNewAchievements && elements.postGameNewAchievementsSection) {
+    const newlyEarnedAchievements = getNewlyEarnedAchievements();
+    const hasNewAchievements = isNonEmptyArray(newlyEarnedAchievements);
+
+    showWhen(elements.postGameNewAchievementsSection, hasNewAchievements);
+
+    if (hasNewAchievements) {
+      renderPostGameNewAchievements(
+        elements.postGameNewAchievements,
+        newlyEarnedAchievements,
+      );
+    } else {
+      renderInto(elements.postGameNewAchievements, "", {
+        visible: false,
+      });
+    }
+  }
+
+  if (elements.postGameClosestAchievements && elements.postGameClosestAchievementsSection) {
+    const closestAchievements = getClosestIncompleteAchievements(3);
+    const hasClosestAchievements = isNonEmptyArray(closestAchievements);
+
+    showWhen(elements.postGameClosestAchievementsSection, hasClosestAchievements);
+
+    if (hasClosestAchievements) {
+      renderPostGameClosestAchievements(
+        elements.postGameClosestAchievements,
+        closestAchievements,
+      );
+    } else {
+      renderInto(elements.postGameClosestAchievements, "", {
+        visible: false,
+      });
+    }
+  }
+
   if (state.mode === "daily") {
     showWhen(elements.postGameLeaderboardSection, true);
     loadPostGameLeaderboardRank();
@@ -4360,28 +5951,36 @@ function renderPuzzleView() {
   renderLanguageControl();
   renderMobileLanguageToggle();
   renderPuzzleCard();
-  renderHintBlock();
-  renderGuessRows();
-  renderProximityLine();
-  syncPreferenceControls();
-  syncActionButtons();
-  renderPostGamePanel();
 
-  if (state.status === "won") {
-    renderStatus(
-      `Correct — ${getLocalizedValue(state.currentPuzzle.verse.book, state.currentPuzzle.verse.bookMl)} (${getLocalizedReference(state.currentPuzzle.verse, getCurrentLanguage())}).`,
-    );
-    publishBootSnapshot({ renderStatus: "won" });
-    return;
-  }
+  if (state.status === "won" || state.status === "lost") {
+    syncEndStateVisibility();
+    renderGuessRows();
+    syncPreferenceControls();
+    syncActionButtons();
+    renderPostGamePanel();
 
-  if (state.status === "lost") {
+    if (state.status === "won") {
+      renderStatus(
+        `Correct — ${getLocalizedValue(state.currentPuzzle.verse.book, state.currentPuzzle.verse.bookMl)} (${getLocalizedReference(state.currentPuzzle.verse, getCurrentLanguage())}).`,
+      );
+      publishBootSnapshot({ renderStatus: "won" });
+      return;
+    }
+
     renderStatus(
       `Out of guesses — the answer was ${getLocalizedValue(state.currentPuzzle.verse.book, state.currentPuzzle.verse.bookMl)} (${getLocalizedReference(state.currentPuzzle.verse, getCurrentLanguage())}).`,
     );
     publishBootSnapshot({ renderStatus: "lost" });
     return;
   }
+
+  syncEndStateVisibility();
+  renderHintBlock();
+  renderGuessRows();
+  renderProximityLine();
+  syncPreferenceControls();
+  syncActionButtons();
+  renderPostGamePanel();
 
   const clueState = buildClueRevealState();
   const newHintCount = clueState.newlyUnlockedKeys.length;
@@ -4525,9 +6124,14 @@ function handleDuplicateGuess(book) {
 }
 
 function refreshAfterGuess(message) {
-  renderHintBlock();
+  syncEndStateVisibility();
+
+  if (state.status !== "won" && state.status !== "lost") {
+    renderHintBlock();
+    renderProximityLine();
+  }
+
   renderGuessRows(true);
-  renderProximityLine();
   syncPreferenceControls();
   syncActionButtons();
   renderStatus(message);
@@ -4637,33 +6241,87 @@ function buildShareSummary() {
 
 function buildShareText() {
   const solved = state.status === "won";
-  const guessWord = state.guesses.length === 1 ? "guess" : "guesses";
+  const statusLabel = solved
+    ? "Solved"
+    : state.status === "lost"
+      ? "Lost"
+      : "In progress";
+  const guessCount = state.guesses.length;
+  const guessWord = guessCount === 1 ? "guess" : "guesses";
   const modeLabel = state.mode === "daily" ? "Daily" : "Practice";
   const difficultyLabel =
     typeof state.preferences?.difficulty === "string"
-      ? state.preferences.difficulty.charAt(0).toUpperCase() + state.preferences.difficulty.slice(1)
+      ? state.preferences.difficulty.charAt(0).toUpperCase() +
+      state.preferences.difficulty.slice(1)
       : "Normal";
-  const currentStreak = Number.isFinite(state.stats?.daily.currentStreak) ? state.stats.daily.currentStreak : 0;
+  const currentStreak = Number.isFinite(state.stats?.daily?.currentStreak)
+    ? state.stats.daily.currentStreak
+    : 0;
   const streakLine =
-    state.mode === "daily" && currentStreak > 0
-      ? `Streak: ${currentStreak} day${currentStreak === 1 ? "" : "s 🔥"}\n`
+    state.mode === "daily" && currentStreak > 1
+      ? `Streak: ${currentStreak} days 🔥\n`
       : "";
+  const dateLine = state.mode === "daily" ? state.currentPuzzle?.date || getTodayPuzzleDate() : "practice";
+  const summary = buildShareSummary();
+  const playUrl = getShareUrl();
 
   return `✝️ Catholic Bibdle ✝️
-${state.mode === "daily" ? state.currentPuzzle.date : "practice"}
-${solved ? "Solved" : state.status === "lost" ? "Lost" : "In progress"} in ${state.guesses.length} ${guessWord}
+${modeLabel} · ${dateLine}
+${statusLabel} in ${guessCount} ${guessWord}
 ${difficultyLabel} mode
-${streakLine}
-${buildShareSummary()}
-Play: https://dvndmy.github.io/BIBDLE`;
+${streakLine}${summary}
+Play: ${playUrl}`;
+}
+
+async function shareResult() {
+  const payload = getSharePayload();
+
+  if (canUseNativeShare(payload)) {
+    try {
+      await navigator.share({
+        title: payload.title,
+        text: payload.text,
+      });
+      renderStatus("Result shared.");
+      return true;
+    } catch (error) {
+      const shareWasCancelled =
+        error?.name === "AbortError" || error?.name === "NotAllowedError";
+
+      if (shareWasCancelled) {
+        renderStatus("Share cancelled.");
+        return false;
+      }
+
+      try {
+        await copyTextToClipboard(payload.text);
+        renderStatus("Native share failed, so the result was copied instead.");
+        return true;
+      } catch {
+        renderStatus("Sharing is unavailable in this browser.");
+        return false;
+      }
+    }
+  }
+
+  try {
+    await copyTextToClipboard(payload.text);
+    renderStatus("Result copied to clipboard.");
+    return true;
+  } catch {
+    renderStatus("Sharing and clipboard copy are unavailable in this browser.");
+    return false;
+  }
 }
 
 async function copyResult() {
   try {
-    await navigator.clipboard.writeText(buildShareText());
+    await copyTextToClipboard(buildShareText());
     renderStatus("Result copied to clipboard.");
+    return true;
   } catch {
     renderStatus("Clipboard access is unavailable in this browser.");
+    return false;
   }
 }
 
@@ -5305,6 +6963,7 @@ function createBindingsApi() {
       handleNextPracticePuzzle,
       handleTryPracticeRound,
       handleTryTodaysBibdle,
+      shareResult,
       copyResult,
       closeSuggestions,
       bindEmptyStateActions,
@@ -5499,6 +7158,32 @@ function initGame() {
     renderStatus("Progress restored.");
   }
 
+  bindShareActions();
+
+  if (elements.shareBtn) {
+    elements.shareBtn.textContent = "Share result";
+    elements.shareBtn.hidden = true;
+  }
+
+  if (elements.copyBtn) {
+    elements.copyBtn.textContent = "Copy result";
+    elements.copyBtn.hidden = true;
+  }
+
+  if (elements.postGameShareBtn) {
+    elements.postGameShareBtn.textContent = "Share result";
+    elements.postGameShareBtn.hidden = true;
+  }
+
+  if (elements.postGameCopyOnlyBtn) {
+    elements.postGameCopyOnlyBtn.textContent = "Copy result";
+    elements.postGameCopyOnlyBtn.hidden = true;
+  }
+
+  if (elements.postGameCopyBtn && !elements.postGameShareBtn && !elements.postGameCopyOnlyBtn) {
+    elements.postGameCopyBtn.textContent = "Share result";
+  }
+
   publishBootSnapshot({
     progressRestored: restored,
     currentPuzzleId: state.currentPuzzle?.id || null,
@@ -5516,6 +7201,7 @@ function startPuzzle(mode = state.mode) {
   clueUiState.lastUnlockedKeys = [];
   clueUiState.lastRenderSignature = "";
 
+  syncEndStateVisibility();
   closePostGamePanel();
   resetInput();
   resetSuggestionsState();
