@@ -37,6 +37,13 @@ import { createRenderPipeline } from "./render-pipeline.js";
 import { createModalService } from "./modal-service.js";
 import { createBindings } from "./bindings.js";
 import { createAuthService } from "./auth-service.js";
+import {
+  createModalHelpers,
+  createPreferenceUpdater,
+  createToggleHandler,
+  renderPlacementCard
+} from "./ui-refactor-helpers.js";
+
 
 const CONFIG = {
   modes: {
@@ -1420,11 +1427,10 @@ function buildAchievementCardMarkup(achievement, options = {}) {
   return `
     <article class="achievement-card ${isEarned ? "is-earned" : "is-locked"}" ${isEarned ? "" : 'aria-disabled="true"'}>
       <div class="achievement-card__media" aria-hidden="true">
-        ${
-          imagePath
-            ? `<img class="achievement-card__image" src="${escapeHtml(imagePath)}" alt="">`
-            : `<div class="achievement-card__media-slot">Badge image</div>`
-        }
+        ${imagePath
+      ? `<img class="achievement-card__image" src="${escapeHtml(imagePath)}" alt="">`
+      : `<div class="achievement-card__media-slot">Badge image</div>`
+    }
       </div>
       <div class="achievement-card__content">
         <h3 class="achievement-card__title">${escapeHtml(title)}</h3>
@@ -3224,26 +3230,9 @@ function renderLeaderboardList(entries) {
 }
 
 function getLeaderboardPlacement(rankEntry) {
-  const rank =
-    Number.isInteger(rankEntry?.rank) && rankEntry.rank > 0
-      ? rankEntry.rank
-      : Number.isInteger(rankEntry?.position) && rankEntry.position > 0
-        ? rankEntry.position
-        : Number.isInteger(rankEntry?.place) && rankEntry.place > 0
-          ? rankEntry.place
-          : null;
-
-  const solved = rankEntry?.result === "won" || rankEntry?.result === "solved";
-
+  const markup = renderPlacementCard(rankEntry, formatLeaderboardTime);
   return {
-    rank,
-    solved,
-    placementLabel: rank ? `#${rank}` : solved ? "Solved" : "Unranked",
-    placementMeta: rank
-      ? `You are currently #${rank} on today’s leaderboard.`
-      : solved
-        ? "You solved today’s puzzle, but a numeric placement is not available yet."
-        : "Your result is recorded, but a ranked position is not available yet.",
+    markup
   };
 }
 
@@ -3255,10 +3244,10 @@ function renderCurrentUserRank(rankEntry) {
   if (!state.auth.user) {
     elements.leaderboardUserRank.innerHTML = renderEmptyState({
       title: "Join the leaderboard",
-      body: "Complete today’s Daily puzzle to record your placement.",
+      body: "Complete today's Daily puzzle to record your placement.",
       compact: true,
       showMarker: true,
-      tone: "empty",
+      tone: "empty"
     });
     bindEmptyStateActions(elements.leaderboardUserRank);
     return;
@@ -3267,52 +3256,18 @@ function renderCurrentUserRank(rankEntry) {
   if (!rankEntry) {
     elements.leaderboardUserRank.innerHTML = renderEmptyState({
       title: "No Daily result yet",
-      body: "Finish today’s Daily puzzle to see your placement here.",
+      body: "Finish today's Daily puzzle to see your placement here.",
       compact: true,
       showMarker: true,
       tone: "empty",
-      actions: renderRetryButtonMarkup("Focus guess box", "focus-guess-input"),
+      actions: renderRetryButtonMarkup("Focus guess box", "focus-guess-input")
     });
     bindEmptyStateActions(elements.leaderboardUserRank);
     return;
   }
 
-  const hasRank = Number.isInteger(rankEntry.rank) && rankEntry.rank > 0;
-  const isSolved = rankEntry.result === "won" || rankEntry.result === "solved";
-
-  const placementLabel = hasRank
-    ? `#${rankEntry.rank}`
-    : isSolved
-      ? "Solved"
-      : "Unranked";
-
-  const placementMeta = hasRank
-    ? `You are currently #${rankEntry.rank} on today’s leaderboard.`
-    : isSolved
-      ? "Your result is recorded, but a numeric placement is not available yet."
-      : "Your result is recorded, but a ranked position is not available yet.";
-
-  elements.leaderboardUserRank.innerHTML = `
-    <div class="leaderboard-user-rank-card">
-      <div>
-        <div class="label">Your place</div>
-        <div class="value">${placementLabel}</div>
-      </div>
-      <div>
-        <div class="label">Result</div>
-        <div class="value">${isSolved ? "Solved" : "Played"}</div>
-      </div>
-      <div>
-        <div class="label">Guesses</div>
-        <div class="value">${rankEntry.guesses ?? "—"}</div>
-      </div>
-      <div>
-        <div class="label">Time</div>
-        <div class="value">${formatLeaderboardTime(rankEntry.completedAt)}</div>
-      </div>
-      <div class="leaderboard-user-rank-note">${placementMeta}</div>
-    </div>
-  `;
+  const { markup } = getLeaderboardPlacement(rankEntry);
+  elements.leaderboardUserRank.innerHTML = markup;
 }
 
 function renderPostGameLeaderboardRank(rankEntry) {
@@ -3337,8 +3292,8 @@ function renderPostGameLeaderboardRank(rankEntry) {
         compact: true,
         showMarker: true,
         tone: "empty",
-        actions: renderRetryButtonMarkup("Open leaderboard", "open-leaderboard"),
-      }),
+        actions: renderRetryButtonMarkup("Open leaderboard", "open-leaderboard")
+      })
     );
     bindEmptyStateActions(elements.postGameLeaderboardRank);
     return;
@@ -3347,55 +3302,14 @@ function renderPostGameLeaderboardRank(rankEntry) {
   if (!rankEntry) {
     renderBusyInto(
       elements.postGameLeaderboardRank,
-      renderLoadingBlock({
-        label: "Loading placement",
-        variant: "rank",
-        rows: 1,
-      }),
-      "Loading placement",
+      renderLoadingBlock({ label: "Loading placement", variant: "rank", rows: 1 }),
+      "Loading placement"
     );
     return;
   }
 
-  const hasRank = Number.isInteger(rankEntry.rank) && rankEntry.rank > 0;
-  const isSolved = rankEntry.result === "won" || rankEntry.result === "solved";
-
-  const placementLabel = hasRank
-    ? `#${rankEntry.rank}`
-    : isSolved
-      ? "Solved"
-      : "Unranked";
-
-  const placementMeta = hasRank
-    ? `You are currently #${rankEntry.rank} on today’s leaderboard.`
-    : isSolved
-      ? "Your result is recorded, but a numeric placement is not available yet."
-      : "Your result is recorded, but a ranked position is not available yet.";
-
-  renderInto(
-    elements.postGameLeaderboardRank,
-    `
-      <div class="leaderboard-user-rank-card">
-        <div>
-          <div class="label">Your place</div>
-          <div class="value">${placementLabel}</div>
-        </div>
-        <div>
-          <div class="label">Result</div>
-          <div class="value">${isSolved ? "Solved" : "Played"}</div>
-        </div>
-        <div>
-          <div class="label">Guesses</div>
-          <div class="value">${rankEntry.guesses ?? "—"}</div>
-        </div>
-        <div>
-          <div class="label">Time</div>
-          <div class="value">${formatLeaderboardTime(rankEntry.completedAt)}</div>
-        </div>
-        <div class="leaderboard-user-rank-note">${placementMeta}</div>
-      </div>
-    `,
-  );
+  const { markup } = getLeaderboardPlacement(rankEntry);
+  renderInto(elements.postGameLeaderboardRank, markup);
 }
 
 async function loadPostGameLeaderboardRank() {
@@ -5532,42 +5446,50 @@ function handlePostGamePracticeStart() {
   resetPuzzle("practice");
 }
 
+function closeLeaderboardModal() {
+  modalHelpers.closeModal("leaderboard");
+}
+
+function openArchiveModal(trigger = document.activeElement) {
+  if (!elements.archiveModal) return;
+
+  const selectedBook = books.find((book) => {
+    const entry = getBookStats(book);
+    return entry && entry.plays > 0;
+  }) ?? null;
+
+  const selectedKey = selectedBook ? getBookStatsKey(selectedBook) : null;
+
+  renderArchiveSummary();
+  renderArchiveGrid(selectedKey);
+  renderArchiveDetails(selectedKey);
+
+  modalHelpers.openModal("archive", { trigger });
+}
+
+function closeArchiveModal() {
+  modalHelpers.closeModal("archive");
+}
+
 async function openLeaderboardModal(trigger = document.activeElement) {
   if (!elements.leaderboardModal) return;
 
-  modalService?.open("leaderboard", { trigger }) ??
-    setModalOpenState(elements.leaderboardModal, true, {
-      trigger,
-    });
+  modalHelpers.openModal("leaderboard", { trigger });
 
   renderBusyInto(
     elements.leaderboardSummary,
-    renderLoadingBlock({
-      label: "Loading global stats",
-      variant: "kpis",
-      rows: 4,
-    }),
-    "Loading global stats",
+    renderLoadingBlock({ label: "Loading global stats", variant: "kpis", rows: 4 }),
+    "Loading global stats"
   );
-
   renderBusyInto(
     elements.leaderboardList,
-    renderLoadingBlock({
-      label: "Loading leaderboard",
-      variant: "list",
-      rows: 5,
-    }),
-    "Loading leaderboard",
+    renderLoadingBlock({ label: "Loading leaderboard", variant: "list", rows: 5 }),
+    "Loading leaderboard"
   );
-
   renderBusyInto(
     elements.leaderboardUserRank,
-    renderLoadingBlock({
-      label: "Loading placement",
-      variant: "rank",
-      rows: 1,
-    }),
-    "Loading placement",
+    renderLoadingBlock({ label: "Loading placement", variant: "rank", rows: 1 }),
+    "Loading placement"
   );
 
   if (!state.auth.enabled || !firebaseDb) {
@@ -5582,9 +5504,10 @@ async function openLeaderboardModal(trigger = document.activeElement) {
         body: "Global Daily leaderboard data is unavailable right now.",
         compact: true,
         showMarker: true,
-        tone: "error",
-      }),
+        tone: "error"
+      })
     );
+
     renderInto(
       elements.leaderboardList,
       renderEmptyState({
@@ -5593,9 +5516,10 @@ async function openLeaderboardModal(trigger = document.activeElement) {
         compact: true,
         showMarker: true,
         tone: "error",
-        actions: renderRetryButtonMarkup("Try again", "retry-leaderboard"),
-      }),
+        actions: renderRetryButtonMarkup("Try again", "retry-leaderboard")
+      })
     );
+
     renderCurrentUserRank(null);
     bindEmptyStateActions(elements.leaderboardSummary);
     bindEmptyStateActions(elements.leaderboardList);
@@ -5603,21 +5527,19 @@ async function openLeaderboardModal(trigger = document.activeElement) {
     return;
   }
 
-  const dateKey = getDailyDateKey();
-
   try {
-    const [stats, entries] = await Promise.all([
-      fetchDailyGlobalStats(dateKey),
-      fetchLeaderboardTopEntries(dateKey),
+    const [stats, entries, userRank] = await Promise.all([
+      fetchDailyGlobalStats(getDailyDateKey()),
+      fetchLeaderboardTopEntries(getDailyDateKey()),
+      state.auth.user?.uid ? fetchCurrentUserRank(getDailyDateKey(), state.auth.user.uid) : Promise.resolve(null)
     ]);
 
-    state.leaderboard.stats = stats;
-    state.leaderboard.entries = entries;
-
+    state.leaderboard.userRank = userRank;
     renderLeaderboardSummary(stats);
     renderLeaderboardList(entries);
+    renderCurrentUserRank(userRank);
   } catch (error) {
-    console.error("Leaderboard stats/list load failed:", error);
+    console.error("Leaderboard load failed", error);
 
     clearBusyState(elements.leaderboardSummary);
     clearBusyState(elements.leaderboardList);
@@ -5627,53 +5549,25 @@ async function openLeaderboardModal(trigger = document.activeElement) {
       elements.leaderboardSummary,
       renderEmptyState({
         title: "Could not load global stats",
-        body: "Today’s global Daily metrics are not available right now.",
+        body: "Today's Daily leaderboard summary is not available yet.",
         compact: true,
         showMarker: true,
-        tone: "error",
-      }),
+        tone: "error"
+      })
     );
+
     renderInto(
       elements.leaderboardList,
       renderEmptyState({
         title: "Could not load leaderboard",
-        body: "Please try again in a moment.",
+        body: "The Daily leaderboard is not available right now.",
         compact: true,
         showMarker: true,
         tone: "error",
-        actions: renderRetryButtonMarkup("Try again", "retry-leaderboard"),
-      }),
+        actions: renderRetryButtonMarkup("Try again", "retry-leaderboard")
+      })
     );
-    renderCurrentUserRank(null);
-    bindEmptyStateActions(elements.leaderboardSummary);
-    bindEmptyStateActions(elements.leaderboardList);
-    bindEmptyStateActions(elements.leaderboardUserRank);
-    return;
-  }
 
-  if (!state.auth.user?.uid) {
-    clearBusyState(elements.leaderboardUserRank);
-    renderCurrentUserRank(null);
-    return;
-  }
-
-  renderBusyInto(
-    elements.leaderboardUserRank,
-    renderLoadingBlock({
-      label: "Loading placement",
-      variant: "rank",
-      rows: 1,
-    }),
-    "Loading placement",
-  );
-
-  try {
-    const userRank = await fetchCurrentUserRank(dateKey, state.auth.user.uid);
-    state.leaderboard.userRank = userRank;
-    renderCurrentUserRank(userRank);
-  } catch (error) {
-    console.error("Leaderboard rank load failed:", error);
-    clearBusyState(elements.leaderboardUserRank);
     renderInto(
       elements.leaderboardUserRank,
       renderEmptyState({
@@ -5682,39 +5576,14 @@ async function openLeaderboardModal(trigger = document.activeElement) {
         compact: true,
         showMarker: true,
         tone: "error",
-        actions: renderRetryButtonMarkup("Try again", "retry-leaderboard"),
-      }),
+        actions: renderRetryButtonMarkup("Try again", "retry-leaderboard")
+      })
     );
+
+    bindEmptyStateActions(elements.leaderboardSummary);
+    bindEmptyStateActions(elements.leaderboardList);
     bindEmptyStateActions(elements.leaderboardUserRank);
   }
-}
-
-function closeLeaderboardModal() {
-  modalService?.close("leaderboard") ?? closeModal(elements.leaderboardModal);
-}
-
-
-
-function openArchiveModal(trigger = document.activeElement) {
-  if (!elements.archiveModal) return;
-
-  const selectedBook =
-    books.find((book) => {
-      const entry = getBookStats(book);
-      return entry && entry.plays > 0;
-    }) || null;
-
-  const selectedKey = selectedBook ? getBookStatsKey(selectedBook) : "";
-
-  renderArchiveSummary();
-  renderArchiveGrid(selectedKey);
-  renderArchiveDetails(selectedKey);
-
-  modalService?.open("archive", { trigger }) ?? setModalOpenState(elements.archiveModal, true, { trigger });
-}
-
-function closeArchiveModal() {
-  modalService?.close("archive") ?? closeModal(elements.archiveModal);
 }
 
 function renderStatsModal() {
@@ -6335,34 +6204,45 @@ function setModalOpen(modal, isOpen) {
   setModalOpenState(modal, isOpen);
 }
 
+const modalHelpers = createModalHelpers({
+  elements,
+  modalService,
+  fallbackOpen: (modal, options) => setModalOpenState(modal, true, options),
+  fallbackClose: (modal, options) => setModalOpenState(modal, false, options)
+});
+
+const helpModalControls = modalHelpers.createModalPair("help");
+const settingsModalControls = modalHelpers.createModalPair("settings", () => {
+  syncSettingsControls();
+});
+const statsModalControls = modalHelpers.createModalPair("stats", () => {
+  renderStatsModal();
+});
+
 function openHelpModal(trigger = document.activeElement) {
-  modalService?.open("help", { trigger }) ?? setModalOpenState(elements.helpModal, true, { trigger });
+  helpModalControls.open(trigger);
 }
 
 function closeHelpModal() {
-  modalService?.close("help") ?? setModalOpen(elements.helpModal, false);
+  helpModalControls.close();
 }
 
 function openSettingsModal(trigger = document.activeElement) {
   if (!elements.settingsModal) return;
-
-  syncSettingsControls();
-  modalService?.open("settings", { trigger }) ?? setModalOpenState(elements.settingsModal, true, { trigger });
+  settingsModalControls.open(trigger);
 }
 
 function closeSettingsModal() {
-  modalService?.close("settings") ?? setModalOpen(elements.settingsModal, false);
+  settingsModalControls.close();
 }
 
 function openStatsModal(trigger = document.activeElement) {
   if (!elements.statsModal) return;
-
-  renderStatsModal();
-  modalService?.open("stats", { trigger }) ?? setModalOpenState(elements.statsModal, true, { trigger });
+  statsModalControls.open(trigger);
 }
 
 function closeStatsModal() {
-  modalService?.close("stats") ?? setModalOpen(elements.statsModal, false);
+  statsModalControls.close();
 }
 
 function syncSettingsControls() {
@@ -6381,54 +6261,41 @@ function syncSettingsControls() {
 }
 
 function applyAccessibilityPreferences() {
-  document.documentElement.classList.toggle(
-    "reduced-motion",
-    !!state.preferences.reducedAnimation,
-  );
-  document.documentElement.classList.toggle(
-    "high-contrast",
-    !!state.preferences.highContrast,
-  );
-  document.documentElement.classList.toggle(
-    "large-text",
-    !!state.preferences.largeText,
-  );
+  document.documentElement.classList.toggle("reduced-motion", !!state.preferences.reducedAnimation);
+  document.documentElement.classList.toggle("high-contrast", !!state.preferences.highContrast);
+  document.documentElement.classList.toggle("large-text", !!state.preferences.largeText);
 }
 
-function handleReducedMotionToggle(event) {
-  state.preferences.reducedAnimation = !!event.target.checked;
-  applyAccessibilityPreferences();
-  savePreferences();
-  renderPipeline.renderPreferencesChanged({
-    reason: "reduced-motion-toggle",
-  });
-}
+const updatePreference = createPreferenceUpdater({
+  state,
+  savePreferences,
+  renderPipeline,
+  applyAccessibilityPreferences
+});
 
-function handleHighContrastToggle(event) {
-  state.preferences.highContrast = !!event.target.checked;
-  applyAccessibilityPreferences();
-  savePreferences();
-  renderPipeline.renderPreferencesChanged({
-    reason: "high-contrast-toggle",
-  });
-}
+const handleReducedMotionToggle = createToggleHandler(
+  updatePreference,
+  "reducedAnimation",
+  "reduced-motion-toggle"
+);
 
-function handleLargeTextToggle(event) {
-  state.preferences.largeText = !!event.target.checked;
-  applyAccessibilityPreferences();
-  savePreferences();
-  renderPipeline.renderPreferencesChanged({
-    reason: "large-text-toggle",
-  });
-}
+const handleHighContrastToggle = createToggleHandler(
+  updatePreference,
+  "highContrast",
+  "high-contrast-toggle"
+);
 
-function handleSoundToggle(event) {
-  state.preferences.sound = !!event.target.checked;
-  savePreferences();
-  renderPipeline.renderPreferencesChanged({
-    reason: "sound-toggle",
-  });
-}
+const handleLargeTextToggle = createToggleHandler(
+  updatePreference,
+  "largeText",
+  "large-text-toggle"
+);
+
+const handleSoundToggle = createToggleHandler(
+  updatePreference,
+  "sound",
+  "sound-toggle"
+);
 
 async function handleGuessSubmit(event) {
   event.preventDefault();
@@ -6539,10 +6406,7 @@ function handleArchiveGridClick(event) {
 function handleThemeToggle() {
   const nextTheme = state.preferences.theme === "dark" ? "light" : "dark";
   applyTheme(nextTheme);
-  savePreferences();
-  renderPipeline.renderPreferencesChanged({
-    reason: "theme-toggle",
-  });
+  updatePreference("theme", nextTheme, "theme-toggle");
 }
 
 function setLanguage(language) {
@@ -6574,9 +6438,7 @@ function handleLanguageChange(event) {
   const value = event.target.value === "ml" ? "ml" : "en";
   setLanguage(value);
   refreshGuessesForCurrentLanguage();
-  renderPipeline.renderPreferencesChanged({
-    reason: "language-change",
-  });
+  renderPipeline.renderPreferencesChanged({ reason: "language-change" });
 }
 
 function renderMobileLanguageToggle() {
@@ -6603,9 +6465,7 @@ function handleMobileLanguageToggle() {
   const nextLanguage = getCurrentLanguage() === "en" ? "ml" : "en";
   setLanguage(nextLanguage);
   refreshGuessesForCurrentLanguage();
-  renderPipeline.renderPreferencesChanged({
-    reason: "mobile-language-toggle",
-  });
+  renderPipeline.renderPreferencesChanged({ reason: "mobile-language-toggle" });
 }
 
 function handleDifficultyChange(event) {
@@ -6618,9 +6478,7 @@ function handleDifficultyChange(event) {
   clueUiState.lastRenderSignature = "";
 
   savePreferences();
-  renderPipeline.renderPreferencesChanged({
-    reason: "difficulty-change",
-  });
+ renderPipeline.renderPreferencesChanged({ reason: "difficulty-change" });
   resetPuzzle(state.mode);
 }
 
@@ -6637,9 +6495,7 @@ function handleModeChange(event) {
   state.preferences.preferredMode = value;
   savePreferences();
 
-  renderPipeline.renderModeSwitch({
-    mode: value,
-  });
+  renderPipeline.renderModeSwitch({ mode: value });
 
   resetPuzzle(value);
 }
@@ -6654,10 +6510,7 @@ function handleNextPracticePuzzle() {
 
   startPuzzle("practice");
   saveProgress();
-  renderPipeline.renderPuzzleReset({
-    mode: "practice",
-    source: "next-practice",
-  });
+  renderPipeline.renderPuzzleReset({ mode: "practice", source: "next-practice" });
 }
 
 function handleTryPracticeRound() {
@@ -7214,10 +7067,7 @@ function startPuzzle(mode = state.mode) {
   closeSuggestions();
   saveProgress();
 
-  renderPipeline.renderPuzzleReset({
-    mode,
-    source: "startPuzzle",
-  });
+  renderPipeline.renderPuzzleReset({ mode, source: "startPuzzle" });
 
   publishBootSnapshot({
     action: "start-puzzle",
@@ -7238,10 +7088,7 @@ function resetPuzzle(mode = state.mode) {
       ? buildClueRevealState().items.filter((item) => item.unlocked).map((item) => item.key)
       : [];
 
-    renderPipeline.renderPuzzleReset({
-      mode,
-      source: "resetPuzzle-restore",
-    });
+    renderPipeline.renderPuzzleReset({ mode, source: "resetPuzzle-restore" });
 
     publishBootSnapshot({
       action: "restore-puzzle",
@@ -7254,10 +7101,7 @@ function resetPuzzle(mode = state.mode) {
 
   startPuzzle(mode);
   saveProgress();
-  renderPipeline.renderPuzzleReset({
-    mode,
-    source: "resetPuzzle",
-  });
+  renderPipeline.renderPuzzleReset({ mode, source: "resetPuzzle" });
 }
 
 function bindLifecycleEvents() {
