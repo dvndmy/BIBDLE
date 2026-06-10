@@ -2307,6 +2307,78 @@ function normalizeBookName(value) {
     .replace(/[^\p{L}\p{N}]+/gu, "");
 }
 
+function buildBookLookupIndex() {
+  const byId = new Map();
+  const byNormalizedName = new Map();
+  const aliasesByBookId = new Map();
+
+  if (!Array.isArray(books) || !books.length) {
+    return {
+      byId,
+      byNormalizedName,
+      aliasesByBookId,
+    };
+  }
+
+  books.forEach((book) => {
+    if (!book?.id) {
+      return;
+    }
+
+    byId.set(book.id, book);
+
+    const aliases = [];
+    const seenAliases = new Set();
+
+    const addAlias = (label, source) => {
+      const value = getSafeString(label);
+      const normalized = normalizeBookName(value);
+
+      if (!value || !normalized || seenAliases.has(normalized)) {
+        return;
+      }
+
+      const alias = {
+        value,
+        normalized,
+        source,
+        bookId: book.id,
+      };
+
+      seenAliases.add(normalized);
+      aliases.push(alias);
+
+      if (!byNormalizedName.has(normalized)) {
+        byNormalizedName.set(normalized, book);
+      }
+    };
+
+    addAlias(book.normalizedName, 'normalized');
+    addAlias(book.name, 'en');
+    addAlias(book.nameMl, 'ml');
+
+    aliasesByBookId.set(book.id, aliases);
+  });
+
+  return {
+    byId,
+    byNormalizedName,
+    aliasesByBookId,
+  };
+}
+
+function getBookLookupIndex() {
+  if (!state.ui) {
+    state.ui = {};
+  }
+
+  if (!state.ui.bookLookupIndex) {
+    state.ui.bookLookupIndex = buildBookLookupIndex();
+  }
+
+  return state.ui.bookLookupIndex;
+}
+
 function getLocalizedBookName(book, language = getCurrentLanguage()) {
   return getLocalizedFieldValue(book, "bookName", language);
 }
@@ -2365,45 +2437,44 @@ function getLocalizedThemes(item, language = getCurrentLanguage()) {
 }
 
 function getBookAliases(book) {
-  if (!book) return [];
-  const aliases = new Map();
+  if (!book?.id) {
+    return [];
+  }
 
-  const addAlias = (label, source) => {
-    const value = getSafeString(label);
-    const normalized = normalizeBookName(value);
-    if (!value || !normalized) return;
-    aliases.set(normalized, {
-      value,
-      normalized,
-      source,
-      bookId: book.id,
-    });
-  };
-
-  addAlias(book.name, "en");
-  addAlias(book.nameMl, "ml");
-
-  return Array.from(aliases.values());
+  const { aliasesByBookId } = getBookLookupIndex();
+  return aliasesByBookId.get(book.id) ?? [];
 }
 
 function getBookById(bookId) {
-  return books.find((book) => book.id === bookId) ?? null;
+  if (!bookId) {
+    return null;
+  }
+
+  const { byId } = getBookLookupIndex();
+  return byId.get(bookId) ?? null;
 }
 
 function getCanonicalBookId(input) {
-  if (!input) return "";
-  if (typeof input === "object" && input.id) return input.id;
+  if (!input) {
+    return '';
+  }
+
+  if (typeof input === 'object' && input.id) {
+    return input.id;
+  }
+
   const byName = getBookByName(input);
-  return byName?.id || "";
+  return byName?.id ?? '';
 }
 
 function getBookByName(name) {
   const normalized = normalizeBookName(name);
+  if (!normalized) {
+    return null;
+  }
 
-  return books.find((book) => {
-    if (normalizeBookName(book.normalizedName) === normalized) return true;
-    return getBookAliases(book).some((alias) => alias.normalized === normalized);
-  }) ?? null;
+  const { byNormalizedName } = getBookLookupIndex();
+  return byNormalizedName.get(normalized) ?? null;
 }
 
 function isBookAlreadyGuessed(bookId) {
@@ -2412,58 +2483,80 @@ function isBookAlreadyGuessed(bookId) {
 
 function getSuggestionCandidates(query, language = getCurrentLanguage()) {
   const normalizedQuery = normalizeBookName(query);
-  if (!normalizedQuery) return [];
+  if (!normalizedQuery) {
+    return [];
+  }
 
+  const { aliasesByBookId } = getBookLookupIndex();
   const ranked = [];
 
   books.forEach((book) => {
-    const aliases = getBookAliases(book);
+    if (!book?.id || isBookAlreadyGuessed(book.id)) {
+      return;
+    }
+
+    const aliases = aliasesByBookId.get(book.id) ?? [];
     const matchingAliases = aliases.filter((alias) =>
       alias.normalized.includes(normalizedQuery)
     );
 
-    if (!matchingAliases.length) return;
-    if (isBookAlreadyGuessed(book.id)) return;
+    if (!matchingAliases.length) {
+      return;
+    }
 
-    const mlAlias = aliases.find((alias) => alias.source === "ml");
-    const enAlias = aliases.find((alias) => alias.source === "en");
-    const exactMatch = matchingAliases.some((alias) => alias.normalized === normalizedQuery);
-    const startsWithMatch = matchingAliases.some((alias) => alias.normalized.startsWith(normalizedQuery));
-    const matchedMl = matchingAliases.some((alias) => alias.source === "ml");
-    const matchedEn = matchingAliases.some((alias) => alias.source === "en");
+    const exactMatch = matchingAliases.some(
+      (alias) => alias.normalized === normalizedQuery
+    );
+    const startsWithMatch = matchingAliases.some((alias) =>
+      alias.normalized.startsWith(normalizedQuery)
+    );
+    const matchedMl = matchingAliases.some((alias) => alias.source === 'ml');
+    const matchedEn = matchingAliases.some(
+      (alias) => alias.source === 'en' || alias.source === 'normalized'
+    );
 
-    if (language === "en") {
-      if (!matchedEn) return;
+    if (language === 'en') {
+      if (!matchedEn) {
+        return;
+      }
 
       ranked.push({
         bookId: book.id,
-        primaryLabel: getLocalizedBookName(book, "en"),
-        secondaryLabel: "",
-        matchSource: "en",
+        primaryLabel: getLocalizedBookName(book, 'en'),
+        secondaryLabel: '',
+        matchSource: 'en',
         score: exactMatch ? 0 : startsWithMatch ? 1 : 2,
       });
+
       return;
     }
 
     ranked.push({
       bookId: book.id,
-      primaryLabel: getLocalizedBookName(book, "ml"),
+      primaryLabel: getLocalizedBookName(book, 'ml'),
       secondaryLabel:
-        getLocalizedBookName(book, "ml") !== getLocalizedBookName(book, "en")
-          ? getLocalizedBookName(book, "en")
-          : "",
-      matchSource: matchedMl ? "ml" : "en",
+        getLocalizedBookName(book, 'ml') !== getLocalizedBookName(book, 'en')
+          ? getLocalizedBookName(book, 'en')
+          : '',
+      matchSource: matchedMl ? 'ml' : 'en',
       score: exactMatch ? 0 : startsWithMatch ? 1 : 2,
     });
   });
 
   return ranked
     .sort((a, b) => {
-      if (a.score !== b.score) return a.score - b.score;
-      if (language === "ml" && a.matchSource !== b.matchSource) {
-        return a.matchSource === "ml" ? -1 : 1;
+      if (a.score !== b.score) {
+        return a.score - b.score;
       }
-      return a.primaryLabel.localeCompare(b.primaryLabel, language === "ml" ? "ml" : "en");
+
+      if (language === 'ml' && a.matchSource !== b.matchSource) {
+        return a.matchSource === 'ml' ? -1 : 1;
+      }
+
+      return a.primaryLabel.localeCompare(
+        b.primaryLabel,
+        language === 'ml' ? 'ml' : 'en'
+      );
     })
     .slice(0, CONFIG.ui.maxSuggestions);
 }
