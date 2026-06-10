@@ -5949,49 +5949,46 @@ function renderPuzzleView() {
   renderMobileLanguageToggle();
   renderPuzzleCard();
 
-  if (state.status === "won" || state.status === "lost") {
-    syncEndStateVisibility();
-    renderGuessRows();
-    syncPreferenceControls();
-    syncActionButtons();
-    renderPostGamePanel();
-
-    if (state.status === "won") {
-      renderStatus(
-        `Correct — ${getLocalizedValue(state.currentPuzzle.verse.book, state.currentPuzzle.verse.bookMl)} (${getLocalizedReference(state.currentPuzzle.verse, getCurrentLanguage())}).`,
-      );
-      publishBootSnapshot({ renderStatus: "won" });
-      return;
-    }
-
-    renderStatus(
-      `Out of guesses — the answer was ${getLocalizedValue(state.currentPuzzle.verse.book, state.currentPuzzle.verse.bookMl)} (${getLocalizedReference(state.currentPuzzle.verse, getCurrentLanguage())}).`,
-    );
-    publishBootSnapshot({ renderStatus: "lost" });
+  if (state.status === "won") {
+    renderAfterGuessOutcome({
+      status: "won",
+      message: getDefaultStatusMessage("won"),
+      animateLatest: false,
+      renderHints: false,
+      renderProximity: false,
+      renderPostGame: true,
+    });
+    publishBootSnapshot?.({ renderStatus: "won" });
     return;
   }
 
-  syncEndStateVisibility();
-  renderHintBlock();
-  renderGuessRows();
-  renderProximityLine();
-  syncPreferenceControls();
-  syncActionButtons();
-  renderPostGamePanel();
-
-  const clueState = buildClueRevealState();
-  const newHintCount = clueState.newlyUnlockedKeys.length;
-
-  if (newHintCount > 0 && state.guesses.length > 0) {
-    renderStatus(
-      `${newHintCount} new ${newHintCount === 1 ? "clue" : "clues"} unlocked. Review the clue panel above.`,
-    );
-    publishBootSnapshot({ renderStatus: "new-clues" });
+  if (state.status === "lost") {
+    renderAfterGuessOutcome({
+      status: "lost",
+      message: getDefaultStatusMessage("lost"),
+      animateLatest: false,
+      renderHints: false,
+      renderProximity: false,
+      renderPostGame: true,
+    });
+    publishBootSnapshot?.({ renderStatus: "lost" });
     return;
   }
 
-  renderStatus();
-  publishBootSnapshot({ renderStatus: "playing" });
+  renderAfterGuessOutcome({
+    status: "playing",
+    message: getDefaultStatusMessage("playing"),
+    animateLatest: false,
+    renderHints: true,
+    renderProximity: true,
+    renderPostGame: true,
+  });
+
+  publishBootSnapshot?.({
+    renderStatus: state.guesses.length > 0 && buildClueRevealState().newlyUnlockedKeys.length > 0
+      ? "new-clues"
+      : "playing",
+  });
 }
 
 function resetInput() {
@@ -6120,36 +6117,100 @@ function handleDuplicateGuess(book) {
   renderStatus(`You already tried ${bookName}.`);
 }
 
-function refreshAfterGuess(message) {
+function renderAfterGuessOutcome({
+  status = state.status,
+  message = getDefaultStatusMessage(status),
+  animateLatest = false,
+  renderHints = status !== "won" && status !== "lost",
+  renderProximity = status !== "won" && status !== "lost",
+  renderPostGame = true,
+}) {
   syncEndStateVisibility();
 
-  if (state.status !== "won" && state.status !== "lost") {
+  if (renderHints) {
     renderHintBlock();
+  }
+
+  renderGuessRows(animateLatest);
+
+  if (renderProximity) {
     renderProximityLine();
   }
 
-  renderGuessRows(true);
   syncPreferenceControls();
   syncActionButtons();
+
+  if (renderPostGame) {
+    renderPostGamePanel();
+  }
+
   renderStatus(message);
   saveProgress();
-  renderPuzzleView();
+}
+
+function getDefaultStatusMessage(status = state.status) {
+  const language = getCurrentLanguage();
+  const puzzle = state.currentPuzzle?.verse;
+
+  if (!puzzle) {
+    return "Guess the book from the verse above.";
+  }
+
+  if (status === "won") {
+    return `Correct! ${getLocalizedValue(puzzle.book, puzzle.bookMl)} — ${getLocalizedReference(puzzle, language)}.`;
+  }
+
+  if (status === "lost") {
+    return `Out of guesses — the answer was ${getLocalizedValue(puzzle.book, puzzle.bookMl)} — ${getLocalizedReference(puzzle, language)}.`;
+  }
+
+  const clueState = buildClueRevealState();
+  const newHintCount = clueState.newlyUnlockedKeys.length;
+
+  if (newHintCount > 0 && state.guesses.length > 0) {
+    return `${newHintCount} new ${newHintCount === 1 ? "clue" : "clues"} unlocked. Review the clue panel above.`;
+  }
+
+  return "Guess the book from the verse above.";
+}
+
+function refreshAfterGuess(message) {
+  renderAfterGuessOutcome({
+    status: state.status,
+    message,
+    animateLatest: true,
+    renderHints: state.status !== "won" && state.status !== "lost",
+    renderProximity: state.status !== "won" && state.status !== "lost",
+    renderPostGame: true,
+  });
 }
 
 async function handleSolvedGuess() {
   state.status = "won";
   await recordPuzzleCompletion("won");
-  refreshAfterGuess(
-    `Correct — ${state.currentPuzzle.verse.book} (${state.currentPuzzle.verse.reference}).`,
-  );
+
+  renderAfterGuessOutcome({
+    status: "won",
+    message: getDefaultStatusMessage("won"),
+    animateLatest: true,
+    renderHints: false,
+    renderProximity: false,
+    renderPostGame: true,
+  });
 }
 
 async function handleLostGuess() {
   state.status = "lost";
   await recordPuzzleCompletion("lost");
-  refreshAfterGuess(
-    `Out of guesses — the answer was ${state.currentPuzzle.verse.book} (${state.currentPuzzle.verse.reference}).`,
-  );
+
+  renderAfterGuessOutcome({
+    status: "lost",
+    message: getDefaultStatusMessage("lost"),
+    animateLatest: true,
+    renderHints: false,
+    renderProximity: false,
+    renderPostGame: true,
+  });
 }
 
 function handleIncorrectGuess(bookName) {
@@ -6157,25 +6218,22 @@ function handleIncorrectGuess(bookName) {
   const newHintCount = clueState.newlyUnlockedKeys.length;
   const nearestDistance = getNearestGuessDistance();
 
-  renderHintBlock();
-  renderGuessRows(true);
-  renderProximityLine();
-  syncPreferenceControls();
-  syncActionButtons();
+  let message = `${bookName} added. Use the colors and clues for your next guess.`;
 
   if (newHintCount > 0) {
-    renderStatus(
-      `${bookName} added. ${newHintCount} new ${newHintCount === 1 ? "clue" : "clues"} unlocked.`,
-    );
-  } else if (typeof nearestDistance === "number" && nearestDistance > 0) {
-    renderStatus(
-      `${bookName} added. Your nearest guess so far is ${nearestDistance} ${nearestDistance === 1 ? "book" : "books"} away.`,
-    );
-  } else {
-    renderStatus(`${bookName} added. Use the colors and clues for your next guess.`);
+    message = `${bookName} added. ${newHintCount} new ${newHintCount === 1 ? "clue" : "clues"} unlocked.`;
+  } else if (typeof nearestDistance === "number" && nearestDistance >= 0) {
+    message = `${bookName} added. Your nearest guess so far is ${nearestDistance} ${nearestDistance === 1 ? "book" : "books"} away.`;
   }
 
-  saveProgress();
+  renderAfterGuessOutcome({
+    status: "playing",
+    message,
+    animateLatest: true,
+    renderHints: true,
+    renderProximity: true,
+    renderPostGame: true,
+  });
 }
 
 async function applyGuess(rawGuess) {
