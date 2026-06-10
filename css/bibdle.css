@@ -1531,6 +1531,8 @@ input::placeholder {
     justify-content: center;
     gap: 0.45rem;
     width: 100%;
+    padding: var(--pill-padding-y) var(--pill-padding-x);
+
 }
 
 #preGuessPanel[hidden],
