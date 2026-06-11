@@ -62,6 +62,31 @@ import {
   showWhenHasItems,
   showWhenHasText,
 } from "./ui-render-utils.js";
+import { computeModeStatsSummary as buildModeStatsSummary } from "./stats-read-models.js";
+import {
+  computeArchiveSummary as buildArchiveSummary,
+  formatArchiveAverage as formatArchiveAverageValue,
+  buildArchiveBarsViewModel,
+  buildArchiveGridViewModel,
+  buildArchiveDetailsViewModel,
+} from "./archive-read-models.js";
+import {
+  clampAchievementProgress as clampAchievementProgressValue,
+  getAchievementCategoryLabel as getAchievementCategoryLabelValue,
+  getAchievementCategoryDescription as getAchievementCategoryDescriptionValue,
+  getAchievementCategoryOrder as getAchievementCategoryOrderValue,
+  getAchievementDescriptionForUi as getAchievementDescriptionForUiValue,
+  formatAchievementProgressText as formatAchievementProgressTextValue,
+  getAchievementStatusCopy as getAchievementStatusCopyValue,
+  buildAchievementCardViewModel,
+  getClosestIncompleteAchievements as getClosestIncompleteAchievementsValue,
+  buildAchievementCategoryGroups,
+} from "./achievement-read-models.js";
+import {
+  formatTriviaLabel as formatTriviaLabelValue,
+  buildTriviaContent as buildTriviaContentValue,
+  buildPostGameContent,
+} from "./postgame-read-models.js";
 
 const CONFIG = {
   modes: {
@@ -1328,17 +1353,7 @@ function getAchievementsByFamily(family) {
 }
 
 function clampAchievementProgress(progress, target) {
-  const safeProgress = Number.isFinite(progress) ? Math.max(0, progress) : 0;
-  const safeTarget = Number.isFinite(target) ? Math.max(0, target) : 0;
-  const isComplete = safeTarget > 0 && safeProgress >= safeTarget;
-
-  return {
-    progress: safeProgress,
-    target: safeTarget,
-    percent: safeTarget > 0 ? Math.max(0, Math.min(100, (safeProgress / safeTarget) * 100)) : 0,
-    remaining: safeTarget > 0 ? Math.max(0, safeTarget - safeProgress) : Number.POSITIVE_INFINITY,
-    isComplete,
-  };
+  return clampAchievementProgressValue(progress, target);
 }
 
 function getAchievementEvaluation(achievement) {
@@ -1354,120 +1369,103 @@ function shouldTreatAchievementAsEarned(achievement, evaluation = null) {
 }
 
 function getAchievementStatusCopy(achievement, evaluation = null) {
-  if (shouldTreatAchievementAsEarned(achievement, evaluation)) {
-    return {
-      icon: "✓",
-      label: "Earned",
-    };
-  }
-
-  return {
-    icon: "🔒",
-    label: "Locked",
-  };
+  return getAchievementStatusCopyValue({
+    achievement,
+    evaluation: evaluation || getAchievementEvaluation(achievement),
+    shouldTreatAchievementAsEarned,
+  });
 }
 
 function getAchievementDescriptionForUi(achievement) {
-  if (!achievement) return "";
-
-  if (achievement.kind === "book-group-complete") {
-    return "Complete one verse from each required book.";
-  }
-
-  if (achievement.kind === "meta-knowledge-complete") {
-    return "Earn every Bible Knowledge achievement.";
-  }
-
-  return achievement.description || "";
+  return getAchievementDescriptionForUiValue(achievement);
 }
 
 function formatAchievementProgressText(achievement, evaluation) {
-  if (!achievement || !evaluation) return "";
-
-  const clamped = clampAchievementProgress(evaluation.progress, evaluation.target);
-  const progress = Math.min(clamped.progress, clamped.target || clamped.progress);
-  const target = clamped.target;
-
-  switch (achievement.kind) {
-    case "daily-streak":
-      return `${progress}/${target} days`;
-
-    case "first-try-total":
-      return `${progress}/${target} first-try wins`;
-
-    case "total-correct":
-      return `${progress}/${target} correct`;
-
-    case "consecutive-first-try":
-      return `${progress}/${target} in a row`;
-
-    case "book-group-complete":
-      return `${progress}/${target} books completed`;
-
-    case "book-count": {
-      const book = getAchievementBookById(achievement.targetBookId);
-      const fallbackLabel = achievement.targetBookId
-        ? achievement.targetBookId
-          .split("-")
-          .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-          .join(" ")
-        : "Book";
-      const bookLabel = book?.name || fallbackLabel;
-      return `${progress}/${target} ${bookLabel} verses`;
-    }
-
-    case "meta-knowledge-complete":
-      return `${progress}/${target} knowledge achievements`;
-
-    default:
-      return target > 0 ? `${progress}/${target}` : "";
-  }
+  return formatAchievementProgressTextValue(
+    achievement,
+    evaluation,
+    getAchievementBookById,
+  );
 }
 
 function buildAchievementCardMarkup(achievement, options = {}) {
   if (!achievement) return "";
 
   const evaluation = options.evaluation || getAchievementEvaluation(achievement);
-  const progressState = clampAchievementProgress(evaluation.progress, evaluation.target);
-  const isEarned = options.isEarned === true || shouldTreatAchievementAsEarned(achievement, evaluation);
+  const isEarned =
+    options.isEarned === true ||
+    shouldTreatAchievementAsEarned(achievement, evaluation);
+
   const title = options.title || achievement.label || "";
-  const description = options.description || getAchievementDescriptionForUi(achievement);
-  const progressText = options.progressText || formatAchievementProgressText(achievement, evaluation);
-  const status = options.status || getAchievementStatusCopy(achievement, evaluation);
-  const progressLabel = title
-    ? `${title} progress: ${progressText || "No progress yet"}`
-    : progressText || "No progress yet";
-  const ariaValueNow = progressState.target > 0
-    ? Math.min(progressState.progress, progressState.target)
-    : progressState.progress;
+  const description =
+    options.description || getAchievementDescriptionForUi(achievement);
+  const progressText =
+    options.progressText || formatAchievementProgressText(achievement, evaluation);
+  const status =
+    options.status || getAchievementStatusCopy(achievement, evaluation);
+
+  const viewModel = buildAchievementCardViewModel(achievement, {
+    evaluation,
+    isEarned,
+    title,
+    description,
+    progressText,
+    status,
+  });
+
   const imagePath = getAchievementImagePath(achievement);
 
   return `
-    <article class="achievement-card ${isEarned ? "is-earned" : "is-locked"}" ${isEarned ? "" : 'aria-disabled="true"'}>
+    <article class="achievement-card ${
+      viewModel.isEarned ? "is-earned" : "is-locked"
+    }" ${viewModel.isEarned ? "" : 'aria-disabled="true"'}>
       <div class="achievement-card__media" aria-hidden="true">
-        ${imagePath
-      ? `<img class="achievement-card__image" src="${escapeHtml(imagePath)}" alt="">`
-      : `<div class="achievement-card__media-slot">Badge image</div>`
-    }
+        ${
+          imagePath
+            ? `<img class="achievement-card__image" src="${escapeHtml(imagePath)}" alt="">`
+            : '<div class="achievement-card__media-slot">Badge image</div>'
+        }
       </div>
       <div class="achievement-card__content">
-        <h3 class="achievement-card__title">${escapeHtml(title)}</h3>
-        ${description ? `<p class="achievement-card__description">${escapeHtml(description)}</p>` : ""}
-        ${progressText ? `<p class="achievement-card__progress-text">${escapeHtml(progressText)}</p>` : ""}
-        <div class="achievement-card__status" aria-label="${escapeHtml(status.label)}">
-          <span class="achievement-card__status-icon" aria-hidden="true">${escapeHtml(status.icon)}</span>
-          <span class="achievement-card__status-text">${escapeHtml(status.label)}</span>
+        <h3 class="achievement-card__title">${escapeHtml(viewModel.title)}</h3>
+        ${
+          description
+            ? `<p class="achievement-card__description">${escapeHtml(viewModel.description)}</p>`
+            : ""
+        }
+        ${
+          progressText
+            ? `<p class="achievement-card__progress-text">${escapeHtml(viewModel.progressText)}</p>`
+            : ""
+        }
+        <div class="achievement-card__status" aria-label="${escapeHtml(
+          viewModel.status.label,
+        )}">
+          <span class="achievement-card__status-icon" aria-hidden="true">${escapeHtml(
+            viewModel.status.icon,
+          )}</span>
+          <span class="achievement-card__status-text">${escapeHtml(
+            viewModel.status.label,
+          )}</span>
         </div>
       </div>
       <div class="achievement-card__progress">
         <div
           class="achievement-progress__track"
           role="progressbar"
-          aria-label="${escapeHtml(progressLabel)}"
+          aria-label="${escapeHtml(viewModel.progressLabel)}"
           aria-valuemin="0"
-          aria-valuenow="${ariaValueNow}"
-          aria-valuemax="${progressState.target > 0 ? progressState.target : Math.max(progressState.progress, 1)}">
-          <span class="achievement-progress__fill" style="width: ${progressState.percent}%;"></span>
+          aria-valuenow="${viewModel.ariaValueNow}"
+          aria-valuemax="${
+            viewModel.progressState.target > 0
+              ? viewModel.progressState.target
+              : Math.max(viewModel.progressState.progress, 1)
+          }"
+        >
+          <span
+            class="achievement-progress__fill"
+            style="width: ${viewModel.progressState.percent}%"
+          ></span>
         </div>
       </div>
     </article>
@@ -1475,94 +1473,39 @@ function buildAchievementCardMarkup(achievement, options = {}) {
 }
 
 function getClosestIncompleteAchievements(limit = 3) {
-  return ACHIEVEMENTS
-    .map((achievement) => {
-      const evaluation = getAchievementEvaluation(achievement);
-      const progressState = clampAchievementProgress(evaluation.progress, evaluation.target);
-      const ratio = progressState.target > 0
-        ? Math.min(progressState.progress, progressState.target) / progressState.target
-        : 0;
-
-      return {
-        achievement,
-        evaluation,
-        isEarned: shouldTreatAchievementAsEarned(achievement, evaluation),
-        progress: progressState.progress,
-        remaining: progressState.remaining,
-        ratio,
-        target: progressState.target,
-      };
-    })
-    .filter((entry) => !entry.isEarned && entry.target > 0)
-    .sort((a, b) => {
-      if (b.ratio !== a.ratio) return b.ratio - a.ratio;
-      if (b.progress !== a.progress) return b.progress - a.progress;
-      if (a.remaining !== b.remaining) return a.remaining - b.remaining;
-      if (a.target !== b.target) return a.target - b.target;
-      return a.achievement.label.localeCompare(b.achievement.label);
-    })
-    .slice(0, limit);
+  return getClosestIncompleteAchievementsValue(ACHIEVEMENTS, {
+    limit,
+    getAchievementEvaluation,
+    shouldTreatAchievementAsEarned,
+  });
 }
 
 function getAchievementCategoryLabel(category) {
-  switch (category) {
-    case ACHIEVEMENT_CATEGORIES.streak:
-      return "Streak";
-    case ACHIEVEMENT_CATEGORIES.accuracy:
-      return "Accuracy";
-    case ACHIEVEMENT_CATEGORIES.bibleKnowledge:
-      return "Bible knowledge";
-    case ACHIEVEMENT_CATEGORIES.rare:
-      return "Rare and meta";
-    default:
-      return "Achievements";
-  }
+  return getAchievementCategoryLabelValue(category, ACHIEVEMENT_CATEGORIES);
 }
 
 function getAchievementCategoryDescription(category) {
-  switch (category) {
-    case ACHIEVEMENT_CATEGORIES.streak:
-      return "Daily streak and consistency milestones.";
-    case ACHIEVEMENT_CATEGORIES.accuracy:
-      return "First-try and precision-based milestones.";
-    case ACHIEVEMENT_CATEGORIES.bibleKnowledge:
-      return "Book, section, and testament coverage milestones.";
-    case ACHIEVEMENT_CATEGORIES.rare:
-      return "Long-term and special completion milestones.";
-    default:
-      return "";
-  }
+  return getAchievementCategoryDescriptionValue(category, ACHIEVEMENT_CATEGORIES);
 }
 
 function getAchievementCategoryOrder(category) {
-  switch (category) {
-    case ACHIEVEMENT_CATEGORIES.streak:
-      return 1;
-    case ACHIEVEMENT_CATEGORIES.accuracy:
-      return 2;
-    case ACHIEVEMENT_CATEGORIES.bibleKnowledge:
-      return 3;
-    case ACHIEVEMENT_CATEGORIES.rare:
-      return 4;
-    default:
-      return 99;
-  }
+  return getAchievementCategoryOrderValue(category, ACHIEVEMENT_CATEGORIES);
 }
 
 function compareAchievementsForStatsModal(a, b) {
   const aEarned = shouldTreatAchievementAsEarned(a, getAchievementEvaluation(a));
   const bEarned = shouldTreatAchievementAsEarned(b, getAchievementEvaluation(b));
 
-  if (aEarned !== bEarned) {
-    return aEarned ? -1 : 1;
-  }
+  if (aEarned !== bEarned) return aEarned ? -1 : 1;
 
-  const aThreshold = Number.isFinite(a.threshold) ? a.threshold : Number.MAX_SAFE_INTEGER;
-  const bThreshold = Number.isFinite(b.threshold) ? b.threshold : Number.MAX_SAFE_INTEGER;
+  const aThreshold = Number.isFinite(a.threshold)
+    ? a.threshold
+    : Number.MAX_SAFE_INTEGER;
+  const bThreshold = Number.isFinite(b.threshold)
+    ? b.threshold
+    : Number.MAX_SAFE_INTEGER;
 
-  if (aThreshold !== bThreshold) {
-    return aThreshold - bThreshold;
-  }
+  if (aThreshold !== bThreshold) return aThreshold - bThreshold;
 
   return a.label.localeCompare(b.label);
 }
@@ -1583,9 +1526,13 @@ function buildAchievementCategoryGroupMarkup(category, achievements) {
     .join("");
 
   return `
-    <section class="achievement-group" aria-labelledby="achievement-group-${escapeHtml(category)}">
+    <section class="achievement-group" aria-labelledby="achievement-group-${escapeHtml(
+      category,
+    )}">
       <div class="achievement-group__header">
-        <h3 class="achievement-group__title" id="achievement-group-${escapeHtml(category)}">${escapeHtml(title)}</h3>
+        <h3 class="achievement-group__title" id="achievement-group-${escapeHtml(
+          category,
+        )}">${escapeHtml(title)}</h3>
         ${description ? `<p class="achievement-group__meta">${escapeHtml(description)}</p>` : ""}
       </div>
       <div class="achievement-group__list">
@@ -4635,49 +4582,7 @@ function closeModal(modalBackdrop, options = {}) {
 }
 
 function computeModeStatsSummary(mode = "daily") {
-  const source = mode === "practice" ? state.stats.practice : state.stats.daily;
-
-  const played =
-    Number.isInteger(source?.played) && source.played >= 0 ? source.played : 0;
-  const won = Number.isInteger(source?.won) && source.won >= 0 ? source.won : 0;
-  const lost =
-    Number.isInteger(source?.lost) && source.lost >= 0 ? source.lost : 0;
-  const currentStreak =
-    mode === "daily" &&
-      Number.isInteger(source?.currentStreak) &&
-      source.currentStreak >= 0
-      ? source.currentStreak
-      : 0;
-  const bestStreak =
-    mode === "daily" &&
-      Number.isInteger(source?.bestStreak) &&
-      source.bestStreak >= 0
-      ? source.bestStreak
-      : 0;
-
-  const rawDistribution =
-    source?.guessDistribution &&
-      typeof source.guessDistribution === "object" &&
-      !Array.isArray(source.guessDistribution)
-      ? source.guessDistribution
-      : {};
-
-  const maxGuesses = 8;
-  const guessDistribution = {};
-  for (let i = 1; i <= maxGuesses; i += 1) {
-    const value = rawDistribution[i] ?? rawDistribution[String(i)] ?? 0;
-    guessDistribution[i] = Number.isInteger(value) && value >= 0 ? value : 0;
-  }
-
-  return {
-    mode,
-    played,
-    won,
-    lost,
-    currentStreak,
-    bestStreak,
-    guessDistribution,
-  };
+  return buildModeStatsSummary(state.stats, mode, 8);
 }
 
 function renderPostGameStats(mode) {
@@ -4827,86 +4732,21 @@ function renderEarnedBadges(container) {
 }
 
 function formatTriviaLabel(value) {
-  if (!value) return "";
-
-  return String(value)
-    .split("-")
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
+  return formatTriviaLabelValue(value);
 }
 
 function buildTriviaContent(puzzle, book) {
-  const language = getCurrentLanguage();
-
-  if (!puzzle && !book) {
-    return {
-      title: "",
-      text: "",
-      chips: [],
-    };
-  }
-
-  const verseThemes = getLocalizedThemes(puzzle, language);
-  const bookThemes = getLocalizedThemes(book, language);
-  const combinedThemes = [...new Set([...verseThemes, ...bookThemes])].slice(0, 3);
-  const chips = [];
-
-  if (book) {
-    const testament = getLocalizedTestament(book, language);
-    const section = getLocalizedSection(book, language);
-    if (testament) chips.push(`${testament}`);
-    if (section) chips.push(section);
-  }
-
-  if (combinedThemes.length) {
-    chips.push(`Themes: ${combinedThemes.join(", ")}`);
-  }
-
-  if (puzzle?.difficulty) {
-    chips.push(`Difficulty: ${formatTriviaLabel(puzzle.difficulty)}`);
-  }
-
-  const localizedBookName = getLocalizedBookName(book, language) || getLocalizedValue(puzzle?.bookMl, puzzle?.book);
-
-  const title =
-    getLocalizedClue(puzzle, language) ||
-    getLocalizedBookIntroTitle(book, language) ||
-    `Learn more about ${localizedBookName || "this book"}`;
-
-  const textParts = [];
-
-  const explanation = getLocalizedExplanation(puzzle, language);
-  const clue = getLocalizedClue(puzzle, language);
-
-  if (explanation) {
-    textParts.push(explanation);
-  } else if (clue) {
-    textParts.push(clue);
-  }
-
-  if (bookThemes.length) {
-    textParts.push(`${localizedBookName} often emphasizes themes such as ${bookThemes.slice(0, 3).join(", ")}.`);
-  } else if (verseThemes.length) {
-    textParts.push(`This verse highlights themes such as ${verseThemes.slice(0, 3).join(", ")}.`);
-  }
-
-  if (puzzle?.devotional) {
-    textParts.push(puzzle.devotional);
-  }
-
-  const uniqueParts = [];
-  textParts.forEach((part) => {
-    const trimmed = String(part || "").trim();
-    if (!trimmed) return;
-    if (uniqueParts.includes(trimmed)) return;
-    uniqueParts.push(trimmed);
+  return buildTriviaContentValue(puzzle, book, {
+    language: getCurrentLanguage(),
+    getLocalizedThemes,
+    getLocalizedTestament,
+    getLocalizedSection,
+    getLocalizedBookName,
+    getLocalizedValue,
+    getLocalizedClue,
+    getLocalizedBookIntroTitle,
+    getLocalizedExplanation,
   });
-
-  return {
-    title,
-    text: uniqueParts.slice(0, 2).join(" "),
-    chips,
-  };
 }
 
 function renderTriviaSection(content) {
@@ -4962,87 +4802,38 @@ function renderTriviaSection(content) {
 }
 
 function getPostGameContent() {
-  const puzzle = state.currentPuzzle?.verse;
-  if (!puzzle) return null;
-
-  const language = getCurrentLanguage();
-  const book = getBookByName(puzzle.book);
-
-  return {
-    title: state.status === "won" ? "Well done" : "Game over",
-    badge: state.status === "won" ? "Solved" : "Failed",
-    reference: getLocalizedReference(puzzle, language),
-    bookName: getLocalizedBookName(book, language) || getLocalizedValue(puzzle.bookMl, puzzle.book),
-    verseText: getLocalizedVerseText(puzzle, language),
-    explanation: getLocalizedExplanation(puzzle, language),
-    introTitle: getLocalizedBookIntroTitle(book, language),
-    introText: getLocalizedBookIntroText(book, language),
-    devotionalText: puzzle.devotional ?? book?.devotionalText ?? "",
-    trivia: buildTriviaContent(puzzle, book),
-  };
+  return buildPostGameContent({
+    state,
+    getCurrentLanguage,
+    getBookByName,
+    helpers: {
+      getLocalizedReference,
+      getLocalizedBookName,
+      getLocalizedValue,
+      getLocalizedVerseText,
+      getLocalizedExplanation,
+      getLocalizedBookIntroTitle,
+      getLocalizedBookIntroText,
+      getLocalizedThemes,
+      getLocalizedTestament,
+      getLocalizedSection,
+      getLocalizedClue,
+    },
+  });
 }
 
 function computeArchiveSummary() {
-  const totalBooks = books.length;
-  const solvedBooks = books.filter((book) => {
-    const entry = getBookStats(book);
-    return entry && entry.solves > 0;
-  }).length;
-
-  const completionPercentage =
-    totalBooks > 0 ? Math.round((solvedBooks / totalBooks) * 100) : 0;
-
-  const testamentSummary = books.reduce((acc, book) => {
-    const key = book.id ? `testament:${book.id}:${book.testament}` : book.testament;
-    const label = getLocalizedTestament(book, getCurrentLanguage());
-
-    if (!acc[label]) {
-      acc[label] = { total: 0, solved: 0, totalAttempts: 0, solveCount: 0 };
-    }
-
-    acc[label].total += 1;
-
-    const entry = getBookStats(book);
-    if (entry && entry.solves > 0) {
-      acc[label].solved += 1;
-      acc[label].totalAttempts += entry.totalAttempts;
-      acc[label].solveCount += entry.solves;
-    }
-
-    return acc;
-  }, {});
-
-  const sectionSummary = books.reduce((acc, book) => {
-    const label = getLocalizedSection(book, getCurrentLanguage());
-
-    if (!acc[label]) {
-      acc[label] = { total: 0, solved: 0, totalAttempts: 0, solveCount: 0 };
-    }
-
-    acc[label].total += 1;
-
-    const entry = getBookStats(book);
-    if (entry && entry.solves > 0) {
-      acc[label].solved += 1;
-      acc[label].totalAttempts += entry.totalAttempts;
-      acc[label].solveCount += entry.solves;
-    }
-
-    return acc;
-  }, {});
-
-  return {
-    totalBooks,
-    solvedBooks,
-    completionPercentage,
-    testamentSummary,
-    sectionSummary,
-  };
+  return buildArchiveSummary({
+    books,
+    getBookStats,
+    getLocalizedTestament,
+    getLocalizedSection,
+    language: getCurrentLanguage(),
+  });
 }
 
 function formatArchiveAverage(totalAttempts, solveCount) {
-  if (!solveCount) return "—";
-  return (totalAttempts / solveCount).toFixed(1);
+  return formatArchiveAverageValue(totalAttempts, solveCount);
 }
 
 function renderArchiveBars(summaryObj) {
@@ -5069,6 +4860,25 @@ function renderArchiveSummary() {
   if (!elements.archiveSummary) return;
 
   const summary = computeArchiveSummary();
+  const testamentBars = buildArchiveBarsViewModel(summary.testamentSummary);
+  const sectionBars = buildArchiveBarsViewModel(summary.sectionSummary);
+
+  const renderBars = (bars) =>
+    bars
+      .map(
+        (item) => `
+          <div class="archive-bar-row">
+            <div class="archive-bar-topline">
+              <span class="archive-bar-label">${escapeHtml(item.label)}</span>
+              <span>${item.solved}/${item.total} · Avg ${escapeHtml(item.average)}</span>
+            </div>
+            <div class="archive-bar-track" aria-hidden="true">
+              <div class="archive-bar-fill" style="width: ${item.percentage}%"></div>
+            </div>
+          </div>
+        `,
+      )
+      .join("");
 
   elements.archiveSummary.innerHTML = `
     <div class="archive-summary-blocks">
@@ -5096,7 +4906,7 @@ function renderArchiveSummary() {
         </div>
         <div class="section-shell__body">
           <div class="archive-bars">
-            ${renderArchiveBars(summary.testamentSummary)}
+            ${renderBars(testamentBars)}
           </div>
         </div>
       </section>
@@ -5107,7 +4917,7 @@ function renderArchiveSummary() {
         </div>
         <div class="section-shell__body">
           <div class="archive-bars">
-            ${renderArchiveBars(summary.sectionSummary)}
+            ${renderBars(sectionBars)}
           </div>
         </div>
       </section>
@@ -5115,50 +4925,51 @@ function renderArchiveSummary() {
   `;
 }
 
-function renderArchiveGrid(selectedBookKey = "") {
+function renderArchiveGrid(selectedBookKey) {
   if (!elements.archiveGrid) return;
 
   const language = getCurrentLanguage();
+  const cells = buildArchiveGridViewModel({
+    books,
+    selectedBookKey,
+    language,
+    getBookStats,
+    getBookStatsKey,
+    getArchiveCellState,
+    getArchiveCellStateLabel,
+    getArchiveCellAriaLabel,
+    getAverageAttemptsForBook,
+    getLocalizedBookName,
+    getLocalizedTestament,
+    getLocalizedSection,
+  });
 
-  elements.archiveGrid.innerHTML = books
-    .map((book) => {
-      const entry = getBookStats(book);
-      const key = getBookStatsKey(book);
-      const stateClass = getArchiveCellState(book);
-      const stateLabel = getArchiveCellStateLabel(book);
-      const average = getAverageAttemptsForBook(book);
-
-      const metaLine =
-        entry && entry.solves > 0
-          ? `Best ${entry.bestAttempts ?? "—"} · Avg ${average ? average.toFixed(1) : "—"}`
-          : entry && entry.plays > 0
-            ? `Played ${entry.plays} · Unsolved`
-            : `${getLocalizedTestament(book, language)} · ${getLocalizedSection(book, language)}`;
-
-      return `
+  elements.archiveGrid.innerHTML = cells
+    .map(
+      (cell) => `
         <button
           type="button"
-          class="archive-cell ${stateClass}${selectedBookKey === key ? " is-selected" : ""}"
-          data-book-key="${key}"
-          aria-label="${getArchiveCellAriaLabel(book)}"
-          aria-pressed="${selectedBookKey === key ? "true" : "false"}"
+          class="archive-cell ${cell.stateClass} ${cell.isSelected ? "is-selected" : ""}"
+          data-book-key="${escapeHtml(cell.key)}"
+          aria-label="${escapeHtml(cell.ariaLabel)}"
+          aria-pressed="${cell.isSelected ? "true" : "false"}"
         >
           <div class="archive-cell-top">
-            <span class="archive-cell-order">#${book.order}</span>
-            <span class="archive-cell-state">${stateLabel}</span>
+            <span class="archive-cell-order">${cell.order}</span>
+            <span class="archive-cell-state">${escapeHtml(cell.stateLabel)}</span>
           </div>
-          <div class="archive-cell-book">${getLocalizedBookName(book, language)}</div>
-          <div class="archive-cell-meta">${metaLine}</div>
+          <div class="archive-cell-book">${escapeHtml(cell.bookName)}</div>
+          <div class="archive-cell-meta">${escapeHtml(cell.metaLine)}</div>
         </button>
-      `;
-    })
+      `,
+    )
     .join("");
 }
 
-function renderArchiveDetails(bookKey = "") {
+function renderArchiveDetails(bookKey) {
   if (!elements.archiveDetails) return;
 
-  const book = books.find((item) => getBookStatsKey(item) === bookKey) || null;
+  const book = books.find((item) => getBookStatsKey(item) === bookKey) ?? null;
 
   if (!book) {
     renderInto(
@@ -5175,45 +4986,43 @@ function renderArchiveDetails(bookKey = "") {
     return;
   }
 
-  const language = getCurrentLanguage();
-  const entry = getBookStats(book);
-  const average = getAverageAttemptsForBook(book);
-  const solved = entry?.solves ?? 0;
-  const plays = entry?.plays ?? 0;
-  const bestAttempts = entry?.bestAttempts ?? "—";
-  const lastSolvedDate = entry?.lastSolvedDate ?? "Not yet solved";
-  const stateLabel = getArchiveCellStateLabel(book);
+  const details = buildArchiveDetailsViewModel({
+    book,
+    language: getCurrentLanguage(),
+    getBookStats,
+    getAverageAttemptsForBook,
+    getArchiveCellStateLabel,
+    getLocalizedBookName,
+    getLocalizedTestament,
+    getLocalizedSection,
+  });
 
   renderInto(
     elements.archiveDetails,
     `
       <div class="archive-details-header">
-        <div class="archive-details-title">${getLocalizedBookName(book, language)}</div>
-        <div class="archive-details-subtitle">${getLocalizedTestament(book, language)} · ${getLocalizedSection(book, language)} · Canon #${book.order}</div>
+        <div class="archive-details-title">${escapeHtml(details.title)}</div>
+        <div class="archive-details-subtitle">${escapeHtml(details.subtitle)}</div>
       </div>
-
       <div class="archive-details-grid">
         <div class="archive-detail-stat">
-          <span class="archive-detail-stat-value">${plays}</span>
+          <span class="archive-detail-stat-value">${details.stats.plays}</span>
           <span class="archive-detail-stat-label">Daily plays</span>
         </div>
         <div class="archive-detail-stat">
-          <span class="archive-detail-stat-value">${solved}</span>
+          <span class="archive-detail-stat-value">${details.stats.solved}</span>
           <span class="archive-detail-stat-label">Daily solves</span>
         </div>
         <div class="archive-detail-stat">
-          <span class="archive-detail-stat-value">${bestAttempts}</span>
+          <span class="archive-detail-stat-value">${details.stats.bestAttempts}</span>
           <span class="archive-detail-stat-label">Best attempts</span>
         </div>
         <div class="archive-detail-stat">
-          <span class="archive-detail-stat-value">${average ? average.toFixed(1) : "—"}</span>
+          <span class="archive-detail-stat-value">${details.stats.average}</span>
           <span class="archive-detail-stat-label">Average attempts</span>
         </div>
       </div>
-
-      <p class="archive-details-copy">
-        Status: ${stateLabel}. Last solved date: ${lastSolvedDate}. This archive tracks Daily mode progress only.
-      </p>
+      <p class="archive-details-copy">${escapeHtml(details.copy)}</p>
     `,
   );
 }
@@ -5552,28 +5361,44 @@ function getDailyStreakBadges() {
 function renderStatsModalBadges() {
   if (!elements.statsModalAchievements) return;
 
-  const groupedAchievements = ACHIEVEMENTS.reduce((acc, achievement) => {
-    const category = achievement.category || "uncategorized";
-
-    if (!acc[category]) {
-      acc[category] = [];
-    }
-
-    acc[category].push(achievement);
-    return acc;
-  }, {});
-
-  const orderedCategories = Object.keys(groupedAchievements).sort(
-    (a, b) => getAchievementCategoryOrder(a) - getAchievementCategoryOrder(b),
-  );
+  const groups = buildAchievementCategoryGroups(ACHIEVEMENTS, {
+    categories: ACHIEVEMENT_CATEGORIES,
+    getAchievementEvaluation,
+    shouldTreatAchievementAsEarned,
+  });
 
   const markup = `
     <div class="achievement-groups">
-      ${orderedCategories
-      .map((category) =>
-        buildAchievementCategoryGroupMarkup(category, groupedAchievements[category]),
-      )
-      .join("")}
+      ${groups
+        .map(
+          (group) => `
+            <section class="achievement-group" aria-labelledby="achievement-group-${escapeHtml(
+              group.category,
+            )}">
+              <div class="achievement-group__header">
+                <h3 class="achievement-group__title" id="achievement-group-${escapeHtml(
+                  group.category,
+                )}">${escapeHtml(group.title)}</h3>
+                ${
+                  group.description
+                    ? `<p class="achievement-group__meta">${escapeHtml(group.description)}</p>`
+                    : ""
+                }
+              </div>
+              <div class="achievement-group__list">
+                ${group.achievements
+                  .map((entry) =>
+                    buildAchievementCardMarkup(entry.achievement, {
+                      evaluation: entry.evaluation,
+                      isEarned: entry.isEarned,
+                    }),
+                  )
+                  .join("")}
+              </div>
+            </section>
+          `,
+        )
+        .join("")}
     </div>
   `;
 
