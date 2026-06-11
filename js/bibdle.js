@@ -43,7 +43,25 @@ import {
   createToggleHandler,
   renderPlacementCard
 } from "./ui-refactor-helpers.js";
-
+import {
+  clearBusyState,
+  escapeHtml,
+  hasRenderableMarkup,
+  hasTextContent,
+  isNonEmptyArray,
+  renderBusyInto,
+  renderEmptyState,
+  renderInto,
+  renderLoadingBlock,
+  renderRetryButtonMarkup,
+  renderSurfaceEmptyState,
+  renderSurfaceLoadingState,
+  renderWhen,
+  setHidden,
+  showWhen,
+  showWhenHasItems,
+  showWhenHasText,
+} from "./ui-render-utils.js";
 
 const CONFIG = {
   modes: {
@@ -3273,14 +3291,18 @@ function renderLeaderboardList(entries) {
   clearBusyState(elements.leaderboardList);
 
   if (!entries.length) {
-    renderSurfaceEmptyState(elements.leaderboardList, {
-      title: 'No leaderboard entries yet',
-      body: "Be the first player to finish today's Daily puzzle.",
-      compact: false,
-      showMarker: true,
-      tone: 'empty',
-      actions: renderRetryButtonMarkup('Focus guess box', 'focus-guess-input'),
-    });
+    renderSurfaceEmptyState(
+  elements.leaderboardList,
+  {
+    title: "No leaderboard entries yet",
+    body: "Be the first player to finish today’s Daily puzzle.",
+    compact: false,
+    showMarker: true,
+    tone: "empty",
+    actions: renderRetryButtonMarkup("Focus guess box", "focus-guess-input"),
+  },
+  bindEmptyStateActions,
+);
     return;
   }
 
@@ -3338,7 +3360,7 @@ function renderCurrentUserRank(rankEntry) {
       showMarker: true,
       tone: 'empty',
       actions: renderRetryButtonMarkup('Focus guess box', 'focus-guess-input'),
-    });
+    }, bindEmptyStateActions);
     return;
   }
 
@@ -3395,7 +3417,7 @@ function renderPostGameLeaderboardRank(rankEntry) {
       showMarker: true,
       tone: 'empty',
       actions: renderRetryButtonMarkup('Open leaderboard', 'open-leaderboard'),
-    });
+    }, bindEmptyStateActions);
     return;
   }
 
@@ -3404,7 +3426,7 @@ function renderPostGameLeaderboardRank(rankEntry) {
       label: 'Loading placement',
       variant: 'rank',
       rows: 1,
-    });
+    }, bindEmptyStateActions);
     return;
   }
 
@@ -3457,7 +3479,7 @@ async function loadPostGameLeaderboardRank() {
     label: 'Loading placement',
     variant: 'rank',
     rows: 1,
-  });
+  }, bindEmptyStateActions);
 
   const user = state.auth.user ?? firebaseAuth?.currentUser ?? null;
 
@@ -3469,7 +3491,7 @@ async function loadPostGameLeaderboardRank() {
       showMarker: true,
       tone: 'error',
       actions: renderRetryButtonMarkup('Open leaderboard', 'open-leaderboard'),
-    });
+    }, bindEmptyStateActions);
     return;
   }
 
@@ -3486,7 +3508,7 @@ async function loadPostGameLeaderboardRank() {
       showMarker: true,
       tone: 'error',
       actions: renderRetryButtonMarkup('Try again', 'retry-postgame-rank'),
-    });
+    }, bindEmptyStateActions);
   }
 }
 
@@ -4532,98 +4554,6 @@ function renderStatus(message = "Guess the book from the verse above.") {
   elements.statusLine.textContent = message;
 }
 
-function renderEmptyState({
-  title = "",
-  body = "",
-  actions = "",
-  compact = false,
-  inline = false,
-  showMarker = true,
-  tone = "empty",
-} = {}) {
-  const classes = [
-    "empty-state",
-    compact ? "empty-state--compact" : "empty-state--standard",
-    inline ? "empty-state--inline" : "",
-    tone ? `empty-state--${tone}` : "",
-  ]
-    .filter(Boolean)
-    .join(" ");
-
-  const normalizedActions =
-    Array.isArray(actions) ? actions.filter(Boolean).join("") : actions;
-
-  return `
-    <div class="${classes}" ${tone === "error" ? 'role="alert"' : ""}>
-      ${showMarker ? '<div class="empty-state__marker" aria-hidden="true"></div>' : ""}
-      <div class="empty-state__content">
-        ${title ? `<p class="empty-state__title">${title}</p>` : ""}
-        ${body ? `<p class="empty-state__body">${body}</p>` : ""}
-      </div>
-      ${normalizedActions ? `<div class="empty-state__actions">${normalizedActions}</div>` : ""}
-    </div>
-  `;
-}
-
-function renderRetryButtonMarkup(label = "Try again", action = "") {
-  if (!action) return "";
-  return `<button type="button" class="pill-btn" data-empty-action="${action}">${label}</button>`;
-}
-
-function renderSurfaceEmptyState(container, options = {}) {
-  if (!container) return false;
-
-  clearBusyState(container);
-
-  const {
-    title = '',
-    body = '',
-    actions = '',
-    compact = false,
-    inline = false,
-    showMarker = true,
-    tone = 'empty',
-  } = options;
-
-  renderInto(
-    container,
-    renderEmptyState({
-      title,
-      body,
-      actions,
-      compact,
-      inline,
-      showMarker,
-      tone,
-    }),
-  );
-
-  bindEmptyStateActions(container);
-  return true;
-}
-
-function renderSurfaceLoadingState(container, options = {}) {
-  if (!container) return false;
-
-  const {
-    label = 'Loading',
-    variant = 'list',
-    rows = 3,
-  } = options;
-
-  renderBusyInto(
-    container,
-    renderLoadingBlock({
-      label,
-      variant,
-      rows,
-    }),
-    label,
-  );
-
-  return true;
-}
-
 function bindEmptyStateActions(container = document) {
   container.querySelectorAll("[data-empty-action]").forEach((button) => {
     if (button.dataset.emptyActionBound === "true") return;
@@ -4652,11 +4582,6 @@ function bindEmptyStateActions(container = document) {
       }
     });
   });
-}
-
-function setHidden(element, hidden) {
-  if (!element) return;
-  element.hidden = !!hidden;
 }
 
 function setModalOpenState(modalBackdrop, isOpen, options = {}) {
@@ -4707,137 +4632,6 @@ function closeModal(modalBackdrop, options = {}) {
   }
 
   setModalOpenState(modalBackdrop, false, options);
-}
-
-function renderLoadingBlock({
-  label = "Loading",
-  variant = "list",
-  rows = 3,
-} = {}) {
-  const items = Array.from({ length: rows }, () => {
-    if (variant === "kpis") {
-      return `
-        <div class="loading-card" aria-hidden="true">
-          <div class="loading-card__lines">
-            <div class="loading-line loading-line--short"></div>
-            <div class="loading-line loading-line--mid"></div>
-          </div>
-        </div>
-      `;
-    }
-
-    if (variant === "rank") {
-      return `
-        <div class="loading-card" aria-hidden="true">
-          <div class="loading-card__lines">
-            <div class="loading-line loading-line--rank"></div>
-            <div class="loading-line loading-line--name"></div>
-            <div class="loading-line loading-line--meta"></div>
-          </div>
-        </div>
-      `;
-    }
-
-    return `
-      <div class="loading-row" aria-hidden="true">
-        <div class="loading-row__lines">
-          <div class="loading-line loading-line--rank"></div>
-          <div class="loading-line loading-line--name"></div>
-        </div>
-      </div>
-    `;
-  }).join("");
-
-  const gridClass =
-    variant === "kpis" ? "loading-block__grid loading-block__grid--kpis" : "loading-block__grid loading-block__grid--list";
-
-  return `
-    <div class="loading-block" role="status" aria-live="polite" aria-label="${escapeHtml(label)}">
-      <div class="loading-block__status">${escapeHtml(label)}</div>
-      <div class="${gridClass}">
-        ${items}
-      </div>
-    </div>
-  `;
-}
-
-function renderBusyInto(container, markup, label = "Loading") {
-  if (!container) return;
-  container.setAttribute("aria-busy", "true");
-  container.setAttribute("data-loading-label", label);
-  container.innerHTML = markup;
-}
-
-function clearBusyState(container) {
-  if (!container) return;
-  container.setAttribute("aria-busy", "false");
-  container.removeAttribute("data-loading-label");
-}
-
-function setContentVisibility(element, shouldShow, renderWhenHidden = false) {
-  if (!element) return;
-  setHidden(element, !shouldShow);
-  if (!shouldShow && !renderWhenHidden) {
-    element.innerHTML = "";
-  }
-}
-
-function renderInto(container, markup, options = {}) {
-  if (!container) return;
-  const { visible = true, preserveWhenHidden = false } = options;
-  setContentVisibility(container, visible, preserveWhenHidden);
-  if (!visible && !preserveWhenHidden) return;
-  container.innerHTML = markup;
-}
-
-function hasItems(value) {
-  return Array.isArray(value) && value.length > 0;
-}
-
-function hasTextContent(value) {
-  return typeof value === "string" && value.trim().length > 0;
-}
-
-function isNonEmptyArray(value) {
-  return Array.isArray(value) && value.length > 0;
-}
-
-function hasRenderableMarkup(value) {
-  return typeof value === "string" && value.trim().length > 0;
-}
-
-function escapeHtml(value) {
-  return String(value ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
-
-function setVisibility(element, visible) {
-  setHidden(element, !visible);
-}
-
-function showWhen(element, condition) {
-  setVisibility(element, !!condition);
-  return !!condition;
-}
-
-function showWhenHasItems(element, items) {
-  return showWhen(element, isNonEmptyArray(items));
-}
-
-function showWhenHasText(element, text) {
-  return showWhen(element, hasTextContent(text));
-}
-
-function renderWhen(container, condition, markup = "", options = {}) {
-  renderInto(container, markup, {
-    visible: !!condition,
-    preserveWhenHidden: !!options.preserveWhenHidden,
-  });
-  return !!condition;
 }
 
 function computeModeStatsSummary(mode = "daily") {
@@ -4951,7 +4745,7 @@ function renderStatsSection(statsObj, container) {
       showMarker: true,
       tone: 'empty',
       actions: renderRetryButtonMarkup('Start guessing', 'focus-guess-input'),
-    });
+    }, bindEmptyStateActions);
     return;
   }
 
@@ -4963,7 +4757,7 @@ function renderStatsSection(statsObj, container) {
       showMarker: true,
       tone: 'empty',
       actions: renderRetryButtonMarkup('Keep playing', 'focus-guess-input'),
-    });
+    }, bindEmptyStateActions);
     return;
   }
 
@@ -5010,7 +4804,7 @@ function renderEarnedBadges(container) {
       body: "Keep a Daily winning streak going to unlock streak badges.",
       compact: true,
       showMarker: true,
-    });
+    }, bindEmptyStateActions);
     return;
   }
 
@@ -5667,7 +5461,7 @@ async function openLeaderboardModal(trigger = document.activeElement) {
       showMarker: true,
       tone: 'error',
       actions: renderRetryButtonMarkup('Try again', 'retry-leaderboard'),
-    });
+    }, bindEmptyStateActions);
 
     renderCurrentUserRank(null);
     return;
@@ -5701,7 +5495,7 @@ async function openLeaderboardModal(trigger = document.activeElement) {
       showMarker: true,
       tone: 'error',
       actions: renderRetryButtonMarkup('Try again', 'retry-leaderboard'),
-    });
+    }, bindEmptyStateActions);
 
     renderCurrentUserRank(null);
     return;
@@ -6048,14 +5842,18 @@ function renderSuggestions() {
       return;
     }
 
-    renderSurfaceEmptyState(elements.autocomplete, {
-      title: 'No matching books',
-      body: 'Try another spelling or a different Bible book name.',
-      compact: true,
-      showMarker: true,
-      tone: 'empty',
-      actions: renderRetryButtonMarkup('Keep typing', 'focus-guess-input'),
-    });
+    renderSurfaceEmptyState(
+      elements.autocomplete,
+      {
+        title: "No matching books",
+        body: "Try another spelling or a different Bible book name.",
+        compact: true,
+        showMarker: true,
+        tone: "empty",
+        actions: renderRetryButtonMarkup("Keep typing", "focus-guess-input"),
+      },
+      bindEmptyStateActions,
+    );
 
     openSuggestions();
     updateComboboxA11y(false);
