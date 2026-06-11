@@ -3292,17 +3292,17 @@ function renderLeaderboardList(entries) {
 
   if (!entries.length) {
     renderSurfaceEmptyState(
-  elements.leaderboardList,
-  {
-    title: "No leaderboard entries yet",
-    body: "Be the first player to finish today’s Daily puzzle.",
-    compact: false,
-    showMarker: true,
-    tone: "empty",
-    actions: renderRetryButtonMarkup("Focus guess box", "focus-guess-input"),
-  },
-  bindEmptyStateActions,
-);
+      elements.leaderboardList,
+      {
+        title: "No leaderboard entries yet",
+        body: "Be the first player to finish today’s Daily puzzle.",
+        compact: false,
+        showMarker: true,
+        tone: "empty",
+        actions: renderRetryButtonMarkup("Focus guess box", "focus-guess-input"),
+      },
+      bindEmptyStateActions,
+    );
     return;
   }
 
@@ -3329,13 +3329,6 @@ function renderLeaderboardList(entries) {
   );
 }
 
-function getLeaderboardPlacement(rankEntry) {
-  const markup = renderPlacementCard(rankEntry, formatLeaderboardTime);
-  return {
-    markup
-  };
-}
-
 function renderCurrentUserRank(rankEntry) {
   if (!elements.leaderboardUserRank) return;
 
@@ -3343,67 +3336,41 @@ function renderCurrentUserRank(rankEntry) {
 
   if (!state.auth.user) {
     renderSurfaceEmptyState(elements.leaderboardUserRank, {
-      title: 'Join the leaderboard',
+      title: "Join the leaderboard",
       body: "Complete today's Daily puzzle to record your placement.",
       compact: true,
       showMarker: true,
-      tone: 'empty',
+      tone: "empty",
     });
     return;
   }
 
   if (!rankEntry) {
     renderSurfaceEmptyState(elements.leaderboardUserRank, {
-      title: 'No Daily result yet',
+      title: "No Daily result yet",
       body: "Finish today's Daily puzzle to see your placement here.",
       compact: true,
       showMarker: true,
-      tone: 'empty',
-      actions: renderRetryButtonMarkup('Focus guess box', 'focus-guess-input'),
+      tone: "empty",
+      actions: renderRetryButtonMarkup("Focus guess box", "focus-guess-input"),
     }, bindEmptyStateActions);
     return;
   }
 
-  const hasRank = Number.isInteger(rankEntry.rank) && rankEntry.rank > 0;
-  const isSolved = rankEntry.result === 'won' || rankEntry.result === 'solved';
-  const placementLabel = hasRank ? `#${rankEntry.rank}` : isSolved ? 'Solved' : 'Unranked';
-  const placementMeta = hasRank
-    ? `You are currently #${rankEntry.rank} on today's leaderboard.`
-    : isSolved
-      ? 'Your result is recorded, but a numeric placement is not available yet.'
-      : 'Your result is recorded, but a ranked position is not available yet.';
-
-  elements.leaderboardUserRank.innerHTML = `
-    <div class="leaderboard-user-rank-card">
-      <div>
-        <div class="label">Your place</div>
-        <div class="value">${placementLabel}</div>
-      </div>
-      <div>
-        <div class="label">Result</div>
-        <div class="value">${isSolved ? 'Solved' : 'Played'}</div>
-      </div>
-      <div>
-        <div class="label">Guesses</div>
-        <div class="value">${rankEntry.guesses ?? '—'}</div>
-      </div>
-      <div>
-        <div class="label">Time</div>
-        <div class="value">${formatLeaderboardTime(rankEntry.completedAt)}</div>
-      </div>
-      <div class="leaderboard-user-rank-note">${placementMeta}</div>
-    </div>
-  `;
+  renderInto(
+    elements.leaderboardUserRank,
+    renderPlacementCard(rankEntry, formatLeaderboardTime)
+  );
 }
 
 function renderPostGameLeaderboardRank(rankEntry) {
   if (!elements.postGameLeaderboardSection || !elements.postGameLeaderboardRank) return;
 
-  const isDaily = state.mode === 'daily';
+  const isDaily = state.mode === "daily";
   showWhen(elements.postGameLeaderboardSection, isDaily);
 
   if (!isDaily) {
-    renderWhen(elements.postGameLeaderboardRank, false, '');
+    renderWhen(elements.postGameLeaderboardRank, false, "");
     return;
   }
 
@@ -3411,57 +3378,28 @@ function renderPostGameLeaderboardRank(rankEntry) {
 
   if (!state.auth.user) {
     renderSurfaceEmptyState(elements.postGameLeaderboardRank, {
-      title: 'Sign in to track placement',
-      body: 'Your Daily result can appear here once you are signed in.',
+      title: "Sign in to track placement",
+      body: "Your Daily result can appear here once you are signed in.",
       compact: true,
       showMarker: true,
-      tone: 'empty',
-      actions: renderRetryButtonMarkup('Open leaderboard', 'open-leaderboard'),
+      tone: "empty",
+      actions: renderRetryButtonMarkup("Open leaderboard", "open-leaderboard"),
     }, bindEmptyStateActions);
     return;
   }
 
   if (!rankEntry) {
     renderSurfaceLoadingState(elements.postGameLeaderboardRank, {
-      label: 'Loading placement',
-      variant: 'rank',
+      label: "Loading placement",
+      variant: "rank",
       rows: 1,
-    }, bindEmptyStateActions);
+    });
     return;
   }
 
-  const hasRank = Number.isInteger(rankEntry.rank) && rankEntry.rank > 0;
-  const isSolved = rankEntry.result === 'won' || rankEntry.result === 'solved';
-  const placementLabel = hasRank ? `#${rankEntry.rank}` : isSolved ? 'Solved' : 'Unranked';
-  const placementMeta = hasRank
-    ? `You are currently #${rankEntry.rank} on today's leaderboard.`
-    : isSolved
-      ? 'Your result is recorded, but a numeric placement is not available yet.'
-      : 'Your result is recorded, but a ranked position is not available yet.';
-
   renderInto(
     elements.postGameLeaderboardRank,
-    `
-      <div class="leaderboard-user-rank-card">
-        <div>
-          <div class="label">Your place</div>
-          <div class="value">${placementLabel}</div>
-        </div>
-        <div>
-          <div class="label">Result</div>
-          <div class="value">${isSolved ? 'Solved' : 'Played'}</div>
-        </div>
-        <div>
-          <div class="label">Guesses</div>
-          <div class="value">${rankEntry.guesses ?? '—'}</div>
-        </div>
-        <div>
-          <div class="label">Time</div>
-          <div class="value">${formatLeaderboardTime(rankEntry.completedAt)}</div>
-        </div>
-        <div class="leaderboard-user-rank-note">${placementMeta}</div>
-      </div>
-    `,
+    renderPlacementCard(rankEntry, formatLeaderboardTime)
   );
 }
 
@@ -5400,69 +5338,67 @@ function handlePostGamePracticeStart() {
 }
 
 function closeLeaderboardModal() {
-  modalHelpers.closeModal("leaderboard");
+  leaderboardModalControls.close();
 }
 
 function openArchiveModal(trigger = document.activeElement) {
   if (!elements.archiveModal) return;
 
-  const selectedBook = books.find((book) => {
-    const entry = getBookStats(book);
-    return entry && entry.plays > 0;
-  }) ?? null;
+  const selectedBook =
+    books.find((book) => {
+      const entry = getBookStats(book);
+      return entry && entry.plays > 0;
+    }) ?? null;
 
   const selectedKey = selectedBook ? getBookStatsKey(selectedBook) : null;
 
   renderArchiveSummary();
   renderArchiveGrid(selectedKey);
   renderArchiveDetails(selectedKey);
-
-  modalHelpers.openModal("archive", { trigger });
+  archiveModalControls.open(trigger);
 }
 
 function closeArchiveModal() {
-  modalHelpers.closeModal("archive");
+  archiveModalControls.close();
 }
 
 async function openLeaderboardModal(trigger = document.activeElement) {
   if (!elements.leaderboardModal) return;
 
-  modalHelpers.openModal("leaderboard", { trigger });
+  leaderboardModalControls.open(trigger);
 
   renderSurfaceLoadingState(elements.leaderboardSummary, {
-    label: 'Loading global stats',
-    variant: 'kpis',
+    label: "Loading global stats",
+    variant: "kpis",
     rows: 4,
   });
   renderSurfaceLoadingState(elements.leaderboardList, {
-    label: 'Loading leaderboard',
-    variant: 'list',
+    label: "Loading leaderboard",
+    variant: "list",
     rows: 5,
   });
   renderSurfaceLoadingState(elements.leaderboardUserRank, {
-    label: 'Loading placement',
-    variant: 'rank',
+    label: "Loading placement",
+    variant: "rank",
     rows: 1,
   });
 
   if (!state.auth.enabled || !firebaseDb) {
     renderSurfaceEmptyState(elements.leaderboardSummary, {
-      title: 'Global stats unavailable',
-      body: 'Global Daily leaderboard data is unavailable right now.',
+      title: "Global stats unavailable",
+      body: "Global Daily leaderboard data is unavailable right now.",
       compact: true,
       showMarker: true,
-      tone: 'error',
+      tone: "error",
     });
-
     renderSurfaceEmptyState(elements.leaderboardList, {
-      title: 'Leaderboard unavailable',
-      body: 'Firebase is not available, but local gameplay still works.',
+      title: "Leaderboard unavailable",
+      body: "Firebase is not available, but local gameplay still works.",
       compact: true,
       showMarker: true,
-      tone: 'error',
-      actions: renderRetryButtonMarkup('Try again', 'retry-leaderboard'),
-    }, bindEmptyStateActions);
-
+      tone: "error",
+      actions: renderRetryButtonMarkup("Try again", "retry-leaderboard"),
+    });
     renderCurrentUserRank(null);
     return;
   }
@@ -5471,7 +5407,9 @@ async function openLeaderboardModal(trigger = document.activeElement) {
     const [stats, entries, userRank] = await Promise.all([
       fetchDailyGlobalStats(getDailyDateKey()),
       fetchLeaderboardTopEntries(getDailyDateKey()),
-      state.auth.user?.uid ? fetchCurrentUserRank(getDailyDateKey(), state.auth.user.uid) : Promise.resolve(null)
+      state.auth.user?.uid
+        ? fetchCurrentUserRank(getDailyDateKey(), state.auth.user.uid)
+        : Promise.resolve(null),
     ]);
 
     state.leaderboard.userRank = userRank;
@@ -5481,24 +5419,21 @@ async function openLeaderboardModal(trigger = document.activeElement) {
   } catch (error) {
     console.error("Leaderboard load failed", error);
     renderSurfaceEmptyState(elements.leaderboardSummary, {
-      title: 'Could not load global stats',
+      title: "Could not load global stats",
       body: "Today's global Daily metrics are not available right now.",
       compact: true,
       showMarker: true,
-      tone: 'error',
+      tone: "error",
     });
-
     renderSurfaceEmptyState(elements.leaderboardList, {
-      title: 'Could not load leaderboard',
-      body: 'Please try again in a moment.',
+      title: "Could not load leaderboard",
+      body: "Please try again in a moment.",
       compact: true,
       showMarker: true,
-      tone: 'error',
-      actions: renderRetryButtonMarkup('Try again', 'retry-leaderboard'),
-    }, bindEmptyStateActions);
-
+      tone: "error",
+      actions: renderRetryButtonMarkup("Try again", "retry-leaderboard"),
+    });
     renderCurrentUserRank(null);
-    return;
   }
 }
 
@@ -5724,12 +5659,12 @@ function renderPostGamePanel() {
     renderWhen(elements.postGameLeaderboardRank, false, "");
   }
 
-  setModalOpenState(elements.postGameModal, true);
-  state.postGameOpen = true;
+  postGameModalControls.open(document.activeElement);
+state.postGameOpen = true;
 }
 
 function closePostGameModal() {
-  modalService?.close("postGame") ?? closeModal(elements.postGameModal);
+  postGameModalControls.close();
 }
 
 function closePostGamePanel() {
@@ -6196,6 +6131,9 @@ const settingsModalControls = modalHelpers.createModalPair("settings", () => {
 const statsModalControls = modalHelpers.createModalPair("stats", () => {
   renderStatsModal();
 });
+const archiveModalControls = modalHelpers.createModalPair("archive");
+const leaderboardModalControls = modalHelpers.createModalPair("leaderboard");
+const postGameModalControls = modalHelpers.createModalPair("postGame");
 
 function openHelpModal(trigger = document.activeElement) {
   helpModalControls.open(trigger);
@@ -6248,7 +6186,18 @@ const updatePreference = createPreferenceUpdater({
   state,
   savePreferences,
   renderPipeline,
-  applyAccessibilityPreferences
+  applyAccessibilityPreferences,
+  afterChangeByKey: {
+    theme: (value) => {
+      applyTheme(value);
+      renderThemeToggle();
+    },
+    language: () => {
+      applyLanguageToDocument();
+      renderLanguageControl();
+      renderMobileLanguageToggle();
+    }
+  }
 });
 
 const handleReducedMotionToggle = createToggleHandler(
@@ -6383,17 +6332,12 @@ function handleArchiveGridClick(event) {
 
 function handleThemeToggle() {
   const nextTheme = state.preferences.theme === "dark" ? "light" : "dark";
-  applyTheme(nextTheme);
   updatePreference("theme", nextTheme, "theme-toggle");
 }
 
-function setLanguage(language) {
+function setLanguage(language, reason = "language-change") {
   const nextLanguage = language === "ml" ? "ml" : "en";
-  state.preferences.language = nextLanguage;
-  applyLanguageToDocument();
-  renderLanguageControl();
-  renderMobileLanguageToggle?.();
-  savePreferences();
+  updatePreference("language", nextLanguage, reason);
 }
 
 function rebuildGuessForCurrentLanguage(savedGuess) {
@@ -6414,9 +6358,8 @@ function refreshGuessesForCurrentLanguage() {
 
 function handleLanguageChange(event) {
   const value = event.target.value === "ml" ? "ml" : "en";
-  setLanguage(value);
+  setLanguage(value, "language-change");
   refreshGuessesForCurrentLanguage();
-  renderPipeline.renderPreferencesChanged({ reason: "language-change" });
 }
 
 function renderMobileLanguageToggle() {
@@ -6441,9 +6384,8 @@ function renderMobileLanguageToggle() {
 
 function handleMobileLanguageToggle() {
   const nextLanguage = getCurrentLanguage() === "en" ? "ml" : "en";
-  setLanguage(nextLanguage);
+  setLanguage(nextLanguage, "mobile-language-toggle");
   refreshGuessesForCurrentLanguage();
-  renderPipeline.renderPreferencesChanged({ reason: "mobile-language-toggle" });
 }
 
 function handleDifficultyChange(event) {
