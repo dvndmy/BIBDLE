@@ -87,6 +87,11 @@ import {
   buildTriviaContent as buildTriviaContentValue,
   buildPostGameContent,
 } from "./postgame-read-models.js";
+import { createPuzzleSurface } from "./puzzle-surface.js";
+import { createStatsSurface } from "./stats-surface.js";
+import { createPostGameSurface } from "./postgame-surface.js";
+import { createArchiveSurface } from "./archive-surface.js";
+import { createLeaderboardSurface } from "./leaderboard-surface.js";
 
 const CONFIG = {
   modes: {
@@ -181,6 +186,12 @@ let renderPipeline = null;
 let modalService = null;
 let bindings = null;
 let authUnsubscribe = null;
+
+let puzzleSurface = null;
+let statsSurface = null;
+let postGameSurface = null;
+let archiveSurface = null;
+let leaderboardSurface = null;
 
 const STATS_SCHEMA_VERSION = 2;
 
@@ -1416,37 +1427,33 @@ function buildAchievementCardMarkup(achievement, options = {}) {
   const imagePath = getAchievementImagePath(achievement);
 
   return `
-    <article class="achievement-card ${
-      viewModel.isEarned ? "is-earned" : "is-locked"
+    <article class="achievement-card ${viewModel.isEarned ? "is-earned" : "is-locked"
     }" ${viewModel.isEarned ? "" : 'aria-disabled="true"'}>
       <div class="achievement-card__media" aria-hidden="true">
-        ${
-          imagePath
-            ? `<img class="achievement-card__image" src="${escapeHtml(imagePath)}" alt="">`
-            : '<div class="achievement-card__media-slot">Badge image</div>'
-        }
+        ${imagePath
+      ? `<img class="achievement-card__image" src="${escapeHtml(imagePath)}" alt="">`
+      : '<div class="achievement-card__media-slot">Badge image</div>'
+    }
       </div>
       <div class="achievement-card__content">
         <h3 class="achievement-card__title">${escapeHtml(viewModel.title)}</h3>
-        ${
-          description
-            ? `<p class="achievement-card__description">${escapeHtml(viewModel.description)}</p>`
-            : ""
-        }
-        ${
-          progressText
-            ? `<p class="achievement-card__progress-text">${escapeHtml(viewModel.progressText)}</p>`
-            : ""
-        }
+        ${description
+      ? `<p class="achievement-card__description">${escapeHtml(viewModel.description)}</p>`
+      : ""
+    }
+        ${progressText
+      ? `<p class="achievement-card__progress-text">${escapeHtml(viewModel.progressText)}</p>`
+      : ""
+    }
         <div class="achievement-card__status" aria-label="${escapeHtml(
-          viewModel.status.label,
-        )}">
+      viewModel.status.label,
+    )}">
           <span class="achievement-card__status-icon" aria-hidden="true">${escapeHtml(
-            viewModel.status.icon,
-          )}</span>
+      viewModel.status.icon,
+    )}</span>
           <span class="achievement-card__status-text">${escapeHtml(
-            viewModel.status.label,
-          )}</span>
+      viewModel.status.label,
+    )}</span>
         </div>
       </div>
       <div class="achievement-card__progress">
@@ -1456,11 +1463,10 @@ function buildAchievementCardMarkup(achievement, options = {}) {
           aria-label="${escapeHtml(viewModel.progressLabel)}"
           aria-valuemin="0"
           aria-valuenow="${viewModel.ariaValueNow}"
-          aria-valuemax="${
-            viewModel.progressState.target > 0
-              ? viewModel.progressState.target
-              : Math.max(viewModel.progressState.progress, 1)
-          }"
+          aria-valuemax="${viewModel.progressState.target > 0
+      ? viewModel.progressState.target
+      : Math.max(viewModel.progressState.progress, 1)
+    }"
         >
           <span
             class="achievement-progress__fill"
@@ -1527,12 +1533,12 @@ function buildAchievementCategoryGroupMarkup(category, achievements) {
 
   return `
     <section class="achievement-group" aria-labelledby="achievement-group-${escapeHtml(
-      category,
-    )}">
+    category,
+  )}">
       <div class="achievement-group__header">
         <h3 class="achievement-group__title" id="achievement-group-${escapeHtml(
-          category,
-        )}">${escapeHtml(title)}</h3>
+    category,
+  )}">${escapeHtml(title)}</h3>
         ${description ? `<p class="achievement-group__meta">${escapeHtml(description)}</p>` : ""}
       </div>
       <div class="achievement-group__list">
@@ -2068,8 +2074,8 @@ function createStartupDependencies() {
     initGame,
     startPuzzle,
     resetPuzzle,
-    renderPuzzleView,
-    renderStatsModal,
+    renderPuzzleView: (...args) => puzzleSurface?.renderPuzzleView?.(...args),
+    renderStatsModal: (...args) => statsSurface?.renderStatsModal?.(...args),
     stopCountdownTimer,
     updateCountdownLabel,
     startCountdownTimer,
@@ -3068,67 +3074,6 @@ async function fetchCurrentUserRank(dateKey, uid) {
   };
 }
 
-function renderLeaderboardSummary(stats) {
-  if (!elements.leaderboardSummary) return;
-
-  if (!stats) {
-    renderSurfaceLoadingState(elements.leaderboardSummary, {
-      label: 'Loading global stats',
-      variant: 'kpis',
-      rows: 4,
-    });
-    return;
-  }
-
-  clearBusyState(elements.leaderboardSummary);
-
-  const players = Number.isInteger(stats.players)
-    ? stats.players
-    : Number.isInteger(stats.totalPlayers)
-      ? stats.totalPlayers
-      : 0;
-
-  const completed = Number.isInteger(stats.solvers)
-    ? stats.solvers
-    : Number.isInteger(stats.completed)
-      ? stats.completed
-      : 0;
-
-  const avgWinningGuesses = typeof stats.averageWinningGuesses === 'number'
-    ? stats.averageWinningGuesses
-    : typeof stats.avgGuesses === 'number'
-      ? stats.avgGuesses
-      : null;
-
-  const avgGuessesDisplay =
-    avgWinningGuesses !== null && Number.isFinite(avgWinningGuesses)
-      ? avgWinningGuesses.toFixed(1)
-      : '—';
-
-  const solveRate = players > 0 ? Math.round((completed / players) * 100) : 0;
-
-  elements.leaderboardSummary.innerHTML = `
-    <div class="leaderboard-kpis">
-      <div class="leaderboard-kpi">
-        <div class="leaderboard-kpi-value">${players}</div>
-        <div class="leaderboard-kpi-label">Players</div>
-      </div>
-      <div class="leaderboard-kpi">
-        <div class="leaderboard-kpi-value">${completed}</div>
-        <div class="leaderboard-kpi-label">Completed</div>
-      </div>
-      <div class="leaderboard-kpi">
-        <div class="leaderboard-kpi-value">${avgGuessesDisplay}</div>
-        <div class="leaderboard-kpi-label">Average guesses</div>
-      </div>
-      <div class="leaderboard-kpi">
-        <div class="leaderboard-kpi-value">${solveRate}%</div>
-        <div class="leaderboard-kpi-label">Solve rate</div>
-      </div>
-    </div>
-  `;
-}
-
 async function ensureAnonymousAuthForDailySubmission() {
   if (!state.auth.enabled || !firebaseAuth) return null;
 
@@ -3220,242 +3165,6 @@ async function submitDailyResultToLeaderboard(outcome) {
     });
   } catch (error) {
     console.error("Leaderboard submission failed:", error);
-  }
-}
-
-function renderLeaderboardList(entries) {
-  if (!elements.leaderboardList) return;
-
-  if (!Array.isArray(entries)) {
-    renderSurfaceLoadingState(elements.leaderboardList, {
-      label: 'Loading leaderboard',
-      variant: 'list',
-      rows: 5,
-    });
-    return;
-  }
-
-  clearBusyState(elements.leaderboardList);
-
-  if (!entries.length) {
-    renderSurfaceEmptyState(
-  elements.leaderboardList,
-  {
-    title: "No leaderboard entries yet",
-    body: "Be the first player to finish today’s Daily puzzle.",
-    compact: false,
-    showMarker: true,
-    tone: "empty",
-    actions: renderRetryButtonMarkup("Focus guess box", "focus-guess-input"),
-  },
-  bindEmptyStateActions,
-);
-    return;
-  }
-
-  const rows = entries
-    .map((entry) => {
-      const isCurrentUser =
-        !!state.auth.user?.uid &&
-        (entry.uid === state.auth.user.uid || entry.userId === state.auth.user.uid);
-
-      return `
-        <div class="leaderboard-row ${isCurrentUser ? 'is-current-user' : ''}">
-          <div class="leaderboard-rank">${entry.rank}</div>
-          <div class="leaderboard-name">${escapeHtml(entry.displayName ?? 'Anonymous')}</div>
-          <div class="leaderboard-guesses">${entry.guesses ?? '—'} ${entry.guesses === 1 ? 'guess' : 'guesses'}</div>
-          <div class="leaderboard-time">${formatLeaderboardTime(entry.completedAt)}</div>
-        </div>
-      `;
-    })
-    .join('');
-
-  renderInto(
-    elements.leaderboardList,
-    `<div class="leaderboard-list-shell">${rows}</div>`,
-  );
-}
-
-function getLeaderboardPlacement(rankEntry) {
-  const markup = renderPlacementCard(rankEntry, formatLeaderboardTime);
-  return {
-    markup
-  };
-}
-
-function renderCurrentUserRank(rankEntry) {
-  if (!elements.leaderboardUserRank) return;
-
-  clearBusyState(elements.leaderboardUserRank);
-
-  if (!state.auth.user) {
-    renderSurfaceEmptyState(elements.leaderboardUserRank, {
-      title: 'Join the leaderboard',
-      body: "Complete today's Daily puzzle to record your placement.",
-      compact: true,
-      showMarker: true,
-      tone: 'empty',
-    });
-    return;
-  }
-
-  if (!rankEntry) {
-    renderSurfaceEmptyState(elements.leaderboardUserRank, {
-      title: 'No Daily result yet',
-      body: "Finish today's Daily puzzle to see your placement here.",
-      compact: true,
-      showMarker: true,
-      tone: 'empty',
-      actions: renderRetryButtonMarkup('Focus guess box', 'focus-guess-input'),
-    }, bindEmptyStateActions);
-    return;
-  }
-
-  const hasRank = Number.isInteger(rankEntry.rank) && rankEntry.rank > 0;
-  const isSolved = rankEntry.result === 'won' || rankEntry.result === 'solved';
-  const placementLabel = hasRank ? `#${rankEntry.rank}` : isSolved ? 'Solved' : 'Unranked';
-  const placementMeta = hasRank
-    ? `You are currently #${rankEntry.rank} on today's leaderboard.`
-    : isSolved
-      ? 'Your result is recorded, but a numeric placement is not available yet.'
-      : 'Your result is recorded, but a ranked position is not available yet.';
-
-  elements.leaderboardUserRank.innerHTML = `
-    <div class="leaderboard-user-rank-card">
-      <div>
-        <div class="label">Your place</div>
-        <div class="value">${placementLabel}</div>
-      </div>
-      <div>
-        <div class="label">Result</div>
-        <div class="value">${isSolved ? 'Solved' : 'Played'}</div>
-      </div>
-      <div>
-        <div class="label">Guesses</div>
-        <div class="value">${rankEntry.guesses ?? '—'}</div>
-      </div>
-      <div>
-        <div class="label">Time</div>
-        <div class="value">${formatLeaderboardTime(rankEntry.completedAt)}</div>
-      </div>
-      <div class="leaderboard-user-rank-note">${placementMeta}</div>
-    </div>
-  `;
-}
-
-function renderPostGameLeaderboardRank(rankEntry) {
-  if (!elements.postGameLeaderboardSection || !elements.postGameLeaderboardRank) return;
-
-  const isDaily = state.mode === 'daily';
-  showWhen(elements.postGameLeaderboardSection, isDaily);
-
-  if (!isDaily) {
-    renderWhen(elements.postGameLeaderboardRank, false, '');
-    return;
-  }
-
-  clearBusyState(elements.postGameLeaderboardRank);
-
-  if (!state.auth.user) {
-    renderSurfaceEmptyState(elements.postGameLeaderboardRank, {
-      title: 'Sign in to track placement',
-      body: 'Your Daily result can appear here once you are signed in.',
-      compact: true,
-      showMarker: true,
-      tone: 'empty',
-      actions: renderRetryButtonMarkup('Open leaderboard', 'open-leaderboard'),
-    }, bindEmptyStateActions);
-    return;
-  }
-
-  if (!rankEntry) {
-    renderSurfaceLoadingState(elements.postGameLeaderboardRank, {
-      label: 'Loading placement',
-      variant: 'rank',
-      rows: 1,
-    }, bindEmptyStateActions);
-    return;
-  }
-
-  const hasRank = Number.isInteger(rankEntry.rank) && rankEntry.rank > 0;
-  const isSolved = rankEntry.result === 'won' || rankEntry.result === 'solved';
-  const placementLabel = hasRank ? `#${rankEntry.rank}` : isSolved ? 'Solved' : 'Unranked';
-  const placementMeta = hasRank
-    ? `You are currently #${rankEntry.rank} on today's leaderboard.`
-    : isSolved
-      ? 'Your result is recorded, but a numeric placement is not available yet.'
-      : 'Your result is recorded, but a ranked position is not available yet.';
-
-  renderInto(
-    elements.postGameLeaderboardRank,
-    `
-      <div class="leaderboard-user-rank-card">
-        <div>
-          <div class="label">Your place</div>
-          <div class="value">${placementLabel}</div>
-        </div>
-        <div>
-          <div class="label">Result</div>
-          <div class="value">${isSolved ? 'Solved' : 'Played'}</div>
-        </div>
-        <div>
-          <div class="label">Guesses</div>
-          <div class="value">${rankEntry.guesses ?? '—'}</div>
-        </div>
-        <div>
-          <div class="label">Time</div>
-          <div class="value">${formatLeaderboardTime(rankEntry.completedAt)}</div>
-        </div>
-        <div class="leaderboard-user-rank-note">${placementMeta}</div>
-      </div>
-    `,
-  );
-}
-
-async function loadPostGameLeaderboardRank() {
-  if (state.mode !== 'daily' || !isGameOver()) {
-    renderPostGameLeaderboardRank(null);
-    return;
-  }
-
-  if (!elements.postGameLeaderboardSection || !elements.postGameLeaderboardRank) return;
-
-  showWhen(elements.postGameLeaderboardSection, true);
-
-  renderSurfaceLoadingState(elements.postGameLeaderboardRank, {
-    label: 'Loading placement',
-    variant: 'rank',
-    rows: 1,
-  }, bindEmptyStateActions);
-
-  const user = state.auth.user ?? firebaseAuth?.currentUser ?? null;
-
-  if (!user?.uid || !state.auth.enabled || !firebaseDb) {
-    renderSurfaceEmptyState(elements.postGameLeaderboardRank, {
-      title: 'Placement unavailable',
-      body: 'Complete a Daily puzzle while connected to global stats to see your placement.',
-      compact: true,
-      showMarker: true,
-      tone: 'error',
-      actions: renderRetryButtonMarkup('Open leaderboard', 'open-leaderboard'),
-    }, bindEmptyStateActions);
-    return;
-  }
-
-  try {
-    const userRank = await fetchCurrentUserRank(getDailyDateKey(), user.uid);
-    state.leaderboard.userRank = userRank;
-    renderPostGameLeaderboardRank(userRank);
-  } catch (error) {
-    console.error('Post-game rank load failed', error);
-    renderSurfaceEmptyState(elements.postGameLeaderboardRank, {
-      title: 'Could not load placement',
-      body: 'Your result was saved locally, but your current global placement is not available yet.',
-      compact: true,
-      showMarker: true,
-      tone: 'error',
-      actions: renderRetryButtonMarkup('Try again', 'retry-postgame-rank'),
-    }, bindEmptyStateActions);
   }
 }
 
@@ -4354,91 +4063,11 @@ function syncPreferenceControls() {
   }
 }
 
-function syncActionButtons() {
-  const gameOver = isGameOver();
-  const inDailyMode = state.mode === "daily";
-  const inPracticeMode = state.mode === "practice";
-  const completedTodaysDaily = hasCompletedTodaysDaily();
-  const completedCurrentDaily = inDailyMode && gameOver;
-  const completedCurrentPractice = inPracticeMode && gameOver;
 
-  showWhen(elements.statsBtn, true);
-  showWhen(elements.helpBtn, true);
 
-  showWhen(elements.archiveBtn, inDailyMode);
-  showWhen(elements.leaderboardBtn, completedCurrentDaily);
 
-  showWhen(elements.shareBtn, gameOver);
-  showWhen(elements.copyBtn, gameOver);
-  showWhen(elements.postGameShareBtn, gameOver);
-  showWhen(elements.postGameCopyOnlyBtn, gameOver);
-  showWhen(elements.postGameCopyBtn, false);
 
-  showWhen(elements.tryPracticeBtn, completedCurrentDaily);
-  showWhen(elements.nextPracticeBtn, completedCurrentPractice);
-  showWhen(elements.todayBibdleBtn, inPracticeMode && !completedTodaysDaily);
-}
 
-function renderPuzzleCard() {
-  const language = getCurrentLanguage();
-  elements.verseText.textContent = getLocalizedVerseText(state.currentPuzzle?.verse, language);
-  elements.dateLabel.textContent =
-    state.mode === "daily"
-      ? `Daily puzzle · ${formatDate()}`
-      : "Practice puzzle";
-
-  if (state.mode === "daily") {
-    startCountdownTimer();
-    return;
-  }
-
-  stopCountdownTimer();
-
-  if (elements.countdownTimer?.parentElement) {
-    elements.countdownTimer.parentElement.classList.add("hidden");
-    elements.countdownTimer.parentElement.classList.add("is-muted");
-  }
-}
-
-function renderHintBlock() {
-  const lines = getHintLines();
-
-  elements.hintBlock.innerHTML = lines
-    .map((item) => {
-      if (item.unlocked) {
-        return `
-          <div class="clue-feed__item is-unlocked ${item.isNew ? "is-new" : ""}" data-clue-key="${item.key}">
-            <p class="meta-line is-book-data">${item.value}</p>
-          </div>
-        `;
-      }
-
-      const icon = item.lockVariant === "gold-star"
-        ? `
-          <span class="clue-feed__lock-icon clue-feed__lock-icon--gold-star" aria-hidden="true">
-            <span class="clue-feed__lock-glyph">🔒</span>
-            <span class="clue-feed__star-glyph">★</span>
-          </span>
-        `
-        : `
-          <span class="clue-feed__lock-icon" aria-hidden="true">🔒</span>
-        `;
-
-      const numberLabel = Number.isInteger(item.unlockAt)
-        ? `<span class="clue-feed__lock-count">${item.unlockAt}</span>`
-        : `<span class="clue-feed__lock-count">★</span>`;
-
-      return `
-        <div class="clue-feed__lock-chip" data-clue-key="${item.key}" aria-label="Clue locked">
-          ${icon}
-          ${numberLabel}
-        </div>
-      `;
-    })
-    .join("");
-
-  elements.attemptLabel.textContent = getAttemptLabel();
-}
 
 function renderEmptyGuessRows() {
   elements.guessRows.innerHTML = `
@@ -4472,30 +4101,8 @@ function renderGuessRow(guess, rowIndex, animate = false) {
   `;
 }
 
-function renderGuessRows(animateLatest = false) {
-  if (!state.guesses.length) {
-    renderEmptyGuessRows();
-    return;
-  }
 
-  const guessesToRender = [...state.guesses].reverse();
-  const latestGuess = state.guesses[state.guesses.length - 1];
 
-  elements.guessRows.innerHTML = guessesToRender
-    .map((guess, index) => {
-      const originalIndex = state.guesses.length - 1 - index;
-      const shouldAnimate = animateLatest && guess === latestGuess;
-      return renderGuessRow(guess, originalIndex, shouldAnimate);
-    })
-    .join("");
-}
-
-function renderProximityLine() {
-  if (!elements.proximityLine) return;
-
-  const lastGuess = state.guesses[state.guesses.length - 1];
-  elements.proximityLine.textContent = getProximityDescription(lastGuess);
-}
 
 function renderStatus(message = "Guess the book from the verse above.") {
   elements.statusLine.textContent = message;
@@ -4623,79 +4230,48 @@ function renderPostGameStats(mode) {
   }
 }
 
-function renderStatsSection(statsObj, container) {
+function renderStatsSection(stats, container) {
   if (!container) return;
 
-  const safeStats = statsObj ?? computeStatsSummary();
-  const totalWins = safeStats.won;
-
-  const guessKeys = Object.keys(safeStats.guessDistribution)
-    .map(Number)
-    .sort((a, b) => a - b);
-
-  const maxCount = guessKeys.reduce(
-    (max, key) => Math.max(max, safeStats.guessDistribution[key] ?? 0),
-    0,
-  );
-
-  container.innerHTML = '';
-
-  const hasStats = safeStats.played > 0 || totalWins > 0 || safeStats.lost > 0;
-
-  if (!hasStats) {
-    renderSurfaceEmptyState(container, {
-      title: 'No history yet',
-      body: 'Play a few rounds to build your guess distribution.',
-      compact: true,
-      showMarker: true,
-      tone: 'empty',
-      actions: renderRetryButtonMarkup('Start guessing', 'focus-guess-input'),
-    }, bindEmptyStateActions);
-    return;
-  }
-
-  if (!guessKeys.length) {
-    renderSurfaceEmptyState(container, {
-      title: 'No solved rounds yet',
-      body: 'Win a puzzle to start filling the guess distribution.',
-      compact: true,
-      showMarker: true,
-      tone: 'empty',
-      actions: renderRetryButtonMarkup('Keep playing', 'focus-guess-input'),
-    }, bindEmptyStateActions);
-    return;
-  }
-
-  guessKeys.forEach((attempt) => {
-    const count = safeStats.guessDistribution[attempt] ?? 0;
-
-    const row = document.createElement('div');
-    row.className = 'dist-row';
-
-    const label = document.createElement('div');
-    label.className = 'dist-label';
-    label.textContent = attempt;
-    label.setAttribute('aria-label', `Guess distribution, ${attempt} attempts`);
-
-    const track = document.createElement('div');
-    track.className = 'dist-track';
-
-    const bar = document.createElement('div');
-    bar.className = 'dist-bar';
-    bar.style.width = `${maxCount > 0 ? Math.max((count / maxCount) * 100, count > 0 ? 8 : 0) : 0}%`;
-    bar.setAttribute('aria-hidden', 'true');
-
-    track.appendChild(bar);
-
-    const value = document.createElement('div');
-    value.className = 'dist-count';
-    value.textContent = String(count);
-
-    row.appendChild(label);
-    row.appendChild(track);
-    row.appendChild(value);
-    container.appendChild(row);
+  const distribution = stats?.guessDistribution || {};
+  const attempts = Array.from({ length: 8 }, (_, index) => {
+    const attempt = index + 1;
+    return {
+      attempt,
+      count: Number(distribution[attempt] || distribution[String(attempt)] || 0),
+    };
   });
+
+  const maxCount = attempts.reduce((max, entry) => Math.max(max, entry.count), 0);
+
+  const markup = attempts
+    .map(({ attempt, count }) => {
+      const widthPercent =
+        maxCount > 0 && count > 0 ? Math.max((count / maxCount) * 100, 8) : 0;
+
+      return `
+        <div class="guess-distribution-row">
+          <div class="guess-distribution-label">${attempt}</div>
+          <div class="guess-distribution-bar-wrap">
+            <div class="guess-distribution-bar">
+              <div
+                class="guess-distribution-bar-fill"
+                style="width: ${widthPercent}%"
+                aria-hidden="true"
+              ></div>
+            </div>
+            <div class="guess-distribution-value">${count}</div>
+          </div>
+        </div>
+      `;
+    })
+    .join("");
+
+  container.innerHTML = markup;
+  container.hidden = false;
+  container.removeAttribute("aria-hidden");
+  container.style.display = "block";
+  container.style.visibility = "visible";
 }
 
 function renderEarnedBadges(container) {
@@ -4854,177 +4430,6 @@ function renderArchiveBars(summaryObj) {
       `;
     })
     .join("");
-}
-
-function renderArchiveSummary() {
-  if (!elements.archiveSummary) return;
-
-  const summary = computeArchiveSummary();
-  const testamentBars = buildArchiveBarsViewModel(summary.testamentSummary);
-  const sectionBars = buildArchiveBarsViewModel(summary.sectionSummary);
-
-  const renderBars = (bars) =>
-    bars
-      .map(
-        (item) => `
-          <div class="archive-bar-row">
-            <div class="archive-bar-topline">
-              <span class="archive-bar-label">${escapeHtml(item.label)}</span>
-              <span>${item.solved}/${item.total} · Avg ${escapeHtml(item.average)}</span>
-            </div>
-            <div class="archive-bar-track" aria-hidden="true">
-              <div class="archive-bar-fill" style="width: ${item.percentage}%"></div>
-            </div>
-          </div>
-        `,
-      )
-      .join("");
-
-  elements.archiveSummary.innerHTML = `
-    <div class="archive-summary-blocks">
-      <section class="archive-summary-group ui-card section-shell section-shell--subtle" aria-label="Overall archive progress">
-        <div class="section-shell__header">
-          <p class="archive-summary-title">Overall</p>
-        </div>
-        <div class="section-shell__body">
-          <div class="archive-kpis">
-            <div class="archive-kpi stat-block">
-              <span class="archive-kpi-value">${summary.solvedBooks}/${summary.totalBooks}</span>
-              <span class="archive-kpi-label">Books solved</span>
-            </div>
-            <div class="archive-kpi stat-block">
-              <span class="archive-kpi-value">${summary.completionPercentage}%</span>
-              <span class="archive-kpi-label">Canon complete</span>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section class="archive-stat-group ui-card section-shell section-shell--subtle" aria-label="Solved books by testament">
-        <div class="section-shell__header">
-          <h3>By testament</h3>
-        </div>
-        <div class="section-shell__body">
-          <div class="archive-bars">
-            ${renderBars(testamentBars)}
-          </div>
-        </div>
-      </section>
-
-      <section class="archive-stat-group ui-card section-shell section-shell--subtle" aria-label="Solved books by section">
-        <div class="section-shell__header">
-          <h3>By section</h3>
-        </div>
-        <div class="section-shell__body">
-          <div class="archive-bars">
-            ${renderBars(sectionBars)}
-          </div>
-        </div>
-      </section>
-    </div>
-  `;
-}
-
-function renderArchiveGrid(selectedBookKey) {
-  if (!elements.archiveGrid) return;
-
-  const language = getCurrentLanguage();
-  const cells = buildArchiveGridViewModel({
-    books,
-    selectedBookKey,
-    language,
-    getBookStats,
-    getBookStatsKey,
-    getArchiveCellState,
-    getArchiveCellStateLabel,
-    getArchiveCellAriaLabel,
-    getAverageAttemptsForBook,
-    getLocalizedBookName,
-    getLocalizedTestament,
-    getLocalizedSection,
-  });
-
-  elements.archiveGrid.innerHTML = cells
-    .map(
-      (cell) => `
-        <button
-          type="button"
-          class="archive-cell ${cell.stateClass} ${cell.isSelected ? "is-selected" : ""}"
-          data-book-key="${escapeHtml(cell.key)}"
-          aria-label="${escapeHtml(cell.ariaLabel)}"
-          aria-pressed="${cell.isSelected ? "true" : "false"}"
-        >
-          <div class="archive-cell-top">
-            <span class="archive-cell-order">${cell.order}</span>
-            <span class="archive-cell-state">${escapeHtml(cell.stateLabel)}</span>
-          </div>
-          <div class="archive-cell-book">${escapeHtml(cell.bookName)}</div>
-          <div class="archive-cell-meta">${escapeHtml(cell.metaLine)}</div>
-        </button>
-      `,
-    )
-    .join("");
-}
-
-function renderArchiveDetails(bookKey) {
-  if (!elements.archiveDetails) return;
-
-  const book = books.find((item) => getBookStatsKey(item) === bookKey) ?? null;
-
-  if (!book) {
-    renderInto(
-      elements.archiveDetails,
-      renderEmptyState({
-        title: "No book selected",
-        body: "Choose a book from the archive map to view its Daily progress details.",
-        compact: false,
-        inline: false,
-        showMarker: true,
-        tone: "empty",
-      }),
-    );
-    return;
-  }
-
-  const details = buildArchiveDetailsViewModel({
-    book,
-    language: getCurrentLanguage(),
-    getBookStats,
-    getAverageAttemptsForBook,
-    getArchiveCellStateLabel,
-    getLocalizedBookName,
-    getLocalizedTestament,
-    getLocalizedSection,
-  });
-
-  renderInto(
-    elements.archiveDetails,
-    `
-      <div class="archive-details-header">
-        <div class="archive-details-title">${escapeHtml(details.title)}</div>
-        <div class="archive-details-subtitle">${escapeHtml(details.subtitle)}</div>
-      </div>
-      <div class="archive-details-grid">
-        <div class="archive-detail-stat">
-          <span class="archive-detail-stat-value">${details.stats.plays}</span>
-          <span class="archive-detail-stat-label">Daily plays</span>
-        </div>
-        <div class="archive-detail-stat">
-          <span class="archive-detail-stat-value">${details.stats.solved}</span>
-          <span class="archive-detail-stat-label">Daily solves</span>
-        </div>
-        <div class="archive-detail-stat">
-          <span class="archive-detail-stat-value">${details.stats.bestAttempts}</span>
-          <span class="archive-detail-stat-label">Best attempts</span>
-        </div>
-        <div class="archive-detail-stat">
-          <span class="archive-detail-stat-value">${details.stats.average}</span>
-          <span class="archive-detail-stat-label">Average attempts</span>
-        </div>
-      </div>
-      <p class="archive-details-copy">${escapeHtml(details.copy)}</p>
-    `,
-  );
 }
 
 const MODAL_FOCUSABLE_SELECTOR = [
@@ -5200,7 +4605,7 @@ function syncModalEnvironment() {
 
 function handlePostGameLeaderboardOpen() {
   const trigger = document.activeElement;
-  closePostGamePanel();
+  postGameSurface?.closePostGamePanel?.();
   openLeaderboardModal(trigger);
 }
 
@@ -5221,10 +4626,9 @@ function openArchiveModal(trigger = document.activeElement) {
   }) ?? null;
 
   const selectedKey = selectedBook ? getBookStatsKey(selectedBook) : null;
-
-  renderArchiveSummary();
-  renderArchiveGrid(selectedKey);
-  renderArchiveDetails(selectedKey);
+  archiveSurface.renderArchiveSummary();
+  archiveSurface.renderArchiveGrid(selectedKey);
+  archiveSurface.renderArchiveDetails(selectedKey);
 
   modalHelpers.openModal("archive", { trigger });
 }
@@ -5271,8 +4675,7 @@ async function openLeaderboardModal(trigger = document.activeElement) {
       tone: 'error',
       actions: renderRetryButtonMarkup('Try again', 'retry-leaderboard'),
     }, bindEmptyStateActions);
-
-    renderCurrentUserRank(null);
+    leaderboardSurface.renderCurrentUserRank(null);
     return;
   }
 
@@ -5284,9 +4687,9 @@ async function openLeaderboardModal(trigger = document.activeElement) {
     ]);
 
     state.leaderboard.userRank = userRank;
-    renderLeaderboardSummary(stats);
-    renderLeaderboardList(entries);
-    renderCurrentUserRank(userRank);
+    leaderboardSurface.renderLeaderboardSummary(stats);
+    leaderboardSurface.renderLeaderboardList(entries);
+    leaderboardSurface.renderCurrentUserRank(userRank);
   } catch (error) {
     console.error("Leaderboard load failed", error);
     renderSurfaceEmptyState(elements.leaderboardSummary, {
@@ -5306,153 +4709,17 @@ async function openLeaderboardModal(trigger = document.activeElement) {
       actions: renderRetryButtonMarkup('Try again', 'retry-leaderboard'),
     }, bindEmptyStateActions);
 
-    renderCurrentUserRank(null);
+    leaderboardSurface.renderCurrentUserRank(null);
     return;
   }
 }
 
-function renderStatsModal() {
-  const dailyStats = computeModeStatsSummary("daily");
-  const practiceStats = computeModeStatsSummary("practice");
-
-  if (elements.statsPlayed) {
-    elements.statsPlayed.textContent = String(dailyStats.played);
-  }
-  if (elements.statsWon) {
-    elements.statsWon.textContent = String(dailyStats.won);
-  }
-  if (elements.statsLost) {
-    elements.statsLost.textContent = String(dailyStats.lost);
-  }
-  if (elements.statsCurrentStreak) {
-    elements.statsCurrentStreak.textContent = String(dailyStats.currentStreak);
-  }
-  if (elements.statsBestStreak) {
-    elements.statsBestStreak.textContent = String(dailyStats.bestStreak);
-  }
-  if (elements.statsGuessDistribution) {
-    renderStatsSection(dailyStats, elements.statsGuessDistribution);
-  }
-  if (elements.statsModalAchievements) {
-    renderStatsModalBadges();
-  }
-
-  if (elements.practiceStatsPlayed) {
-    elements.practiceStatsPlayed.textContent = String(practiceStats.played);
-  }
-  if (elements.practiceStatsWon) {
-    elements.practiceStatsWon.textContent = String(practiceStats.won);
-  }
-  if (elements.practiceStatsLost) {
-    elements.practiceStatsLost.textContent = String(practiceStats.lost);
-  }
-  if (elements.practiceStatsGuessDistribution) {
-    renderStatsSection(practiceStats, elements.practiceStatsGuessDistribution);
-  }
-}
 
 function getDailyStreakBadges() {
   return STREAK_BADGES.map((badge) => ({
     ...badge,
     earned: hasEarnedAchievement(badge.id),
   }));
-}
-
-function renderStatsModalBadges() {
-  if (!elements.statsModalAchievements) return;
-
-  const groups = buildAchievementCategoryGroups(ACHIEVEMENTS, {
-    categories: ACHIEVEMENT_CATEGORIES,
-    getAchievementEvaluation,
-    shouldTreatAchievementAsEarned,
-  });
-
-  const markup = `
-    <div class="achievement-groups">
-      ${groups
-        .map(
-          (group) => `
-            <section class="achievement-group" aria-labelledby="achievement-group-${escapeHtml(
-              group.category,
-            )}">
-              <div class="achievement-group__header">
-                <h3 class="achievement-group__title" id="achievement-group-${escapeHtml(
-                  group.category,
-                )}">${escapeHtml(group.title)}</h3>
-                ${
-                  group.description
-                    ? `<p class="achievement-group__meta">${escapeHtml(group.description)}</p>`
-                    : ""
-                }
-              </div>
-              <div class="achievement-group__list">
-                ${group.achievements
-                  .map((entry) =>
-                    buildAchievementCardMarkup(entry.achievement, {
-                      evaluation: entry.evaluation,
-                      isEarned: entry.isEarned,
-                    }),
-                  )
-                  .join("")}
-              </div>
-            </section>
-          `,
-        )
-        .join("")}
-    </div>
-  `;
-
-  renderInto(elements.statsModalAchievements, markup, {
-    visible: hasRenderableMarkup(markup),
-  });
-}
-
-function renderPostGameNewAchievements(container, achievements) {
-  if (!container) return;
-
-  if (!isNonEmptyArray(achievements)) {
-    renderInto(container, "", {
-      visible: false,
-    });
-    return;
-  }
-
-  const markup = achievements
-    .map((achievement) =>
-      buildAchievementCardMarkup(achievement, {
-        evaluation: getAchievementEvaluation(achievement),
-        isEarned: true,
-      }),
-    )
-    .join("");
-
-  renderInto(container, markup, {
-    visible: hasRenderableMarkup(markup),
-  });
-}
-
-function renderPostGameClosestAchievements(container, achievements) {
-  if (!container) return;
-
-  if (!isNonEmptyArray(achievements)) {
-    renderInto(container, "", {
-      visible: false,
-    });
-    return;
-  }
-
-  const markup = achievements
-    .map((entry) =>
-      buildAchievementCardMarkup(entry.achievement, {
-        evaluation: entry.evaluation,
-        isEarned: false,
-      }),
-    )
-    .join("");
-
-  renderInto(container, markup, {
-    visible: hasRenderableMarkup(markup),
-  });
 }
 
 function renderPostGameBadges(container, achievements) {
@@ -5555,59 +4822,6 @@ function renderPostGamePanel() {
 
 function closePostGameModal() {
   modalService?.close("postGame") ?? closeModal(elements.postGameModal);
-}
-
-function closePostGamePanel() {
-  closePostGameModal();
-}
-
-function renderPuzzleView() {
-  applyLanguageToDocument();
-  applyModeTheme(state.mode);
-  renderLanguageControl();
-  renderMobileLanguageToggle();
-  renderPuzzleCard();
-
-  if (state.status === "won") {
-    renderAfterGuessOutcome({
-      status: "won",
-      message: getDefaultStatusMessage("won"),
-      animateLatest: false,
-      renderHints: false,
-      renderProximity: false,
-      renderPostGame: true,
-    });
-    publishBootSnapshot?.({ renderStatus: "won" });
-    return;
-  }
-
-  if (state.status === "lost") {
-    renderAfterGuessOutcome({
-      status: "lost",
-      message: getDefaultStatusMessage("lost"),
-      animateLatest: false,
-      renderHints: false,
-      renderProximity: false,
-      renderPostGame: true,
-    });
-    publishBootSnapshot?.({ renderStatus: "lost" });
-    return;
-  }
-
-  renderAfterGuessOutcome({
-    status: "playing",
-    message: getDefaultStatusMessage("playing"),
-    animateLatest: false,
-    renderHints: true,
-    renderProximity: true,
-    renderPostGame: true,
-  });
-
-  publishBootSnapshot?.({
-    renderStatus: state.guesses.length > 0 && buildClueRevealState().newlyUnlockedKeys.length > 0
-      ? "new-clues"
-      : "playing",
-  });
 }
 
 function resetInput() {
@@ -5740,36 +4954,7 @@ function handleDuplicateGuess(book) {
   renderStatus(`You already tried ${bookName}.`);
 }
 
-function renderAfterGuessOutcome({
-  status = state.status,
-  message = getDefaultStatusMessage(status),
-  animateLatest = false,
-  renderHints = status !== "won" && status !== "lost",
-  renderProximity = status !== "won" && status !== "lost",
-  renderPostGame = true,
-}) {
-  syncEndStateVisibility();
 
-  if (renderHints) {
-    renderHintBlock();
-  }
-
-  renderGuessRows(animateLatest);
-
-  if (renderProximity) {
-    renderProximityLine();
-  }
-
-  syncPreferenceControls();
-  syncActionButtons();
-
-  if (renderPostGame) {
-    renderPostGamePanel();
-  }
-
-  renderStatus(message);
-  saveProgress();
-}
 
 function getDefaultStatusMessage(status = state.status) {
   const language = getCurrentLanguage();
@@ -5798,7 +4983,7 @@ function getDefaultStatusMessage(status = state.status) {
 }
 
 function refreshAfterGuess(message) {
-  renderAfterGuessOutcome({
+  puzzleSurface.renderAfterGuessOutcome({
     status: state.status,
     message,
     animateLatest: true,
@@ -5811,8 +4996,7 @@ function refreshAfterGuess(message) {
 async function handleSolvedGuess() {
   state.status = "won";
   await recordPuzzleCompletion("won");
-
-  renderAfterGuessOutcome({
+  puzzleSurface.renderAfterGuessOutcome({
     status: "won",
     message: getDefaultStatusMessage("won"),
     animateLatest: true,
@@ -5825,8 +5009,7 @@ async function handleSolvedGuess() {
 async function handleLostGuess() {
   state.status = "lost";
   await recordPuzzleCompletion("lost");
-
-  renderAfterGuessOutcome({
+  puzzleSurface.renderAfterGuessOutcome({
     status: "lost",
     message: getDefaultStatusMessage("lost"),
     animateLatest: true,
@@ -5844,12 +5027,16 @@ function handleIncorrectGuess(bookName) {
   let message = `${bookName} added. Use the colors and clues for your next guess.`;
 
   if (newHintCount > 0) {
-    message = `${bookName} added. ${newHintCount} new ${newHintCount === 1 ? "clue" : "clues"} unlocked.`;
-  } else if (typeof nearestDistance === "number" && nearestDistance >= 0) {
-    message = `${bookName} added. Your nearest guess so far is ${nearestDistance} ${nearestDistance === 1 ? "book" : "books"} away.`;
+    message = `${bookName} added. ${newHintCount} new ${
+      newHintCount === 1 ? "clue" : "clues"
+    } unlocked.`;
+  } else if (typeof nearestDistance === "number" && nearestDistance > 0) {
+    message = `${bookName} added. Your nearest guess so far is ${nearestDistance} ${
+      nearestDistance === 1 ? "book" : "books"
+    } away.`;
   }
 
-  renderAfterGuessOutcome({
+  puzzleSurface.renderAfterGuessOutcome({
     status: "playing",
     message,
     animateLatest: true,
@@ -5861,11 +5048,12 @@ function handleIncorrectGuess(bookName) {
 
 async function applyGuess(rawGuess) {
   if (isGameOver()) {
-    renderPuzzleView();
+    puzzleSurface.renderPuzzleView();
     return;
   }
 
   const match = typeof rawGuess === "object" ? rawGuess : getBookByName(rawGuess);
+
   if (!match) {
     handleInvalidGuess();
     return;
@@ -6018,9 +5206,10 @@ const helpModalControls = modalHelpers.createModalPair("help");
 const settingsModalControls = modalHelpers.createModalPair("settings", () => {
   syncSettingsControls();
 });
-const statsModalControls = modalHelpers.createModalPair("stats", () => {
-  renderStatsModal();
-});
+const statsModalControls = modalHelpers.createModalPair(
+  "stats",
+  (...args) => statsSurface?.renderStatsModal?.(...args),
+);
 
 function openHelpModal(trigger = document.activeElement) {
   helpModalControls.open(trigger);
@@ -6046,6 +5235,10 @@ function openStatsModal(trigger = document.activeElement) {
 
 function closeStatsModal() {
   statsModalControls.close();
+}
+
+function closePostGamePanel() {
+  postGameSurface?.closePostGamePanel?.();
 }
 
 function syncSettingsControls() {
@@ -6202,8 +5395,8 @@ function handleArchiveGridClick(event) {
   if (!button) return;
 
   const bookKey = button.dataset.bookKey || "";
-  renderArchiveGrid(bookKey);
-  renderArchiveDetails(bookKey);
+  archiveSurface.renderArchiveGrid(bookKey);
+  archiveSurface.renderArchiveDetails(bookKey);
 }
 
 function handleThemeToggle() {
@@ -6378,8 +5571,8 @@ async function loadCloudDataToLocal(user) {
   applyAccessibilityPreferences();
   initTheme();
   syncPreferenceControls();
-  renderPuzzleView();
-  renderStatsModal();
+  puzzleSurface.renderPuzzleView();
+  statsSurface.renderStatsModal();
 
   return true;
 }
@@ -6523,18 +5716,18 @@ function createRenderPipelineApi() {
     state,
     elements,
     modalService,
-    renderPuzzleView,
+    renderPuzzleView: (...args) => puzzleSurface?.renderPuzzleView?.(...args),
     renderAuthUI,
-    renderStatsModal,
+    renderStatsModal: (...args) => statsSurface?.renderStatsModal?.(...args),
     renderLanguageControl,
     renderMobileLanguageToggle,
     renderThemeToggle,
     syncPreferenceControls,
-    renderPostGamePanel,
+    renderPostGamePanel: (...args) => postGameSurface?.renderPostGamePanel?.(...args),
     renderStatus,
     bindEmptyStateActions,
     closeSuggestions,
-    closePostGamePanel,
+    closePostGamePanel: (...args) => postGameSurface?.closePostGamePanel?.(...args),
     publishBootSnapshot,
   };
 }
@@ -6864,7 +6057,7 @@ function startPuzzle(mode = state.mode) {
   clueUiState.lastRenderSignature = "";
 
   syncEndStateVisibility();
-  closePostGamePanel();
+  postGameSurface?.closePostGamePanel?.();
   resetInput();
   resetSuggestionsState();
   closeSuggestions();
@@ -6932,6 +6125,119 @@ function bindLifecycleEvents() {
   state.ui.lifecycleEventsBound = true;
 }
 
+function initializeRenderSurfaces() {
+  statsSurface = createStatsSurface({
+    elements,
+    ACHIEVEMENTS,
+    ACHIEVEMENT_CATEGORIES,
+    computeModeStatsSummary,
+    getAchievementEvaluation,
+    shouldTreatAchievementAsEarned,
+    getAchievementCategoryOrder,
+    buildAchievementCategoryGroupMarkup,
+    buildAchievementCardMarkup,
+    getNewlyEarnedAchievements,
+    getClosestIncompleteAchievements,
+    isNonEmptyArray,
+    hasRenderableMarkup,
+    renderInto,
+  });
+
+  leaderboardSurface = createLeaderboardSurface({
+    state,
+    elements,
+    bindEmptyStateActions,
+    formatLeaderboardTime,
+    renderPlacementCard,
+    escapeHtml,
+    renderInto,
+    clearBusyState,
+    renderSurfaceEmptyState,
+    renderSurfaceLoadingState,
+    renderRetryButtonMarkup,
+  });
+
+  archiveSurface = createArchiveSurface({
+    elements,
+    books,
+    getCurrentLanguage,
+    computeArchiveSummary,
+    buildArchiveBarsViewModel,
+    buildArchiveGridViewModel,
+    buildArchiveDetailsViewModel,
+    getBookStats,
+    getBookStatsKey,
+    getArchiveCellState,
+    getArchiveCellStateLabel,
+    getArchiveCellAriaLabel,
+    getAverageAttemptsForBook,
+    getLocalizedBookName,
+    getLocalizedTestament,
+    getLocalizedSection,
+    renderInto,
+    renderEmptyState,
+    escapeHtml,
+  });
+
+  postGameSurface = createPostGameSurface({
+    state,
+    elements,
+    firebaseAuth,
+    firebaseDb,
+    bindEmptyStateActions,
+    isGameOver,
+    getPostGameContent,
+    getNewlyEarnedAchievements,
+    getClosestIncompleteAchievements,
+    isNonEmptyArray,
+    showWhen,
+    renderWhen,
+    renderInto,
+    clearBusyState,
+    renderSurfaceEmptyState,
+    renderSurfaceLoadingState,
+    renderRetryButtonMarkup,
+    setModalOpenState,
+    fetchCurrentUserRank,
+    getDailyDateKey,
+    renderPostGameNewAchievements: (...args) =>
+      statsSurface.renderPostGameNewAchievements(...args),
+    renderPostGameClosestAchievements: (...args) =>
+      statsSurface.renderPostGameClosestAchievements(...args),
+    renderPostGameStats,
+  });
+
+  puzzleSurface = createPuzzleSurface({
+    state,
+    elements,
+    applyLanguageToDocument,
+    applyModeTheme,
+    renderLanguageControl,
+    renderMobileLanguageToggle,
+    publishBootSnapshot,
+    renderStatus,
+    getDefaultStatusMessage,
+    syncEndStateVisibility,
+    syncPreferenceControls,
+    saveProgress,
+    isGameOver,
+    getCurrentLanguage,
+    getLocalizedVerseText,
+    formatDate,
+    startCountdownTimer,
+    stopCountdownTimer,
+    getHintLines,
+    getAttemptLabel,
+    renderEmptyGuessRows,
+    renderGuessRow,
+    getProximityDescription,
+    hasCompletedTodaysDaily,
+    showWhen,
+    renderPostGamePanel: (...args) => postGameSurface.renderPostGamePanel(...args),
+    buildClueRevealState,
+  });
+}
+
 async function bootstrapApplication() {
   ensureBootDebugSurface();
 
@@ -6952,6 +6258,8 @@ async function bootstrapApplication() {
   renderPipeline = createRenderPipeline(createRenderPipelineApi());
 
   bindings = createBindings(createBindingsApi());
+
+  initializeRenderSurfaces();
 
   const dependencies = {
     ...createStartupDependencies(),

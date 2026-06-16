@@ -2803,9 +2803,58 @@ html.reduced-motion *::after {
 }
 
 .guess-distribution {
+    width: 100%;
+    min-width: 0;
+}
+
+.guess-distribution-row {
     display: grid;
-    gap: 0.5rem;
-    padding-top: 0.25rem;
+    grid-template-columns: 2rem minmax(0, 1fr);
+    gap: 0.75rem;
+    align-items: center;
+    margin-bottom: 0.5rem;
+    width: 100%;
+    min-width: 0;
+}
+
+.guess-distribution-label {
+    font-family: var(--font-ui);
+    font-weight: 700;
+    text-align: right;
+}
+
+.guess-distribution-bar-wrap {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.75rem;
+    align-items: center;
+    width: 100%;
+    min-width: 0;
+}
+
+.guess-distribution-bar {
+    position: relative;
+    min-height: 1.25rem;
+    width: 100%;
+    min-width: 0;
+    overflow: hidden;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.guess-distribution-bar-fill {
+    display: block;
+    height: 1rem;
+    border-radius: 999px;
+    background: linear-gradient(90deg,
+            var(--color-primary),
+            var(--color-primary-hover));
+}
+
+.guess-distribution-value {
+    font-family: var(--font-ui);
+    min-width: 1.5rem;
+    text-align: right;
 }
 
 .dist-row {
