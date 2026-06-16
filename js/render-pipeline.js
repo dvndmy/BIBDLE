@@ -40,7 +40,7 @@ export function createRenderPipeline({
   function renderPuzzleSurface(reason = "puzzle-surface") {
     if (!assertRenderable()) return;
     renderPuzzleView?.();
-    renderPostGamePanel?.();
+    renderPostGamePanel?.({ loadLeaderboardRank: false });
     publish("renderPuzzleSurface", { reason });
   }
 
