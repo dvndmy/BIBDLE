@@ -98,13 +98,22 @@ export function createRenderPipeline({
     });
   }
 
-  function renderPuzzleReset({ mode = state?.mode, source = "puzzle-reset" } = {}) {
+  function renderPuzzleReset(mode = state?.mode, options = {}) {
+    const source =
+      typeof options === "string"
+        ? options
+        : options?.source || "puzzle-reset";
+
     runTransition({
       reason: source,
       mode,
       closeTransient: true,
       renderPuzzle: true,
-      renderStats: true
+      renderStats: true,
+      extra:
+        typeof options === "object" && options
+          ? { ...options }
+          : undefined,
     });
   }
 

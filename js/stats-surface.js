@@ -179,11 +179,6 @@ export function createStatsSurface({
       elements.practiceStatsGuessDistribution.style.display = "block";
       renderStatsSection(practiceStats, elements.practiceStatsGuessDistribution);
     }
-
-    console.log("daily stats container", elements.statsGuessDistribution);
-    console.log("daily stats html", elements.statsGuessDistribution?.innerHTML);
-    console.log("practice stats container", elements.practiceStatsGuessDistribution);
-    console.log("practice stats html", elements.practiceStatsGuessDistribution?.innerHTML);
   }
 
   return {

@@ -92,6 +92,7 @@ import { createStatsSurface } from "./stats-surface.js";
 import { createPostGameSurface } from "./postgame-surface.js";
 import { createArchiveSurface } from "./archive-surface.js";
 import { createLeaderboardSurface } from "./leaderboard-surface.js";
+import { createGameTransitions } from "./game-transitions.js";
 
 const CONFIG = {
   modes: {
@@ -192,6 +193,7 @@ let statsSurface = null;
 let postGameSurface = null;
 let archiveSurface = null;
 let leaderboardSurface = null;
+let gameTransitions = null;
 
 const STATS_SCHEMA_VERSION = 2;
 
@@ -3090,6 +3092,12 @@ async function ensureAnonymousAuthForDailySubmission() {
   }
 }
 
+function renderAfterAuthStateChange(reason = "auth-state-change") {
+  renderPipeline.renderSyncState(reason);
+  renderPipeline.renderPuzzleSurface(reason);
+  renderPipeline.renderStatsSurface(reason);
+}
+
 async function submitDailyResultToLeaderboard(outcome) {
   if (!state.auth.enabled || !firebaseDb || state.mode !== "daily") {
     return;
@@ -4993,57 +5001,40 @@ function refreshAfterGuess(message) {
   });
 }
 
-async function handleSolvedGuess() {
-  state.status = "won";
-  await recordPuzzleCompletion("won");
-  puzzleSurface.renderAfterGuessOutcome({
-    status: "won",
-    message: getDefaultStatusMessage("won"),
-    animateLatest: true,
-    renderHints: false,
-    renderProximity: false,
-    renderPostGame: true,
-  });
-}
+function renderGuessTransitionResult(result) {
+  if (!result) return;
 
-async function handleLostGuess() {
-  state.status = "lost";
-  await recordPuzzleCompletion("lost");
-  puzzleSurface.renderAfterGuessOutcome({
-    status: "lost",
-    message: getDefaultStatusMessage("lost"),
-    animateLatest: true,
-    renderHints: false,
-    renderProximity: false,
-    renderPostGame: true,
-  });
-}
+  if (result.type === "guess-rejected") {
+    if (result.reason === "invalid") {
+      handleInvalidGuess();
+      return;
+    }
 
-function handleIncorrectGuess(bookName) {
-  const clueState = buildClueRevealState();
-  const newHintCount = clueState.newlyUnlockedKeys.length;
-  const nearestDistance = getNearestGuessDistance();
+    if (result.reason === "duplicate") {
+      handleDuplicateGuess(result.match);
+      return;
+    }
 
-  let message = `${bookName} added. Use the colors and clues for your next guess.`;
-
-  if (newHintCount > 0) {
-    message = `${bookName} added. ${newHintCount} new ${
-      newHintCount === 1 ? "clue" : "clues"
-    } unlocked.`;
-  } else if (typeof nearestDistance === "number" && nearestDistance > 0) {
-    message = `${bookName} added. Your nearest guess so far is ${nearestDistance} ${
-      nearestDistance === 1 ? "book" : "books"
-    } away.`;
+    return;
   }
 
-  puzzleSurface.renderAfterGuessOutcome({
-    status: "playing",
-    message,
-    animateLatest: true,
-    renderHints: true,
-    renderProximity: true,
-    renderPostGame: true,
-  });
+  if (
+    result.type === "guess-solved" ||
+    result.type === "guess-lost" ||
+    result.type === "guess-incorrect"
+  ) {
+    const message =
+      result.message || getDefaultStatusMessage(result.messageType || result.status);
+
+    puzzleSurface.renderAfterGuessOutcome({
+      status: result.status,
+      message,
+      animateLatest: !!result.animateLatest,
+      renderHints: !!result.renderHints,
+      renderProximity: !!result.renderProximity,
+      renderPostGame: !!result.renderPostGame,
+    });
+  }
 }
 
 async function applyGuess(rawGuess) {
@@ -5052,37 +5043,8 @@ async function applyGuess(rawGuess) {
     return;
   }
 
-  const match = typeof rawGuess === "object" ? rawGuess : getBookByName(rawGuess);
-
-  if (!match) {
-    handleInvalidGuess();
-    return;
-  }
-
-  if (isBookAlreadyGuessed(match.id)) {
-    handleDuplicateGuess(match);
-    return;
-  }
-
-  const result = compareGuess(match);
-  if (!result) return;
-
-  state.guesses.push(result);
-  resetInput();
-  resetSuggestionsState();
-  closeSuggestions();
-
-  if (result.solved) {
-    await handleSolvedGuess();
-    return;
-  }
-
-  if (state.guesses.length >= getMaxGuesses()) {
-    await handleLostGuess();
-    return;
-  }
-
-  handleIncorrectGuess(getLocalizedBookName(match, getCurrentLanguage()));
+  const result = await gameTransitions.applyGuess(rawGuess);
+  renderGuessTransitionResult(result);
 }
 
 function buildShareSummary() {
@@ -5467,6 +5429,7 @@ function handleMobileLanguageToggle() {
 function handleDifficultyChange(event) {
   const value = event.target.value;
   if (!CONFIG.modes[value]) return;
+
   state.preferences.difficulty = value;
 
   const clueUiState = ensureClueUiState();
@@ -5474,47 +5437,41 @@ function handleDifficultyChange(event) {
   clueUiState.lastRenderSignature = "";
 
   savePreferences();
-  renderPipeline.renderPreferencesChanged({ reason: "difficulty-change" });
-  resetPuzzle(state.mode);
+  renderPipeline.renderPreferencesChanged("difficulty-change");
+
+  const result = gameTransitions.resetPuzzle(state.mode);
+  renderPuzzleLifecycleResult(result, { source: "difficulty-change" });
 }
 
 function handleModeChange(event) {
   const value = event.target.value;
   if (value !== "daily" && value !== "practice") return;
 
-  markLifecycleStage("mode-switch", {
-    from: state.mode,
-    to: value,
-  });
-
-  state.mode = value;
+  markLifecycleStage("mode-switch", { from: state.mode, to: value });
   state.preferences.preferredMode = value;
   savePreferences();
 
-  renderPipeline.renderModeSwitch({ mode: value });
+  renderPipeline.renderModeSwitch(value);
 
-  resetPuzzle(value);
+  const result = gameTransitions.handleModeSwitch(value);
+  renderPuzzleLifecycleResult(result, { source: "mode-switch" });
 }
 
 function handleNextPracticePuzzle() {
   if (state.mode !== "practice") return;
 
-  markLifecycleStage("puzzle-reset", {
-    mode: "practice",
-    trigger: "next-practice",
-  });
-
-  startPuzzle("practice");
-  saveProgress();
-  renderPipeline.renderPuzzleReset({ mode: "practice", source: "next-practice" });
+  const result = gameTransitions.handleNextPracticePuzzle();
+  renderPuzzleLifecycleResult(result, { source: "next-practice" });
 }
 
 function handleTryPracticeRound() {
-  resetPuzzle("practice");
+  const result = gameTransitions.handleTryPracticeRound();
+  renderPuzzleLifecycleResult(result, { source: "try-practice" });
 }
 
 function handleTryTodaysBibdle() {
-  resetPuzzle("daily");
+  const result = gameTransitions.handleTryTodaysBibdle();
+  renderPuzzleLifecycleResult(result, { source: "today-bibdle" });
 }
 
 function bindBackdropClose(modal, onClose) {
@@ -5860,28 +5817,31 @@ function handleAuthDisabled() {
   state.auth.enabled = false;
   state.auth.user = null;
   state.auth.syncing = false;
-  renderPipeline.renderAuthState("disabled");
+
   publishBootSnapshot({ firebase: "disabled" });
+  renderAfterAuthStateChange("auth-disabled");
 }
 
-function handleAuthInitialized(context = {}) {
-  firebaseApp = context.app || null;
-  firebaseAuth = context.auth || null;
-  firebaseDb = context.db || null;
-
+function handleAuthInitialized(context) {
+  firebaseApp = context.app ?? null;
+  firebaseAuth = context.auth ?? null;
+  firebaseDb = context.db ?? null;
   state.auth.enabled = !!context.enabled;
-  renderPipeline.renderAuthState("initialized");
+
   publishBootSnapshot({ firebase: "initialized" });
+  renderAfterAuthStateChange("auth-initialized");
 }
 
 function handleAuthInitFailure(error) {
-  console.error("Firebase init failed:", error);
+  console.error("Firebase init failed", error);
+
   state.auth.ready = true;
   state.auth.enabled = false;
   state.auth.user = null;
   state.auth.syncing = false;
-  renderPipeline.renderAuthState("init-failed");
+
   markLifecycleError("init-services", error, { service: "firebase-auth" });
+  renderAfterAuthStateChange("auth-init-failed");
 }
 
 function handleAuthStateSyncStart(user) {
@@ -5904,22 +5864,26 @@ function handleAuthStateSyncStart(user) {
   });
 }
 
-function handleAuthStateReady({ user, hadCloudProfile } = {}) {
-  state.auth.user = user || null;
+function handleAuthStateReady({ user, hadCloudProfile }) {
+  state.auth.user = user ?? null;
   state.auth.ready = true;
   state.auth.syncing = false;
 
-  renderPipeline.renderAuthState("ready");
   publishBootSnapshot({
     auth: "ready",
     hadCloudProfile: !!hadCloudProfile,
+    user: user
+      ? { uid: user.uid, isAnonymous: !!user.isAnonymous }
+      : null,
   });
+
+  renderAfterAuthStateChange("auth-ready");
 }
 
-function handleAuthStateSyncError({ user, error } = {}) {
-  console.error("Auth sync failed:", error);
+function handleAuthStateSyncError({ user, error }) {
+  console.error("Auth sync failed", error);
 
-  state.auth.user = user || null;
+  state.auth.user = user ?? null;
   state.auth.ready = true;
   state.auth.syncing = false;
 
@@ -5929,15 +5893,11 @@ function handleAuthStateSyncError({ user, error } = {}) {
     setAuthStatus("Signed in, cloud sync unavailable");
   }
 
-  renderPipeline.renderAuthState("sync-error");
   markLifecycleError("auth-ready", error, {
-    user: user
-      ? {
-        uid: user.uid,
-        isAnonymous: !!user.isAnonymous,
-      }
-      : null,
+    user: user ? { uid: user.uid, isAnonymous: !!user.isAnonymous } : null,
   });
+
+  renderAfterAuthStateChange("auth-sync-error");
 }
 
 function handleAuthActionError(type, error) {
@@ -5997,16 +5957,11 @@ function initAuthLifecycle() {
 function initGame() {
   markLifecycleStage("hydrate", { step: "progress-restore" });
 
-  const restored = loadProgress(state.mode);
+  const result = gameTransitions.resetPuzzle(state.mode);
+  const restored = !!result?.restored;
 
-  if (!restored) {
-    markLifecycleStage("puzzle-reset", { trigger: "boot", mode: state.mode });
-    startPuzzle(state.mode);
-    saveProgress();
-  }
-
-  renderPipeline.renderBootComplete({
-    restored,
+  renderPuzzleLifecycleResult(result, {
+    source: restored ? "boot-restore" : "boot-start",
   });
 
   if (restored) {
@@ -6035,69 +5990,50 @@ function initGame() {
     elements.postGameCopyOnlyBtn.hidden = true;
   }
 
-  if (elements.postGameCopyBtn && !elements.postGameShareBtn && !elements.postGameCopyOnlyBtn) {
+  if (
+    elements.postGameCopyBtn &&
+    !elements.postGameShareBtn &&
+    !elements.postGameCopyOnlyBtn
+  ) {
     elements.postGameCopyBtn.textContent = "Share result";
   }
 
   publishBootSnapshot({
     progressRestored: restored,
-    currentPuzzleId: state.currentPuzzle?.id || null,
+    currentPuzzleId: state.currentPuzzle?.id ?? null,
   });
+}
+
+function renderPuzzleLifecycleResult(result, options = {}) {
+  if (!result) return;
+
+  const source = options.source || result.type || "puzzle-lifecycle";
+
+  postGameSurface?.closePostGamePanel?.();
+
+  if (
+    result.type === "puzzle-reset" ||
+    result.type === "puzzle-restored" ||
+    result.type === "next-practice-puzzle" ||
+    result.type === "puzzle-started"
+  ) {
+    renderPipeline.renderPuzzleReset(result.mode, {
+      source,
+      restored: !!result.restored,
+    });
+  }
 }
 
 function startPuzzle(mode = state.mode) {
-  state.mode = mode;
-  applyModeTheme(mode);
-  state.currentPuzzle = buildCurrentPuzzle(mode);
-  state.guesses = [];
-  state.status = "playing";
-
-  const clueUiState = ensureClueUiState();
-  clueUiState.lastUnlockedKeys = [];
-  clueUiState.lastRenderSignature = "";
-
-  syncEndStateVisibility();
-  postGameSurface?.closePostGamePanel?.();
-  resetInput();
-  resetSuggestionsState();
-  closeSuggestions();
-  saveProgress();
-
-  renderPipeline.renderPuzzleReset({ mode, source: "startPuzzle" });
-
-  publishBootSnapshot({
-    action: "start-puzzle",
-    mode,
-    puzzleId: state.currentPuzzle?.id || null,
-  });
+  const result = gameTransitions.startPuzzle(mode);
+  renderPuzzleLifecycleResult(result, { source: "startPuzzle" });
 }
 
 function resetPuzzle(mode = state.mode) {
-  markLifecycleStage("puzzle-reset", { mode });
-
-  if (loadProgress(mode)) {
-    const clueUiState = ensureClueUiState();
-    clueUiState.lastUnlockedKeys = state.guesses
-      .map((guess) => guess)
-      .filter(Boolean)
-      .length
-      ? buildClueRevealState().items.filter((item) => item.unlocked).map((item) => item.key)
-      : [];
-
-    renderPipeline.renderPuzzleReset({ mode, source: "resetPuzzle-restore" });
-
-    publishBootSnapshot({
-      action: "restore-puzzle",
-      mode,
-      puzzleId: state.currentPuzzle?.id || null,
-    });
-
-    return;
-  }
-
-  startPuzzle(mode);
-  saveProgress();
-  renderPipeline.renderPuzzleReset({ mode, source: "resetPuzzle" });
+  const result = gameTransitions.resetPuzzle(mode);
+  renderPuzzleLifecycleResult(result, {
+    source: result.restored ? "resetPuzzle-restore" : "resetPuzzle",
+  });
 }
 
 function bindLifecycleEvents() {
@@ -6238,6 +6174,40 @@ function initializeRenderSurfaces() {
   });
 }
 
+function initializeGameTransitions() {
+  gameTransitions = createGameTransitions({
+    state,
+    CONFIG,
+    ensureClueUiState,
+    buildClueRevealState,
+    getLocalizedBookName,
+    getCurrentLanguage,
+    getBookByName,
+    getBookById,
+    isBookAlreadyGuessed,
+    compareGuess,
+    getMaxGuesses,
+    getTodayPuzzleDate,
+    pickPuzzle,
+    saveProgress,
+    clearSavedProgress,
+    loadProgress,
+    restoreProgressPayload,
+    canRestoreSavedPracticePuzzle,
+    readStoredProgressBuckets,
+    writeStoredProgressBuckets,
+    getProgressStorageKey,
+    applyModeTheme,
+    resetInput,
+    resetSuggestionsState,
+    closeSuggestions,
+    syncEndStateVisibility,
+    recordPuzzleCompletion,
+    markLifecycleStage,
+    publishBootSnapshot,
+  });
+}
+
 async function bootstrapApplication() {
   ensureBootDebugSurface();
 
@@ -6260,6 +6230,8 @@ async function bootstrapApplication() {
   bindings = createBindings(createBindingsApi());
 
   initializeRenderSurfaces();
+
+  initializeGameTransitions();
 
   const dependencies = {
     ...createStartupDependencies(),
