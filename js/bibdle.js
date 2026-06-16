@@ -3032,10 +3032,7 @@ async function fetchCurrentUserRank(dateKey, uid) {
   const entry = entrySnap.data();
 
   if (entry.result !== "won") {
-    return {
-      rank: null,
-      ...entry,
-    };
+    return { rank: null, ...entry };
   }
 
   const scoresRef = getDailyScoresCollectionRef(dateKey);
@@ -3058,22 +3055,14 @@ async function fetchCurrentUserRank(dateKey, uid) {
       ...docSnap.data(),
     }));
 
-    const match = rankedDocs.find((doc) => doc.uid === uid);
+    const match = rankedDocs.find((doc) => doc.uid === uid || doc.id === uid);
 
-    if (match) {
-      return {
-        ...entry,
-        rank: match.rank,
-      };
-    }
+    if (match) return { ...entry, rank: match.rank };
   } catch (error) {
-    console.error("Rank derivation failed:", error);
+    console.error("Rank derivation failed", error);
   }
 
-  return {
-    rank: null,
-    ...entry,
-  };
+  return { rank: null, ...entry };
 }
 
 async function ensureAnonymousAuthForDailySubmission() {
@@ -3173,6 +3162,31 @@ async function submitDailyResultToLeaderboard(outcome) {
     });
   } catch (error) {
     console.error("Leaderboard submission failed:", error);
+  }
+}
+
+async function ensureLeaderboardViewerUser() {
+  if (!state.auth.enabled || !firebaseAuth) return null;
+
+  const existingUser = state.auth.user ?? firebaseAuth.currentUser ?? null;
+  if (existingUser?.uid) {
+    return existingUser;
+  }
+
+  try {
+    const credential = await signInAnonymously(firebaseAuth);
+    const user = credential?.user ?? firebaseAuth.currentUser ?? null;
+
+    if (user?.uid) {
+      state.auth.user = user;
+      state.auth.ready = true;
+      return user;
+    }
+
+    return null;
+  } catch (error) {
+    console.error("Anonymous sign-in for leaderboard failed", error);
+    return null;
   }
 }
 
@@ -4130,7 +4144,7 @@ function bindEmptyStateActions(container = document) {
       }
 
       if (action === "retry-postgame-rank") {
-        loadPostGameLeaderboardRank();
+        postGameSurface.loadPostGameLeaderboardRank();
         return;
       }
 
@@ -4649,77 +4663,7 @@ async function openLeaderboardModal(trigger = document.activeElement) {
   if (!elements.leaderboardModal) return;
 
   modalHelpers.openModal("leaderboard", { trigger });
-
-  renderSurfaceLoadingState(elements.leaderboardSummary, {
-    label: 'Loading global stats',
-    variant: 'kpis',
-    rows: 4,
-  });
-  renderSurfaceLoadingState(elements.leaderboardList, {
-    label: 'Loading leaderboard',
-    variant: 'list',
-    rows: 5,
-  });
-  renderSurfaceLoadingState(elements.leaderboardUserRank, {
-    label: 'Loading placement',
-    variant: 'rank',
-    rows: 1,
-  });
-
-  if (!state.auth.enabled || !firebaseDb) {
-    renderSurfaceEmptyState(elements.leaderboardSummary, {
-      title: 'Global stats unavailable',
-      body: 'Global Daily leaderboard data is unavailable right now.',
-      compact: true,
-      showMarker: true,
-      tone: 'error',
-    });
-
-    renderSurfaceEmptyState(elements.leaderboardList, {
-      title: 'Leaderboard unavailable',
-      body: 'Firebase is not available, but local gameplay still works.',
-      compact: true,
-      showMarker: true,
-      tone: 'error',
-      actions: renderRetryButtonMarkup('Try again', 'retry-leaderboard'),
-    }, bindEmptyStateActions);
-    leaderboardSurface.renderCurrentUserRank(null);
-    return;
-  }
-
-  try {
-    const [stats, entries, userRank] = await Promise.all([
-      fetchDailyGlobalStats(getDailyDateKey()),
-      fetchLeaderboardTopEntries(getDailyDateKey()),
-      state.auth.user?.uid ? fetchCurrentUserRank(getDailyDateKey(), state.auth.user.uid) : Promise.resolve(null)
-    ]);
-
-    state.leaderboard.userRank = userRank;
-    leaderboardSurface.renderLeaderboardSummary(stats);
-    leaderboardSurface.renderLeaderboardList(entries);
-    leaderboardSurface.renderCurrentUserRank(userRank);
-  } catch (error) {
-    console.error("Leaderboard load failed", error);
-    renderSurfaceEmptyState(elements.leaderboardSummary, {
-      title: 'Could not load global stats',
-      body: "Today's global Daily metrics are not available right now.",
-      compact: true,
-      showMarker: true,
-      tone: 'error',
-    });
-
-    renderSurfaceEmptyState(elements.leaderboardList, {
-      title: 'Could not load leaderboard',
-      body: 'Please try again in a moment.',
-      compact: true,
-      showMarker: true,
-      tone: 'error',
-      actions: renderRetryButtonMarkup('Try again', 'retry-leaderboard'),
-    }, bindEmptyStateActions);
-
-    leaderboardSurface.renderCurrentUserRank(null);
-    return;
-  }
+  await leaderboardSurface.loadLeaderboard();
 }
 
 
@@ -4818,6 +4762,7 @@ function renderPostGamePanel() {
 
   if (state.mode === "daily") {
     showWhen(elements.postGameLeaderboardSection, true);
+    ensureLeaderboardViewerUser();
     loadPostGameLeaderboardRank();
   } else {
     showWhen(elements.postGameLeaderboardSection, false);
@@ -6091,6 +6036,11 @@ function initializeRenderSurfaces() {
     renderSurfaceEmptyState,
     renderSurfaceLoadingState,
     renderRetryButtonMarkup,
+    fetchDailyGlobalStats,
+    fetchLeaderboardTopEntries,
+    fetchCurrentUserRank,
+    getDailyDateKey,
+    isLeaderboardAvailable: () => !!state.auth.enabled && !!firebaseDb,
   });
 
   archiveSurface = createArchiveSurface({
@@ -6118,8 +6068,8 @@ function initializeRenderSurfaces() {
   postGameSurface = createPostGameSurface({
     state,
     elements,
-    firebaseAuth,
-    firebaseDb,
+    getFirebaseAuth: () => firebaseAuth,
+    getFirebaseDb: () => firebaseDb,
     bindEmptyStateActions,
     isGameOver,
     getPostGameContent,
