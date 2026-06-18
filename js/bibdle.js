@@ -37,6 +37,62 @@ import { createRenderPipeline } from "./render-pipeline.js";
 import { createModalService } from "./modal-service.js";
 import { createBindings } from "./bindings.js";
 import { createAuthService } from "./auth-service.js";
+import {
+  createModalHelpers,
+  createPreferenceUpdater,
+  createToggleHandler,
+  renderPlacementCard
+} from "./ui-refactor-helpers.js";
+import {
+  clearBusyState,
+  escapeHtml,
+  hasRenderableMarkup,
+  hasTextContent,
+  isNonEmptyArray,
+  renderBusyInto,
+  renderEmptyState,
+  renderInto,
+  renderLoadingBlock,
+  renderRetryButtonMarkup,
+  renderSurfaceEmptyState,
+  renderSurfaceLoadingState,
+  renderWhen,
+  setHidden,
+  showWhen,
+  showWhenHasItems,
+  showWhenHasText,
+} from "./ui-render-utils.js";
+import { computeModeStatsSummary as buildModeStatsSummary } from "./stats-read-models.js";
+import {
+  computeArchiveSummary as buildArchiveSummary,
+  formatArchiveAverage as formatArchiveAverageValue,
+  buildArchiveBarsViewModel,
+  buildArchiveGridViewModel,
+  buildArchiveDetailsViewModel,
+} from "./archive-read-models.js";
+import {
+  clampAchievementProgress as clampAchievementProgressValue,
+  getAchievementCategoryLabel as getAchievementCategoryLabelValue,
+  getAchievementCategoryDescription as getAchievementCategoryDescriptionValue,
+  getAchievementCategoryOrder as getAchievementCategoryOrderValue,
+  getAchievementDescriptionForUi as getAchievementDescriptionForUiValue,
+  formatAchievementProgressText as formatAchievementProgressTextValue,
+  getAchievementStatusCopy as getAchievementStatusCopyValue,
+  buildAchievementCardViewModel,
+  getClosestIncompleteAchievements as getClosestIncompleteAchievementsValue,
+  buildAchievementCategoryGroups,
+} from "./achievement-read-models.js";
+import {
+  formatTriviaLabel as formatTriviaLabelValue,
+  buildTriviaContent as buildTriviaContentValue,
+  buildPostGameContent,
+} from "./postgame-read-models.js";
+import { createPuzzleSurface } from "./puzzle-surface.js";
+import { createStatsSurface } from "./stats-surface.js";
+import { createPostGameSurface } from "./postgame-surface.js";
+import { createArchiveSurface } from "./archive-surface.js";
+import { createLeaderboardSurface } from "./leaderboard-surface.js";
+import { createGameTransitions } from "./game-transitions.js";
 
 const CONFIG = {
   modes: {
@@ -131,6 +187,13 @@ let renderPipeline = null;
 let modalService = null;
 let bindings = null;
 let authUnsubscribe = null;
+
+let puzzleSurface = null;
+let statsSurface = null;
+let postGameSurface = null;
+let archiveSurface = null;
+let leaderboardSurface = null;
+let gameTransitions = null;
 
 const STATS_SCHEMA_VERSION = 2;
 
@@ -1303,17 +1366,7 @@ function getAchievementsByFamily(family) {
 }
 
 function clampAchievementProgress(progress, target) {
-  const safeProgress = Number.isFinite(progress) ? Math.max(0, progress) : 0;
-  const safeTarget = Number.isFinite(target) ? Math.max(0, target) : 0;
-  const isComplete = safeTarget > 0 && safeProgress >= safeTarget;
-
-  return {
-    progress: safeProgress,
-    target: safeTarget,
-    percent: safeTarget > 0 ? Math.max(0, Math.min(100, (safeProgress / safeTarget) * 100)) : 0,
-    remaining: safeTarget > 0 ? Math.max(0, safeTarget - safeProgress) : Number.POSITIVE_INFINITY,
-    isComplete,
-  };
+  return clampAchievementProgressValue(progress, target);
 }
 
 function getAchievementEvaluation(achievement) {
@@ -1329,121 +1382,98 @@ function shouldTreatAchievementAsEarned(achievement, evaluation = null) {
 }
 
 function getAchievementStatusCopy(achievement, evaluation = null) {
-  if (shouldTreatAchievementAsEarned(achievement, evaluation)) {
-    return {
-      icon: "✓",
-      label: "Earned",
-    };
-  }
-
-  return {
-    icon: "🔒",
-    label: "Locked",
-  };
+  return getAchievementStatusCopyValue({
+    achievement,
+    evaluation: evaluation || getAchievementEvaluation(achievement),
+    shouldTreatAchievementAsEarned,
+  });
 }
 
 function getAchievementDescriptionForUi(achievement) {
-  if (!achievement) return "";
-
-  if (achievement.kind === "book-group-complete") {
-    return "Complete one verse from each required book.";
-  }
-
-  if (achievement.kind === "meta-knowledge-complete") {
-    return "Earn every Bible Knowledge achievement.";
-  }
-
-  return achievement.description || "";
+  return getAchievementDescriptionForUiValue(achievement);
 }
 
 function formatAchievementProgressText(achievement, evaluation) {
-  if (!achievement || !evaluation) return "";
-
-  const clamped = clampAchievementProgress(evaluation.progress, evaluation.target);
-  const progress = Math.min(clamped.progress, clamped.target || clamped.progress);
-  const target = clamped.target;
-
-  switch (achievement.kind) {
-    case "daily-streak":
-      return `${progress}/${target} days`;
-
-    case "first-try-total":
-      return `${progress}/${target} first-try wins`;
-
-    case "total-correct":
-      return `${progress}/${target} correct`;
-
-    case "consecutive-first-try":
-      return `${progress}/${target} in a row`;
-
-    case "book-group-complete":
-      return `${progress}/${target} books completed`;
-
-    case "book-count": {
-      const book = getAchievementBookById(achievement.targetBookId);
-      const fallbackLabel = achievement.targetBookId
-        ? achievement.targetBookId
-          .split("-")
-          .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-          .join(" ")
-        : "Book";
-      const bookLabel = book?.name || fallbackLabel;
-      return `${progress}/${target} ${bookLabel} verses`;
-    }
-
-    case "meta-knowledge-complete":
-      return `${progress}/${target} knowledge achievements`;
-
-    default:
-      return target > 0 ? `${progress}/${target}` : "";
-  }
+  return formatAchievementProgressTextValue(
+    achievement,
+    evaluation,
+    getAchievementBookById,
+  );
 }
 
 function buildAchievementCardMarkup(achievement, options = {}) {
   if (!achievement) return "";
 
   const evaluation = options.evaluation || getAchievementEvaluation(achievement);
-  const progressState = clampAchievementProgress(evaluation.progress, evaluation.target);
-  const isEarned = options.isEarned === true || shouldTreatAchievementAsEarned(achievement, evaluation);
+  const isEarned =
+    options.isEarned === true ||
+    shouldTreatAchievementAsEarned(achievement, evaluation);
+
   const title = options.title || achievement.label || "";
-  const description = options.description || getAchievementDescriptionForUi(achievement);
-  const progressText = options.progressText || formatAchievementProgressText(achievement, evaluation);
-  const status = options.status || getAchievementStatusCopy(achievement, evaluation);
-  const progressLabel = title
-    ? `${title} progress: ${progressText || "No progress yet"}`
-    : progressText || "No progress yet";
-  const ariaValueNow = progressState.target > 0
-    ? Math.min(progressState.progress, progressState.target)
-    : progressState.progress;
+  const description =
+    options.description || getAchievementDescriptionForUi(achievement);
+  const progressText =
+    options.progressText || formatAchievementProgressText(achievement, evaluation);
+  const status =
+    options.status || getAchievementStatusCopy(achievement, evaluation);
+
+  const viewModel = buildAchievementCardViewModel(achievement, {
+    evaluation,
+    isEarned,
+    title,
+    description,
+    progressText,
+    status,
+  });
+
   const imagePath = getAchievementImagePath(achievement);
 
   return `
-    <article class="achievement-card ${isEarned ? "is-earned" : "is-locked"}" ${isEarned ? "" : 'aria-disabled="true"'}>
+    <article class="achievement-card ${viewModel.isEarned ? "is-earned" : "is-locked"
+    }" ${viewModel.isEarned ? "" : 'aria-disabled="true"'}>
       <div class="achievement-card__media" aria-hidden="true">
-        ${
-          imagePath
-            ? `<img class="achievement-card__image" src="${escapeHtml(imagePath)}" alt="">`
-            : `<div class="achievement-card__media-slot">Badge image</div>`
-        }
+        ${imagePath
+      ? `<img class="achievement-card__image" src="${escapeHtml(imagePath)}" alt="">`
+      : '<div class="achievement-card__media-slot">Badge image</div>'
+    }
       </div>
       <div class="achievement-card__content">
-        <h3 class="achievement-card__title">${escapeHtml(title)}</h3>
-        ${description ? `<p class="achievement-card__description">${escapeHtml(description)}</p>` : ""}
-        ${progressText ? `<p class="achievement-card__progress-text">${escapeHtml(progressText)}</p>` : ""}
-        <div class="achievement-card__status" aria-label="${escapeHtml(status.label)}">
-          <span class="achievement-card__status-icon" aria-hidden="true">${escapeHtml(status.icon)}</span>
-          <span class="achievement-card__status-text">${escapeHtml(status.label)}</span>
+        <h3 class="achievement-card__title">${escapeHtml(viewModel.title)}</h3>
+        ${description
+      ? `<p class="achievement-card__description">${escapeHtml(viewModel.description)}</p>`
+      : ""
+    }
+        ${progressText
+      ? `<p class="achievement-card__progress-text">${escapeHtml(viewModel.progressText)}</p>`
+      : ""
+    }
+        <div class="achievement-card__status" aria-label="${escapeHtml(
+      viewModel.status.label,
+    )}">
+          <span class="achievement-card__status-icon" aria-hidden="true">${escapeHtml(
+      viewModel.status.icon,
+    )}</span>
+          <span class="achievement-card__status-text">${escapeHtml(
+      viewModel.status.label,
+    )}</span>
         </div>
       </div>
       <div class="achievement-card__progress">
         <div
           class="achievement-progress__track"
           role="progressbar"
-          aria-label="${escapeHtml(progressLabel)}"
+          aria-label="${escapeHtml(viewModel.progressLabel)}"
           aria-valuemin="0"
-          aria-valuenow="${ariaValueNow}"
-          aria-valuemax="${progressState.target > 0 ? progressState.target : Math.max(progressState.progress, 1)}">
-          <span class="achievement-progress__fill" style="width: ${progressState.percent}%;"></span>
+          aria-valuenow="${viewModel.ariaValueNow}"
+          aria-valuemax="${viewModel.progressState.target > 0
+      ? viewModel.progressState.target
+      : Math.max(viewModel.progressState.progress, 1)
+    }"
+        >
+          <span
+            class="achievement-progress__fill"
+            style="width: ${viewModel.progressState.percent}%"
+          ></span>
         </div>
       </div>
     </article>
@@ -1451,94 +1481,39 @@ function buildAchievementCardMarkup(achievement, options = {}) {
 }
 
 function getClosestIncompleteAchievements(limit = 3) {
-  return ACHIEVEMENTS
-    .map((achievement) => {
-      const evaluation = getAchievementEvaluation(achievement);
-      const progressState = clampAchievementProgress(evaluation.progress, evaluation.target);
-      const ratio = progressState.target > 0
-        ? Math.min(progressState.progress, progressState.target) / progressState.target
-        : 0;
-
-      return {
-        achievement,
-        evaluation,
-        isEarned: shouldTreatAchievementAsEarned(achievement, evaluation),
-        progress: progressState.progress,
-        remaining: progressState.remaining,
-        ratio,
-        target: progressState.target,
-      };
-    })
-    .filter((entry) => !entry.isEarned && entry.target > 0)
-    .sort((a, b) => {
-      if (b.ratio !== a.ratio) return b.ratio - a.ratio;
-      if (b.progress !== a.progress) return b.progress - a.progress;
-      if (a.remaining !== b.remaining) return a.remaining - b.remaining;
-      if (a.target !== b.target) return a.target - b.target;
-      return a.achievement.label.localeCompare(b.achievement.label);
-    })
-    .slice(0, limit);
+  return getClosestIncompleteAchievementsValue(ACHIEVEMENTS, {
+    limit,
+    getAchievementEvaluation,
+    shouldTreatAchievementAsEarned,
+  });
 }
 
 function getAchievementCategoryLabel(category) {
-  switch (category) {
-    case ACHIEVEMENT_CATEGORIES.streak:
-      return "Streak";
-    case ACHIEVEMENT_CATEGORIES.accuracy:
-      return "Accuracy";
-    case ACHIEVEMENT_CATEGORIES.bibleKnowledge:
-      return "Bible knowledge";
-    case ACHIEVEMENT_CATEGORIES.rare:
-      return "Rare and meta";
-    default:
-      return "Achievements";
-  }
+  return getAchievementCategoryLabelValue(category, ACHIEVEMENT_CATEGORIES);
 }
 
 function getAchievementCategoryDescription(category) {
-  switch (category) {
-    case ACHIEVEMENT_CATEGORIES.streak:
-      return "Daily streak and consistency milestones.";
-    case ACHIEVEMENT_CATEGORIES.accuracy:
-      return "First-try and precision-based milestones.";
-    case ACHIEVEMENT_CATEGORIES.bibleKnowledge:
-      return "Book, section, and testament coverage milestones.";
-    case ACHIEVEMENT_CATEGORIES.rare:
-      return "Long-term and special completion milestones.";
-    default:
-      return "";
-  }
+  return getAchievementCategoryDescriptionValue(category, ACHIEVEMENT_CATEGORIES);
 }
 
 function getAchievementCategoryOrder(category) {
-  switch (category) {
-    case ACHIEVEMENT_CATEGORIES.streak:
-      return 1;
-    case ACHIEVEMENT_CATEGORIES.accuracy:
-      return 2;
-    case ACHIEVEMENT_CATEGORIES.bibleKnowledge:
-      return 3;
-    case ACHIEVEMENT_CATEGORIES.rare:
-      return 4;
-    default:
-      return 99;
-  }
+  return getAchievementCategoryOrderValue(category, ACHIEVEMENT_CATEGORIES);
 }
 
 function compareAchievementsForStatsModal(a, b) {
   const aEarned = shouldTreatAchievementAsEarned(a, getAchievementEvaluation(a));
   const bEarned = shouldTreatAchievementAsEarned(b, getAchievementEvaluation(b));
 
-  if (aEarned !== bEarned) {
-    return aEarned ? -1 : 1;
-  }
+  if (aEarned !== bEarned) return aEarned ? -1 : 1;
 
-  const aThreshold = Number.isFinite(a.threshold) ? a.threshold : Number.MAX_SAFE_INTEGER;
-  const bThreshold = Number.isFinite(b.threshold) ? b.threshold : Number.MAX_SAFE_INTEGER;
+  const aThreshold = Number.isFinite(a.threshold)
+    ? a.threshold
+    : Number.MAX_SAFE_INTEGER;
+  const bThreshold = Number.isFinite(b.threshold)
+    ? b.threshold
+    : Number.MAX_SAFE_INTEGER;
 
-  if (aThreshold !== bThreshold) {
-    return aThreshold - bThreshold;
-  }
+  if (aThreshold !== bThreshold) return aThreshold - bThreshold;
 
   return a.label.localeCompare(b.label);
 }
@@ -1559,9 +1534,13 @@ function buildAchievementCategoryGroupMarkup(category, achievements) {
     .join("");
 
   return `
-    <section class="achievement-group" aria-labelledby="achievement-group-${escapeHtml(category)}">
+    <section class="achievement-group" aria-labelledby="achievement-group-${escapeHtml(
+    category,
+  )}">
       <div class="achievement-group__header">
-        <h3 class="achievement-group__title" id="achievement-group-${escapeHtml(category)}">${escapeHtml(title)}</h3>
+        <h3 class="achievement-group__title" id="achievement-group-${escapeHtml(
+    category,
+  )}">${escapeHtml(title)}</h3>
         ${description ? `<p class="achievement-group__meta">${escapeHtml(description)}</p>` : ""}
       </div>
       <div class="achievement-group__list">
@@ -2097,8 +2076,8 @@ function createStartupDependencies() {
     initGame,
     startPuzzle,
     resetPuzzle,
-    renderPuzzleView,
-    renderStatsModal,
+    renderPuzzleView: (...args) => puzzleSurface?.renderPuzzleView?.(...args),
+    renderStatsModal: (...args) => statsSurface?.renderStatsModal?.(...args),
     stopCountdownTimer,
     updateCountdownLabel,
     startCountdownTimer,
@@ -2254,6 +2233,33 @@ function getLocalizedValue(primary, fallback) {
   return getSafeString(primary) || getSafeString(fallback) || "";
 }
 
+const LOCALIZED_FIELD_MAP = {
+  bookName: { en: "name", ml: "nameMl" },
+  testament: { en: "testament", ml: "testamentMl" },
+  section: { en: "section", ml: "sectionMl" },
+  bookIntroTitle: { en: "bookIntroTitle", ml: "bookIntroTitleMl" },
+  bookIntroText: { en: "bookIntroText", ml: "bookIntroTextMl" },
+  reference: { en: "reference", ml: "referenceMl" },
+  verseText: { en: "text", ml: "textMl" },
+  clue: { en: "clue", ml: "clueMl" },
+  explanation: { en: "explanation", ml: "explanationMl" },
+};
+
+function getLocalizedFieldValue(item, fieldKey, language = getCurrentLanguage()) {
+  if (!item) return "";
+
+  const fieldConfig = LOCALIZED_FIELD_MAP[fieldKey];
+  if (!fieldConfig) return "";
+
+  const requestedLanguage = language === "ml" ? "ml" : "en";
+  const fallbackLanguage = requestedLanguage === "ml" ? "en" : "ml";
+
+  return getLocalizedValue(
+    item[fieldConfig[requestedLanguage]],
+    item[fieldConfig[fallbackLanguage]]
+  );
+}
+
 function getLocalizedFirstLetter(book, language = getCurrentLanguage()) {
   if (!book) return "";
 
@@ -2274,67 +2280,112 @@ function normalizeBookName(value) {
     .replace(/[^\p{L}\p{N}]+/gu, "");
 }
 
+function buildBookLookupIndex() {
+  const byId = new Map();
+  const byNormalizedName = new Map();
+  const aliasesByBookId = new Map();
+
+  if (!Array.isArray(books) || !books.length) {
+    return {
+      byId,
+      byNormalizedName,
+      aliasesByBookId,
+    };
+  }
+
+  books.forEach((book) => {
+    if (!book?.id) {
+      return;
+    }
+
+    byId.set(book.id, book);
+
+    const aliases = [];
+    const seenAliases = new Set();
+
+    const addAlias = (label, source) => {
+      const value = getSafeString(label);
+      const normalized = normalizeBookName(value);
+
+      if (!value || !normalized || seenAliases.has(normalized)) {
+        return;
+      }
+
+      const alias = {
+        value,
+        normalized,
+        source,
+        bookId: book.id,
+      };
+
+      seenAliases.add(normalized);
+      aliases.push(alias);
+
+      if (!byNormalizedName.has(normalized)) {
+        byNormalizedName.set(normalized, book);
+      }
+    };
+
+    addAlias(book.normalizedName, 'normalized');
+    addAlias(book.name, 'en');
+    addAlias(book.nameMl, 'ml');
+
+    aliasesByBookId.set(book.id, aliases);
+  });
+
+  return {
+    byId,
+    byNormalizedName,
+    aliasesByBookId,
+  };
+}
+
+function getBookLookupIndex() {
+  if (!state.ui) {
+    state.ui = {};
+  }
+
+  if (!state.ui.bookLookupIndex) {
+    state.ui.bookLookupIndex = buildBookLookupIndex();
+  }
+
+  return state.ui.bookLookupIndex;
+}
+
 function getLocalizedBookName(book, language = getCurrentLanguage()) {
-  if (!book) return "";
-  return language === "ml"
-    ? getLocalizedValue(book.nameMl, book.name)
-    : getLocalizedValue(book.name, book.nameMl);
+  return getLocalizedFieldValue(book, "bookName", language);
 }
 
 function getLocalizedTestament(book, language = getCurrentLanguage()) {
-  if (!book) return "";
-  return language === "ml"
-    ? getLocalizedValue(book.testamentMl, book.testament)
-    : getLocalizedValue(book.testament, book.testamentMl);
+  return getLocalizedFieldValue(book, "testament", language);
 }
 
 function getLocalizedSection(book, language = getCurrentLanguage()) {
-  if (!book) return "";
-  return language === "ml"
-    ? getLocalizedValue(book.sectionMl, book.section)
-    : getLocalizedValue(book.section, book.sectionMl);
+  return getLocalizedFieldValue(book, "section", language);
 }
 
 function getLocalizedBookIntroTitle(book, language = getCurrentLanguage()) {
-  if (!book) return "";
-  return language === "ml"
-    ? getLocalizedValue(book.bookIntroTitleMl, book.bookIntroTitle)
-    : getLocalizedValue(book.bookIntroTitle, book.bookIntroTitleMl);
+  return getLocalizedFieldValue(book, "bookIntroTitle", language);
 }
 
 function getLocalizedBookIntroText(book, language = getCurrentLanguage()) {
-  if (!book) return "";
-  return language === "ml"
-    ? getLocalizedValue(book.bookIntroTextMl, book.bookIntroText)
-    : getLocalizedValue(book.bookIntroText, book.bookIntroTextMl);
+  return getLocalizedFieldValue(book, "bookIntroText", language);
 }
 
 function getLocalizedReference(verse, language = getCurrentLanguage()) {
-  if (!verse) return "";
-  return language === "ml"
-    ? getLocalizedValue(verse.referenceMl, verse.reference)
-    : getLocalizedValue(verse.reference, verse.referenceMl);
+  return getLocalizedFieldValue(verse, "reference", language);
 }
 
 function getLocalizedVerseText(verse, language = getCurrentLanguage()) {
-  if (!verse) return "";
-  return language === "ml"
-    ? getLocalizedValue(verse.textMl, verse.text)
-    : getLocalizedValue(verse.text, verse.textMl);
+  return getLocalizedFieldValue(verse, "verseText", language);
 }
 
 function getLocalizedClue(verse, language = getCurrentLanguage()) {
-  if (!verse) return "";
-  return language === "ml"
-    ? getLocalizedValue(verse.clueMl, verse.clue)
-    : getLocalizedValue(verse.clue, verse.clueMl);
+  return getLocalizedFieldValue(verse, "clue", language);
 }
 
 function getLocalizedExplanation(verse, language = getCurrentLanguage()) {
-  if (!verse) return "";
-  return language === "ml"
-    ? getLocalizedValue(verse.explanationMl, verse.explanation)
-    : getLocalizedValue(verse.explanation, verse.explanationMl);
+  return getLocalizedFieldValue(verse, "explanation", language);
 }
 
 function getLocalizedThemes(item, language = getCurrentLanguage()) {
@@ -2359,45 +2410,44 @@ function getLocalizedThemes(item, language = getCurrentLanguage()) {
 }
 
 function getBookAliases(book) {
-  if (!book) return [];
-  const aliases = new Map();
+  if (!book?.id) {
+    return [];
+  }
 
-  const addAlias = (label, source) => {
-    const value = getSafeString(label);
-    const normalized = normalizeBookName(value);
-    if (!value || !normalized) return;
-    aliases.set(normalized, {
-      value,
-      normalized,
-      source,
-      bookId: book.id,
-    });
-  };
-
-  addAlias(book.name, "en");
-  addAlias(book.nameMl, "ml");
-
-  return Array.from(aliases.values());
+  const { aliasesByBookId } = getBookLookupIndex();
+  return aliasesByBookId.get(book.id) ?? [];
 }
 
 function getBookById(bookId) {
-  return books.find((book) => book.id === bookId) ?? null;
+  if (!bookId) {
+    return null;
+  }
+
+  const { byId } = getBookLookupIndex();
+  return byId.get(bookId) ?? null;
 }
 
 function getCanonicalBookId(input) {
-  if (!input) return "";
-  if (typeof input === "object" && input.id) return input.id;
+  if (!input) {
+    return '';
+  }
+
+  if (typeof input === 'object' && input.id) {
+    return input.id;
+  }
+
   const byName = getBookByName(input);
-  return byName?.id || "";
+  return byName?.id ?? '';
 }
 
 function getBookByName(name) {
   const normalized = normalizeBookName(name);
+  if (!normalized) {
+    return null;
+  }
 
-  return books.find((book) => {
-    if (normalizeBookName(book.normalizedName) === normalized) return true;
-    return getBookAliases(book).some((alias) => alias.normalized === normalized);
-  }) ?? null;
+  const { byNormalizedName } = getBookLookupIndex();
+  return byNormalizedName.get(normalized) ?? null;
 }
 
 function isBookAlreadyGuessed(bookId) {
@@ -2406,58 +2456,80 @@ function isBookAlreadyGuessed(bookId) {
 
 function getSuggestionCandidates(query, language = getCurrentLanguage()) {
   const normalizedQuery = normalizeBookName(query);
-  if (!normalizedQuery) return [];
+  if (!normalizedQuery) {
+    return [];
+  }
 
+  const { aliasesByBookId } = getBookLookupIndex();
   const ranked = [];
 
   books.forEach((book) => {
-    const aliases = getBookAliases(book);
+    if (!book?.id || isBookAlreadyGuessed(book.id)) {
+      return;
+    }
+
+    const aliases = aliasesByBookId.get(book.id) ?? [];
     const matchingAliases = aliases.filter((alias) =>
       alias.normalized.includes(normalizedQuery)
     );
 
-    if (!matchingAliases.length) return;
-    if (isBookAlreadyGuessed(book.id)) return;
+    if (!matchingAliases.length) {
+      return;
+    }
 
-    const mlAlias = aliases.find((alias) => alias.source === "ml");
-    const enAlias = aliases.find((alias) => alias.source === "en");
-    const exactMatch = matchingAliases.some((alias) => alias.normalized === normalizedQuery);
-    const startsWithMatch = matchingAliases.some((alias) => alias.normalized.startsWith(normalizedQuery));
-    const matchedMl = matchingAliases.some((alias) => alias.source === "ml");
-    const matchedEn = matchingAliases.some((alias) => alias.source === "en");
+    const exactMatch = matchingAliases.some(
+      (alias) => alias.normalized === normalizedQuery
+    );
+    const startsWithMatch = matchingAliases.some((alias) =>
+      alias.normalized.startsWith(normalizedQuery)
+    );
+    const matchedMl = matchingAliases.some((alias) => alias.source === 'ml');
+    const matchedEn = matchingAliases.some(
+      (alias) => alias.source === 'en' || alias.source === 'normalized'
+    );
 
-    if (language === "en") {
-      if (!matchedEn) return;
+    if (language === 'en') {
+      if (!matchedEn) {
+        return;
+      }
 
       ranked.push({
         bookId: book.id,
-        primaryLabel: getLocalizedBookName(book, "en"),
-        secondaryLabel: "",
-        matchSource: "en",
+        primaryLabel: getLocalizedBookName(book, 'en'),
+        secondaryLabel: '',
+        matchSource: 'en',
         score: exactMatch ? 0 : startsWithMatch ? 1 : 2,
       });
+
       return;
     }
 
     ranked.push({
       bookId: book.id,
-      primaryLabel: getLocalizedBookName(book, "ml"),
+      primaryLabel: getLocalizedBookName(book, 'ml'),
       secondaryLabel:
-        getLocalizedBookName(book, "ml") !== getLocalizedBookName(book, "en")
-          ? getLocalizedBookName(book, "en")
-          : "",
-      matchSource: matchedMl ? "ml" : "en",
+        getLocalizedBookName(book, 'ml') !== getLocalizedBookName(book, 'en')
+          ? getLocalizedBookName(book, 'en')
+          : '',
+      matchSource: matchedMl ? 'ml' : 'en',
       score: exactMatch ? 0 : startsWithMatch ? 1 : 2,
     });
   });
 
   return ranked
     .sort((a, b) => {
-      if (a.score !== b.score) return a.score - b.score;
-      if (language === "ml" && a.matchSource !== b.matchSource) {
-        return a.matchSource === "ml" ? -1 : 1;
+      if (a.score !== b.score) {
+        return a.score - b.score;
       }
-      return a.primaryLabel.localeCompare(b.primaryLabel, language === "ml" ? "ml" : "en");
+
+      if (language === 'ml' && a.matchSource !== b.matchSource) {
+        return a.matchSource === 'ml' ? -1 : 1;
+      }
+
+      return a.primaryLabel.localeCompare(
+        b.primaryLabel,
+        language === 'ml' ? 'ml' : 'en'
+      );
     })
     .slice(0, CONFIG.ui.maxSuggestions);
 }
@@ -2960,10 +3032,7 @@ async function fetchCurrentUserRank(dateKey, uid) {
   const entry = entrySnap.data();
 
   if (entry.result !== "won") {
-    return {
-      rank: null,
-      ...entry,
-    };
+    return { rank: null, ...entry };
   }
 
   const scoresRef = getDailyScoresCollectionRef(dateKey);
@@ -2986,91 +3055,14 @@ async function fetchCurrentUserRank(dateKey, uid) {
       ...docSnap.data(),
     }));
 
-    const match = rankedDocs.find((doc) => doc.uid === uid);
+    const match = rankedDocs.find((doc) => doc.uid === uid || doc.id === uid);
 
-    if (match) {
-      return {
-        ...entry,
-        rank: match.rank,
-      };
-    }
+    if (match) return { ...entry, rank: match.rank };
   } catch (error) {
-    console.error("Rank derivation failed:", error);
+    console.error("Rank derivation failed", error);
   }
 
-  return {
-    rank: null,
-    ...entry,
-  };
-}
-
-function renderLeaderboardSummary(stats) {
-  if (!elements.leaderboardSummary) return;
-
-  if (!stats) {
-    renderBusyInto(
-      elements.leaderboardSummary,
-      renderLoadingBlock({
-        label: "Loading global stats",
-        variant: "kpis",
-        rows: 4,
-      }),
-      "Loading global stats",
-    );
-    return;
-  }
-
-  clearBusyState(elements.leaderboardSummary);
-
-  const players =
-    Number.isInteger(stats.players)
-      ? stats.players
-      : Number.isInteger(stats.totalPlayers)
-        ? stats.totalPlayers
-        : 0;
-
-  const completed =
-    Number.isInteger(stats.solvers)
-      ? stats.solvers
-      : Number.isInteger(stats.completed)
-        ? stats.completed
-        : 0;
-
-  const avgWinningGuesses =
-    typeof stats.averageWinningGuesses === "number"
-      ? stats.averageWinningGuesses
-      : typeof stats.avgGuesses === "number"
-        ? stats.avgGuesses
-        : null;
-
-  const avgGuessesDisplay =
-    avgWinningGuesses !== null && Number.isFinite(avgWinningGuesses)
-      ? avgWinningGuesses.toFixed(1)
-      : "—";
-
-  const solveRate =
-    players > 0 ? `${Math.round((completed / players) * 100)}%` : "0%";
-
-  elements.leaderboardSummary.innerHTML = `
-    <div class="leaderboard-kpis">
-      <div class="leaderboard-kpi">
-        <div class="leaderboard-kpi-value">${players}</div>
-        <div class="leaderboard-kpi-label">Players</div>
-      </div>
-      <div class="leaderboard-kpi">
-        <div class="leaderboard-kpi-value">${completed}</div>
-        <div class="leaderboard-kpi-label">Completed</div>
-      </div>
-      <div class="leaderboard-kpi">
-        <div class="leaderboard-kpi-value">${avgGuessesDisplay}</div>
-        <div class="leaderboard-kpi-label">Average guesses</div>
-      </div>
-      <div class="leaderboard-kpi">
-        <div class="leaderboard-kpi-value">${solveRate}</div>
-        <div class="leaderboard-kpi-label">Solve rate</div>
-      </div>
-    </div>
-  `;
+  return { rank: null, ...entry };
 }
 
 async function ensureAnonymousAuthForDailySubmission() {
@@ -3087,6 +3079,12 @@ async function ensureAnonymousAuthForDailySubmission() {
     console.error("Anonymous auth failed:", error);
     return null;
   }
+}
+
+function renderAfterAuthStateChange(reason = "auth-state-change") {
+  renderPipeline.renderSyncState(reason);
+  renderPipeline.renderPuzzleSurface(reason);
+  renderPipeline.renderStatsSurface(reason);
 }
 
 async function submitDailyResultToLeaderboard(outcome) {
@@ -3167,293 +3165,28 @@ async function submitDailyResultToLeaderboard(outcome) {
   }
 }
 
-function renderLeaderboardList(entries) {
-  if (!elements.leaderboardList) return;
+async function ensureLeaderboardViewerUser() {
+  if (!state.auth.enabled || !firebaseAuth) return null;
 
-  if (!Array.isArray(entries)) {
-    renderBusyInto(
-      elements.leaderboardList,
-      renderLoadingBlock({
-        label: "Loading leaderboard",
-        variant: "list",
-        rows: 5,
-      }),
-      "Loading leaderboard",
-    );
-    return;
-  }
-
-  clearBusyState(elements.leaderboardList);
-
-  if (!entries.length) {
-    renderInto(
-      elements.leaderboardList,
-      renderEmptyState({
-        title: "No leaderboard entries yet",
-        body: "Be the first player to finish today’s Daily puzzle.",
-        compact: false,
-        showMarker: true,
-        tone: "empty",
-        actions: renderRetryButtonMarkup("Focus guess box", "focus-guess-input"),
-      }),
-    );
-    bindEmptyStateActions(elements.leaderboardList);
-    return;
-  }
-
-  const rows = entries
-    .map((entry) => {
-      const isCurrentUser =
-        !!state.auth.user?.uid && (entry.uid === state.auth.user.uid || entry.userId === state.auth.user.uid);
-
-      return `
-        <div class="leaderboard-row ${isCurrentUser ? "is-current-user" : ""}">
-          <div class="leaderboard-rank">#${entry.rank}</div>
-          <div class="leaderboard-name">${escapeHtml(entry.displayName || "Anonymous")}</div>
-          <div class="leaderboard-guesses">${entry.guesses ?? "—"} ${entry.guesses === 1 ? "guess" : "guesses"}</div>
-          <div class="leaderboard-time">${formatLeaderboardTime(entry.completedAt)}</div>
-        </div>
-      `;
-    })
-    .join("");
-
-  renderInto(
-    elements.leaderboardList,
-    `<div class="leaderboard-list-shell">${rows}</div>`,
-  );
-}
-
-function getLeaderboardPlacement(rankEntry) {
-  const rank =
-    Number.isInteger(rankEntry?.rank) && rankEntry.rank > 0
-      ? rankEntry.rank
-      : Number.isInteger(rankEntry?.position) && rankEntry.position > 0
-        ? rankEntry.position
-        : Number.isInteger(rankEntry?.place) && rankEntry.place > 0
-          ? rankEntry.place
-          : null;
-
-  const solved = rankEntry?.result === "won" || rankEntry?.result === "solved";
-
-  return {
-    rank,
-    solved,
-    placementLabel: rank ? `#${rank}` : solved ? "Solved" : "Unranked",
-    placementMeta: rank
-      ? `You are currently #${rank} on today’s leaderboard.`
-      : solved
-        ? "You solved today’s puzzle, but a numeric placement is not available yet."
-        : "Your result is recorded, but a ranked position is not available yet.",
-  };
-}
-
-function renderCurrentUserRank(rankEntry) {
-  if (!elements.leaderboardUserRank) return;
-
-  clearBusyState(elements.leaderboardUserRank);
-
-  if (!state.auth.user) {
-    elements.leaderboardUserRank.innerHTML = renderEmptyState({
-      title: "Join the leaderboard",
-      body: "Complete today’s Daily puzzle to record your placement.",
-      compact: true,
-      showMarker: true,
-      tone: "empty",
-    });
-    bindEmptyStateActions(elements.leaderboardUserRank);
-    return;
-  }
-
-  if (!rankEntry) {
-    elements.leaderboardUserRank.innerHTML = renderEmptyState({
-      title: "No Daily result yet",
-      body: "Finish today’s Daily puzzle to see your placement here.",
-      compact: true,
-      showMarker: true,
-      tone: "empty",
-      actions: renderRetryButtonMarkup("Focus guess box", "focus-guess-input"),
-    });
-    bindEmptyStateActions(elements.leaderboardUserRank);
-    return;
-  }
-
-  const hasRank = Number.isInteger(rankEntry.rank) && rankEntry.rank > 0;
-  const isSolved = rankEntry.result === "won" || rankEntry.result === "solved";
-
-  const placementLabel = hasRank
-    ? `#${rankEntry.rank}`
-    : isSolved
-      ? "Solved"
-      : "Unranked";
-
-  const placementMeta = hasRank
-    ? `You are currently #${rankEntry.rank} on today’s leaderboard.`
-    : isSolved
-      ? "Your result is recorded, but a numeric placement is not available yet."
-      : "Your result is recorded, but a ranked position is not available yet.";
-
-  elements.leaderboardUserRank.innerHTML = `
-    <div class="leaderboard-user-rank-card">
-      <div>
-        <div class="label">Your place</div>
-        <div class="value">${placementLabel}</div>
-      </div>
-      <div>
-        <div class="label">Result</div>
-        <div class="value">${isSolved ? "Solved" : "Played"}</div>
-      </div>
-      <div>
-        <div class="label">Guesses</div>
-        <div class="value">${rankEntry.guesses ?? "—"}</div>
-      </div>
-      <div>
-        <div class="label">Time</div>
-        <div class="value">${formatLeaderboardTime(rankEntry.completedAt)}</div>
-      </div>
-      <div class="leaderboard-user-rank-note">${placementMeta}</div>
-    </div>
-  `;
-}
-
-function renderPostGameLeaderboardRank(rankEntry) {
-  if (!elements.postGameLeaderboardSection || !elements.postGameLeaderboardRank) return;
-
-  const isDaily = state.mode === "daily";
-  showWhen(elements.postGameLeaderboardSection, isDaily);
-
-  if (!isDaily) {
-    renderWhen(elements.postGameLeaderboardRank, false, "");
-    return;
-  }
-
-  clearBusyState(elements.postGameLeaderboardRank);
-
-  if (!state.auth.user) {
-    renderInto(
-      elements.postGameLeaderboardRank,
-      renderEmptyState({
-        title: "Sign in to track placement",
-        body: "Your Daily result can appear here once you are signed in.",
-        compact: true,
-        showMarker: true,
-        tone: "empty",
-        actions: renderRetryButtonMarkup("Open leaderboard", "open-leaderboard"),
-      }),
-    );
-    bindEmptyStateActions(elements.postGameLeaderboardRank);
-    return;
-  }
-
-  if (!rankEntry) {
-    renderBusyInto(
-      elements.postGameLeaderboardRank,
-      renderLoadingBlock({
-        label: "Loading placement",
-        variant: "rank",
-        rows: 1,
-      }),
-      "Loading placement",
-    );
-    return;
-  }
-
-  const hasRank = Number.isInteger(rankEntry.rank) && rankEntry.rank > 0;
-  const isSolved = rankEntry.result === "won" || rankEntry.result === "solved";
-
-  const placementLabel = hasRank
-    ? `#${rankEntry.rank}`
-    : isSolved
-      ? "Solved"
-      : "Unranked";
-
-  const placementMeta = hasRank
-    ? `You are currently #${rankEntry.rank} on today’s leaderboard.`
-    : isSolved
-      ? "Your result is recorded, but a numeric placement is not available yet."
-      : "Your result is recorded, but a ranked position is not available yet.";
-
-  renderInto(
-    elements.postGameLeaderboardRank,
-    `
-      <div class="leaderboard-user-rank-card">
-        <div>
-          <div class="label">Your place</div>
-          <div class="value">${placementLabel}</div>
-        </div>
-        <div>
-          <div class="label">Result</div>
-          <div class="value">${isSolved ? "Solved" : "Played"}</div>
-        </div>
-        <div>
-          <div class="label">Guesses</div>
-          <div class="value">${rankEntry.guesses ?? "—"}</div>
-        </div>
-        <div>
-          <div class="label">Time</div>
-          <div class="value">${formatLeaderboardTime(rankEntry.completedAt)}</div>
-        </div>
-        <div class="leaderboard-user-rank-note">${placementMeta}</div>
-      </div>
-    `,
-  );
-}
-
-async function loadPostGameLeaderboardRank() {
-  if (state.mode !== "daily" || !isGameOver()) {
-    renderPostGameLeaderboardRank(null);
-    return;
-  }
-
-  if (!elements.postGameLeaderboardSection || !elements.postGameLeaderboardRank) return;
-
-  showWhen(elements.postGameLeaderboardSection, true);
-  renderBusyInto(
-    elements.postGameLeaderboardRank,
-    renderLoadingBlock({
-      label: "Loading placement",
-      variant: "rank",
-      rows: 1,
-    }),
-    "Loading placement",
-  );
-
-  const user = state.auth.user || firebaseAuth?.currentUser || null;
-  if (!user?.uid || !state.auth.enabled || !firebaseDb) {
-    clearBusyState(elements.postGameLeaderboardRank);
-    renderInto(
-      elements.postGameLeaderboardRank,
-      renderEmptyState({
-        title: "Placement unavailable",
-        body: "Complete a Daily puzzle while connected to global stats to see your placement.",
-        compact: true,
-        showMarker: true,
-        tone: "error",
-        actions: renderRetryButtonMarkup("Open leaderboard", "open-leaderboard"),
-      }),
-    );
-    bindEmptyStateActions(elements.postGameLeaderboardRank);
-    return;
+  const existingUser = state.auth.user ?? firebaseAuth.currentUser ?? null;
+  if (existingUser?.uid) {
+    return existingUser;
   }
 
   try {
-    const userRank = await fetchCurrentUserRank(getDailyDateKey(), user.uid);
-    state.leaderboard.userRank = userRank;
-    renderPostGameLeaderboardRank(userRank);
+    const credential = await signInAnonymously(firebaseAuth);
+    const user = credential?.user ?? firebaseAuth.currentUser ?? null;
+
+    if (user?.uid) {
+      state.auth.user = user;
+      state.auth.ready = true;
+      return user;
+    }
+
+    return null;
   } catch (error) {
-    console.error("Post-game rank load failed:", error);
-    clearBusyState(elements.postGameLeaderboardRank);
-    renderInto(
-      elements.postGameLeaderboardRank,
-      renderEmptyState({
-        title: "Could not load placement",
-        body: "Your result was saved locally, but your current global placement is not available yet.",
-        compact: true,
-        showMarker: true,
-        tone: "error",
-        actions: renderRetryButtonMarkup("Try again", "retry-postgame-rank"),
-      }),
-    );
-    bindEmptyStateActions(elements.postGameLeaderboardRank);
+    console.error("Anonymous sign-in for leaderboard failed", error);
+    return null;
   }
 }
 
@@ -4352,91 +4085,11 @@ function syncPreferenceControls() {
   }
 }
 
-function syncActionButtons() {
-  const gameOver = isGameOver();
-  const inDailyMode = state.mode === "daily";
-  const inPracticeMode = state.mode === "practice";
-  const completedTodaysDaily = hasCompletedTodaysDaily();
-  const completedCurrentDaily = inDailyMode && gameOver;
-  const completedCurrentPractice = inPracticeMode && gameOver;
 
-  showWhen(elements.statsBtn, true);
-  showWhen(elements.helpBtn, true);
 
-  showWhen(elements.archiveBtn, inDailyMode);
-  showWhen(elements.leaderboardBtn, completedCurrentDaily);
 
-  showWhen(elements.shareBtn, gameOver);
-  showWhen(elements.copyBtn, gameOver);
-  showWhen(elements.postGameShareBtn, gameOver);
-  showWhen(elements.postGameCopyOnlyBtn, gameOver);
-  showWhen(elements.postGameCopyBtn, false);
 
-  showWhen(elements.tryPracticeBtn, completedCurrentDaily);
-  showWhen(elements.nextPracticeBtn, completedCurrentPractice);
-  showWhen(elements.todayBibdleBtn, inPracticeMode && !completedTodaysDaily);
-}
 
-function renderPuzzleCard() {
-  const language = getCurrentLanguage();
-  elements.verseText.textContent = getLocalizedVerseText(state.currentPuzzle?.verse, language);
-  elements.dateLabel.textContent =
-    state.mode === "daily"
-      ? `Daily puzzle · ${formatDate()}`
-      : "Practice puzzle";
-
-  if (state.mode === "daily") {
-    startCountdownTimer();
-    return;
-  }
-
-  stopCountdownTimer();
-
-  if (elements.countdownTimer?.parentElement) {
-    elements.countdownTimer.parentElement.classList.add("hidden");
-    elements.countdownTimer.parentElement.classList.add("is-muted");
-  }
-}
-
-function renderHintBlock() {
-  const lines = getHintLines();
-
-  elements.hintBlock.innerHTML = lines
-    .map((item) => {
-      if (item.unlocked) {
-        return `
-          <div class="clue-feed__item is-unlocked ${item.isNew ? "is-new" : ""}" data-clue-key="${item.key}">
-            <p class="meta-line is-book-data">${item.value}</p>
-          </div>
-        `;
-      }
-
-      const icon = item.lockVariant === "gold-star"
-        ? `
-          <span class="clue-feed__lock-icon clue-feed__lock-icon--gold-star" aria-hidden="true">
-            <span class="clue-feed__lock-glyph">🔒</span>
-            <span class="clue-feed__star-glyph">★</span>
-          </span>
-        `
-        : `
-          <span class="clue-feed__lock-icon" aria-hidden="true">🔒</span>
-        `;
-
-      const numberLabel = Number.isInteger(item.unlockAt)
-        ? `<span class="clue-feed__lock-count">${item.unlockAt}</span>`
-        : `<span class="clue-feed__lock-count">★</span>`;
-
-      return `
-        <div class="clue-feed__lock-chip" data-clue-key="${item.key}" aria-label="Clue locked">
-          ${icon}
-          ${numberLabel}
-        </div>
-      `;
-    })
-    .join("");
-
-  elements.attemptLabel.textContent = getAttemptLabel();
-}
 
 function renderEmptyGuessRows() {
   elements.guessRows.innerHTML = `
@@ -4470,71 +4123,11 @@ function renderGuessRow(guess, rowIndex, animate = false) {
   `;
 }
 
-function renderGuessRows(animateLatest = false) {
-  if (!state.guesses.length) {
-    renderEmptyGuessRows();
-    return;
-  }
 
-  const guessesToRender = [...state.guesses].reverse();
-  const latestGuess = state.guesses[state.guesses.length - 1];
 
-  elements.guessRows.innerHTML = guessesToRender
-    .map((guess, index) => {
-      const originalIndex = state.guesses.length - 1 - index;
-      const shouldAnimate = animateLatest && guess === latestGuess;
-      return renderGuessRow(guess, originalIndex, shouldAnimate);
-    })
-    .join("");
-}
-
-function renderProximityLine() {
-  if (!elements.proximityLine) return;
-
-  const lastGuess = state.guesses[state.guesses.length - 1];
-  elements.proximityLine.textContent = getProximityDescription(lastGuess);
-}
 
 function renderStatus(message = "Guess the book from the verse above.") {
   elements.statusLine.textContent = message;
-}
-
-function renderEmptyState({
-  title = "",
-  body = "",
-  actions = "",
-  compact = false,
-  inline = false,
-  showMarker = true,
-  tone = "empty",
-} = {}) {
-  const classes = [
-    "empty-state",
-    compact ? "empty-state--compact" : "empty-state--standard",
-    inline ? "empty-state--inline" : "",
-    tone ? `empty-state--${tone}` : "",
-  ]
-    .filter(Boolean)
-    .join(" ");
-
-  const normalizedActions =
-    Array.isArray(actions) ? actions.filter(Boolean).join("") : actions;
-
-  return `
-    <div class="${classes}" ${tone === "error" ? 'role="alert"' : ""}>
-      ${showMarker ? '<div class="empty-state__marker" aria-hidden="true"></div>' : ""}
-      <div class="empty-state__content">
-        ${title ? `<p class="empty-state__title">${title}</p>` : ""}
-        ${body ? `<p class="empty-state__body">${body}</p>` : ""}
-      </div>
-      ${normalizedActions ? `<div class="empty-state__actions">${normalizedActions}</div>` : ""}
-    </div>
-  `;
-}
-
-function renderRetryButtonMarkup(label = "Try again", action = "") {
-  if (!action) return "";
-  return `<button type="button" class="pill-btn" data-empty-action="${action}">${label}</button>`;
 }
 
 function bindEmptyStateActions(container = document) {
@@ -4551,7 +4144,7 @@ function bindEmptyStateActions(container = document) {
       }
 
       if (action === "retry-postgame-rank") {
-        loadPostGameLeaderboardRank();
+        postGameSurface.loadPostGameLeaderboardRank();
         return;
       }
 
@@ -4565,11 +4158,6 @@ function bindEmptyStateActions(container = document) {
       }
     });
   });
-}
-
-function setHidden(element, hidden) {
-  if (!element) return;
-  element.hidden = !!hidden;
 }
 
 function setModalOpenState(modalBackdrop, isOpen, options = {}) {
@@ -4622,181 +4210,8 @@ function closeModal(modalBackdrop, options = {}) {
   setModalOpenState(modalBackdrop, false, options);
 }
 
-function renderLoadingBlock({
-  label = "Loading",
-  variant = "list",
-  rows = 3,
-} = {}) {
-  const items = Array.from({ length: rows }, () => {
-    if (variant === "kpis") {
-      return `
-        <div class="loading-card" aria-hidden="true">
-          <div class="loading-card__lines">
-            <div class="loading-line loading-line--short"></div>
-            <div class="loading-line loading-line--mid"></div>
-          </div>
-        </div>
-      `;
-    }
-
-    if (variant === "rank") {
-      return `
-        <div class="loading-card" aria-hidden="true">
-          <div class="loading-card__lines">
-            <div class="loading-line loading-line--rank"></div>
-            <div class="loading-line loading-line--name"></div>
-            <div class="loading-line loading-line--meta"></div>
-          </div>
-        </div>
-      `;
-    }
-
-    return `
-      <div class="loading-row" aria-hidden="true">
-        <div class="loading-row__lines">
-          <div class="loading-line loading-line--rank"></div>
-          <div class="loading-line loading-line--name"></div>
-        </div>
-      </div>
-    `;
-  }).join("");
-
-  const gridClass =
-    variant === "kpis" ? "loading-block__grid loading-block__grid--kpis" : "loading-block__grid loading-block__grid--list";
-
-  return `
-    <div class="loading-block" role="status" aria-live="polite" aria-label="${escapeHtml(label)}">
-      <div class="loading-block__status">${escapeHtml(label)}</div>
-      <div class="${gridClass}">
-        ${items}
-      </div>
-    </div>
-  `;
-}
-
-function renderBusyInto(container, markup, label = "Loading") {
-  if (!container) return;
-  container.setAttribute("aria-busy", "true");
-  container.setAttribute("data-loading-label", label);
-  container.innerHTML = markup;
-}
-
-function clearBusyState(container) {
-  if (!container) return;
-  container.setAttribute("aria-busy", "false");
-  container.removeAttribute("data-loading-label");
-}
-
-function setContentVisibility(element, shouldShow, renderWhenHidden = false) {
-  if (!element) return;
-  setHidden(element, !shouldShow);
-  if (!shouldShow && !renderWhenHidden) {
-    element.innerHTML = "";
-  }
-}
-
-function renderInto(container, markup, options = {}) {
-  if (!container) return;
-  const { visible = true, preserveWhenHidden = false } = options;
-  setContentVisibility(container, visible, preserveWhenHidden);
-  if (!visible && !preserveWhenHidden) return;
-  container.innerHTML = markup;
-}
-
-function hasItems(value) {
-  return Array.isArray(value) && value.length > 0;
-}
-
-function hasTextContent(value) {
-  return typeof value === "string" && value.trim().length > 0;
-}
-
-function isNonEmptyArray(value) {
-  return Array.isArray(value) && value.length > 0;
-}
-
-function hasRenderableMarkup(value) {
-  return typeof value === "string" && value.trim().length > 0;
-}
-
-function escapeHtml(value) {
-  return String(value ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
-
-function setVisibility(element, visible) {
-  setHidden(element, !visible);
-}
-
-function showWhen(element, condition) {
-  setVisibility(element, !!condition);
-  return !!condition;
-}
-
-function showWhenHasItems(element, items) {
-  return showWhen(element, isNonEmptyArray(items));
-}
-
-function showWhenHasText(element, text) {
-  return showWhen(element, hasTextContent(text));
-}
-
-function renderWhen(container, condition, markup = "", options = {}) {
-  renderInto(container, markup, {
-    visible: !!condition,
-    preserveWhenHidden: !!options.preserveWhenHidden,
-  });
-  return !!condition;
-}
-
 function computeModeStatsSummary(mode = "daily") {
-  const source = mode === "practice" ? state.stats.practice : state.stats.daily;
-
-  const played =
-    Number.isInteger(source?.played) && source.played >= 0 ? source.played : 0;
-  const won = Number.isInteger(source?.won) && source.won >= 0 ? source.won : 0;
-  const lost =
-    Number.isInteger(source?.lost) && source.lost >= 0 ? source.lost : 0;
-  const currentStreak =
-    mode === "daily" &&
-      Number.isInteger(source?.currentStreak) &&
-      source.currentStreak >= 0
-      ? source.currentStreak
-      : 0;
-  const bestStreak =
-    mode === "daily" &&
-      Number.isInteger(source?.bestStreak) &&
-      source.bestStreak >= 0
-      ? source.bestStreak
-      : 0;
-
-  const rawDistribution =
-    source?.guessDistribution &&
-      typeof source.guessDistribution === "object" &&
-      !Array.isArray(source.guessDistribution)
-      ? source.guessDistribution
-      : {};
-
-  const maxGuesses = 8;
-  const guessDistribution = {};
-  for (let i = 1; i <= maxGuesses; i += 1) {
-    const value = rawDistribution[i] ?? rawDistribution[String(i)] ?? 0;
-    guessDistribution[i] = Number.isInteger(value) && value >= 0 ? value : 0;
-  }
-
-  return {
-    mode,
-    played,
-    won,
-    lost,
-    currentStreak,
-    bestStreak,
-    guessDistribution,
-  };
+  return buildModeStatsSummary(state.stats, mode, 8);
 }
 
 function renderPostGameStats(mode) {
@@ -4837,80 +4252,48 @@ function renderPostGameStats(mode) {
   }
 }
 
-function renderStatsSection(statsObj, container) {
+function renderStatsSection(stats, container) {
   if (!container) return;
 
-  const safeStats = statsObj ?? computeStatsSummary();
-  const totalWins = safeStats.won;
-  const guessKeys = Object.keys(safeStats.guessDistribution || {})
-    .map(Number)
-    .sort((a, b) => a - b);
-
-  const maxCount = guessKeys.reduce(
-    (max, key) => Math.max(max, safeStats.guessDistribution[key] || 0),
-    0,
-  );
-
-  container.innerHTML = "";
-
-  const hasStats =
-    safeStats.played > 0 || totalWins > 0 || safeStats.lost > 0;
-
-  if (!hasStats) {
-    container.innerHTML = renderEmptyState({
-      title: "No history yet",
-      body: "Play a few rounds to build your guess distribution.",
-      compact: true,
-      showMarker: true,
-      tone: "empty",
-      actions: renderRetryButtonMarkup("Start guessing", "focus-guess-input"),
-    });
-    bindEmptyStateActions(container);
-    return;
-  }
-
-  if (!guessKeys.length) {
-    container.innerHTML = renderEmptyState({
-      title: "No solved rounds yet",
-      body: "Win a puzzle to start filling the guess distribution.",
-      compact: true,
-      showMarker: true,
-      tone: "empty",
-      actions: renderRetryButtonMarkup("Keep playing", "focus-guess-input"),
-    });
-    bindEmptyStateActions(container);
-    return;
-  }
-
-  guessKeys.forEach((attempt) => {
-    const count = safeStats.guessDistribution[attempt] || 0;
-
-    const row = document.createElement("div");
-    row.className = "dist-row";
-
-    const label = document.createElement("div");
-    label.className = "dist-label";
-    label.textContent = `${attempt}`;
-    label.setAttribute("aria-label", `Guess distribution, ${attempt} attempts`);
-
-    const track = document.createElement("div");
-    track.className = "dist-track";
-
-    const bar = document.createElement("div");
-    bar.className = "dist-bar";
-    bar.style.width = `${maxCount > 0 ? Math.max((count / maxCount) * 100, count > 0 ? 8 : 0) : 0}%`;
-    bar.setAttribute("aria-hidden", "true");
-    track.appendChild(bar);
-
-    const value = document.createElement("div");
-    value.className = "dist-count";
-    value.textContent = String(count);
-
-    row.appendChild(label);
-    row.appendChild(track);
-    row.appendChild(value);
-    container.appendChild(row);
+  const distribution = stats?.guessDistribution || {};
+  const attempts = Array.from({ length: 8 }, (_, index) => {
+    const attempt = index + 1;
+    return {
+      attempt,
+      count: Number(distribution[attempt] || distribution[String(attempt)] || 0),
+    };
   });
+
+  const maxCount = attempts.reduce((max, entry) => Math.max(max, entry.count), 0);
+
+  const markup = attempts
+    .map(({ attempt, count }) => {
+      const widthPercent =
+        maxCount > 0 && count > 0 ? Math.max((count / maxCount) * 100, 8) : 0;
+
+      return `
+        <div class="guess-distribution-row">
+          <div class="guess-distribution-label">${attempt}</div>
+          <div class="guess-distribution-bar-wrap">
+            <div class="guess-distribution-bar">
+              <div
+                class="guess-distribution-bar-fill"
+                style="width: ${widthPercent}%"
+                aria-hidden="true"
+              ></div>
+            </div>
+            <div class="guess-distribution-value">${count}</div>
+          </div>
+        </div>
+      `;
+    })
+    .join("");
+
+  container.innerHTML = markup;
+  container.hidden = false;
+  container.removeAttribute("aria-hidden");
+  container.style.display = "block";
+  container.style.visibility = "visible";
 }
 
 function renderEarnedBadges(container) {
@@ -4924,7 +4307,7 @@ function renderEarnedBadges(container) {
       body: "Keep a Daily winning streak going to unlock streak badges.",
       compact: true,
       showMarker: true,
-    });
+    }, bindEmptyStateActions);
     return;
   }
 
@@ -4947,86 +4330,21 @@ function renderEarnedBadges(container) {
 }
 
 function formatTriviaLabel(value) {
-  if (!value) return "";
-
-  return String(value)
-    .split("-")
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
+  return formatTriviaLabelValue(value);
 }
 
 function buildTriviaContent(puzzle, book) {
-  const language = getCurrentLanguage();
-
-  if (!puzzle && !book) {
-    return {
-      title: "",
-      text: "",
-      chips: [],
-    };
-  }
-
-  const verseThemes = getLocalizedThemes(puzzle, language);
-  const bookThemes = getLocalizedThemes(book, language);
-  const combinedThemes = [...new Set([...verseThemes, ...bookThemes])].slice(0, 3);
-  const chips = [];
-
-  if (book) {
-    const testament = getLocalizedTestament(book, language);
-    const section = getLocalizedSection(book, language);
-    if (testament) chips.push(`${testament}`);
-    if (section) chips.push(section);
-  }
-
-  if (combinedThemes.length) {
-    chips.push(`Themes: ${combinedThemes.join(", ")}`);
-  }
-
-  if (puzzle?.difficulty) {
-    chips.push(`Difficulty: ${formatTriviaLabel(puzzle.difficulty)}`);
-  }
-
-  const localizedBookName = getLocalizedBookName(book, language) || getLocalizedValue(puzzle?.bookMl, puzzle?.book);
-
-  const title =
-    getLocalizedClue(puzzle, language) ||
-    getLocalizedBookIntroTitle(book, language) ||
-    `Learn more about ${localizedBookName || "this book"}`;
-
-  const textParts = [];
-
-  const explanation = getLocalizedExplanation(puzzle, language);
-  const clue = getLocalizedClue(puzzle, language);
-
-  if (explanation) {
-    textParts.push(explanation);
-  } else if (clue) {
-    textParts.push(clue);
-  }
-
-  if (bookThemes.length) {
-    textParts.push(`${localizedBookName} often emphasizes themes such as ${bookThemes.slice(0, 3).join(", ")}.`);
-  } else if (verseThemes.length) {
-    textParts.push(`This verse highlights themes such as ${verseThemes.slice(0, 3).join(", ")}.`);
-  }
-
-  if (puzzle?.devotional) {
-    textParts.push(puzzle.devotional);
-  }
-
-  const uniqueParts = [];
-  textParts.forEach((part) => {
-    const trimmed = String(part || "").trim();
-    if (!trimmed) return;
-    if (uniqueParts.includes(trimmed)) return;
-    uniqueParts.push(trimmed);
+  return buildTriviaContentValue(puzzle, book, {
+    language: getCurrentLanguage(),
+    getLocalizedThemes,
+    getLocalizedTestament,
+    getLocalizedSection,
+    getLocalizedBookName,
+    getLocalizedValue,
+    getLocalizedClue,
+    getLocalizedBookIntroTitle,
+    getLocalizedExplanation,
   });
-
-  return {
-    title,
-    text: uniqueParts.slice(0, 2).join(" "),
-    chips,
-  };
 }
 
 function renderTriviaSection(content) {
@@ -5037,14 +4355,7 @@ function renderTriviaSection(content) {
     postGameTriviaChips,
   } = elements;
 
-  if (
-    !postGameTriviaSection ||
-    !postGameTriviaTitle ||
-    !postGameTriviaText ||
-    !postGameTriviaChips
-  ) {
-    return;
-  }
+  if (!postGameTriviaSection || !postGameTriviaTitle || !postGameTriviaText || !postGameTriviaChips) return;
 
   const hasTitle = hasTextContent(content?.title);
   const hasText = hasTextContent(content?.text);
@@ -5054,128 +4365,73 @@ function renderTriviaSection(content) {
   showWhen(postGameTriviaSection, true);
 
   if (!hasTrivia) {
-    postGameTriviaTitle.textContent = "Book trivia";
-    postGameTriviaText.textContent = "";
-    renderInto(
-      postGameTriviaChips,
-      renderEmptyState({
-        title: "No trivia available",
-        body: "This book does not have extra trivia to show yet.",
-        compact: true,
-        showMarker: true,
-        tone: "empty",
-      }),
-    );
-    bindEmptyStateActions(postGameTriviaChips);
+    postGameTriviaTitle.textContent = 'Book trivia';
+    postGameTriviaText.textContent = '';
+
+    renderSurfaceEmptyState(postGameTriviaChips, {
+      title: 'No trivia available',
+      body: 'This book does not have extra trivia to show yet.',
+      compact: true,
+      showMarker: true,
+      tone: 'empty',
+    });
     return;
   }
 
-  postGameTriviaTitle.textContent = content.title || "Learn more";
-  postGameTriviaText.textContent = content.text || "";
+  postGameTriviaTitle.textContent = content.title || 'Learn more';
+  postGameTriviaText.textContent = content.text || '';
 
-  const chipsMarkup = (content.chips || [])
-    .map((chip) => `<span class="postgame-chip ui-chip">${chip}</span>`)
-    .join("");
+  const chipsMarkup = content.chips
+    .map((chip) => `<span class="postgame-chip ui-chip">${escapeHtml(chip)}</span>`)
+    .join('');
 
   if (chipsMarkup) {
     renderWhen(postGameTriviaChips, true, chipsMarkup);
-  } else {
-    renderInto(
-      postGameTriviaChips,
-      renderEmptyState({
-        title: "No extra trivia points",
-        body: "There is a short summary for this book, but no additional trivia tags yet.",
-        compact: true,
-        showMarker: true,
-        tone: "empty",
-      }),
-    );
-    bindEmptyStateActions(postGameTriviaChips);
+    return;
   }
+
+  renderSurfaceEmptyState(postGameTriviaChips, {
+    title: 'No extra trivia points',
+    body: 'There is a short summary for this book, but no additional trivia tags yet.',
+    compact: true,
+    showMarker: true,
+    tone: 'empty',
+  });
 }
 
 function getPostGameContent() {
-  const puzzle = state.currentPuzzle?.verse;
-  if (!puzzle) return null;
-
-  const language = getCurrentLanguage();
-  const book = getBookByName(puzzle.book);
-
-  return {
-    title: state.status === "won" ? "Well done" : "Game over",
-    badge: state.status === "won" ? "Solved" : "Failed",
-    reference: getLocalizedReference(puzzle, language),
-    bookName: getLocalizedBookName(book, language) || getLocalizedValue(puzzle.bookMl, puzzle.book),
-    verseText: getLocalizedVerseText(puzzle, language),
-    explanation: getLocalizedExplanation(puzzle, language),
-    introTitle: getLocalizedBookIntroTitle(book, language),
-    introText: getLocalizedBookIntroText(book, language),
-    devotionalText: puzzle.devotional ?? book?.devotionalText ?? "",
-    trivia: buildTriviaContent(puzzle, book),
-  };
+  return buildPostGameContent({
+    state,
+    getCurrentLanguage,
+    getBookByName,
+    helpers: {
+      getLocalizedReference,
+      getLocalizedBookName,
+      getLocalizedValue,
+      getLocalizedVerseText,
+      getLocalizedExplanation,
+      getLocalizedBookIntroTitle,
+      getLocalizedBookIntroText,
+      getLocalizedThemes,
+      getLocalizedTestament,
+      getLocalizedSection,
+      getLocalizedClue,
+    },
+  });
 }
 
 function computeArchiveSummary() {
-  const totalBooks = books.length;
-  const solvedBooks = books.filter((book) => {
-    const entry = getBookStats(book);
-    return entry && entry.solves > 0;
-  }).length;
-
-  const completionPercentage =
-    totalBooks > 0 ? Math.round((solvedBooks / totalBooks) * 100) : 0;
-
-  const testamentSummary = books.reduce((acc, book) => {
-    const key = book.id ? `testament:${book.id}:${book.testament}` : book.testament;
-    const label = getLocalizedTestament(book, getCurrentLanguage());
-
-    if (!acc[label]) {
-      acc[label] = { total: 0, solved: 0, totalAttempts: 0, solveCount: 0 };
-    }
-
-    acc[label].total += 1;
-
-    const entry = getBookStats(book);
-    if (entry && entry.solves > 0) {
-      acc[label].solved += 1;
-      acc[label].totalAttempts += entry.totalAttempts;
-      acc[label].solveCount += entry.solves;
-    }
-
-    return acc;
-  }, {});
-
-  const sectionSummary = books.reduce((acc, book) => {
-    const label = getLocalizedSection(book, getCurrentLanguage());
-
-    if (!acc[label]) {
-      acc[label] = { total: 0, solved: 0, totalAttempts: 0, solveCount: 0 };
-    }
-
-    acc[label].total += 1;
-
-    const entry = getBookStats(book);
-    if (entry && entry.solves > 0) {
-      acc[label].solved += 1;
-      acc[label].totalAttempts += entry.totalAttempts;
-      acc[label].solveCount += entry.solves;
-    }
-
-    return acc;
-  }, {});
-
-  return {
-    totalBooks,
-    solvedBooks,
-    completionPercentage,
-    testamentSummary,
-    sectionSummary,
-  };
+  return buildArchiveSummary({
+    books,
+    getBookStats,
+    getLocalizedTestament,
+    getLocalizedSection,
+    language: getCurrentLanguage(),
+  });
 }
 
 function formatArchiveAverage(totalAttempts, solveCount) {
-  if (!solveCount) return "—";
-  return (totalAttempts / solveCount).toFixed(1);
+  return formatArchiveAverageValue(totalAttempts, solveCount);
 }
 
 function renderArchiveBars(summaryObj) {
@@ -5196,159 +4452,6 @@ function renderArchiveBars(summaryObj) {
       `;
     })
     .join("");
-}
-
-function renderArchiveSummary() {
-  if (!elements.archiveSummary) return;
-
-  const summary = computeArchiveSummary();
-
-  elements.archiveSummary.innerHTML = `
-    <div class="archive-summary-blocks">
-      <section class="archive-summary-group ui-card section-shell section-shell--subtle" aria-label="Overall archive progress">
-        <div class="section-shell__header">
-          <p class="archive-summary-title">Overall</p>
-        </div>
-        <div class="section-shell__body">
-          <div class="archive-kpis">
-            <div class="archive-kpi stat-block">
-              <span class="archive-kpi-value">${summary.solvedBooks}/${summary.totalBooks}</span>
-              <span class="archive-kpi-label">Books solved</span>
-            </div>
-            <div class="archive-kpi stat-block">
-              <span class="archive-kpi-value">${summary.completionPercentage}%</span>
-              <span class="archive-kpi-label">Canon complete</span>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section class="archive-stat-group ui-card section-shell section-shell--subtle" aria-label="Solved books by testament">
-        <div class="section-shell__header">
-          <h3>By testament</h3>
-        </div>
-        <div class="section-shell__body">
-          <div class="archive-bars">
-            ${renderArchiveBars(summary.testamentSummary)}
-          </div>
-        </div>
-      </section>
-
-      <section class="archive-stat-group ui-card section-shell section-shell--subtle" aria-label="Solved books by section">
-        <div class="section-shell__header">
-          <h3>By section</h3>
-        </div>
-        <div class="section-shell__body">
-          <div class="archive-bars">
-            ${renderArchiveBars(summary.sectionSummary)}
-          </div>
-        </div>
-      </section>
-    </div>
-  `;
-}
-
-function renderArchiveGrid(selectedBookKey = "") {
-  if (!elements.archiveGrid) return;
-
-  const language = getCurrentLanguage();
-
-  elements.archiveGrid.innerHTML = books
-    .map((book) => {
-      const entry = getBookStats(book);
-      const key = getBookStatsKey(book);
-      const stateClass = getArchiveCellState(book);
-      const stateLabel = getArchiveCellStateLabel(book);
-      const average = getAverageAttemptsForBook(book);
-
-      const metaLine =
-        entry && entry.solves > 0
-          ? `Best ${entry.bestAttempts ?? "—"} · Avg ${average ? average.toFixed(1) : "—"}`
-          : entry && entry.plays > 0
-            ? `Played ${entry.plays} · Unsolved`
-            : `${getLocalizedTestament(book, language)} · ${getLocalizedSection(book, language)}`;
-
-      return `
-        <button
-          type="button"
-          class="archive-cell ${stateClass}${selectedBookKey === key ? " is-selected" : ""}"
-          data-book-key="${key}"
-          aria-label="${getArchiveCellAriaLabel(book)}"
-          aria-pressed="${selectedBookKey === key ? "true" : "false"}"
-        >
-          <div class="archive-cell-top">
-            <span class="archive-cell-order">#${book.order}</span>
-            <span class="archive-cell-state">${stateLabel}</span>
-          </div>
-          <div class="archive-cell-book">${getLocalizedBookName(book, language)}</div>
-          <div class="archive-cell-meta">${metaLine}</div>
-        </button>
-      `;
-    })
-    .join("");
-}
-
-function renderArchiveDetails(bookKey = "") {
-  if (!elements.archiveDetails) return;
-
-  const book = books.find((item) => getBookStatsKey(item) === bookKey) || null;
-
-  if (!book) {
-    renderInto(
-      elements.archiveDetails,
-      renderEmptyState({
-        title: "No book selected",
-        body: "Choose a book from the archive map to view its Daily progress details.",
-        compact: false,
-        inline: false,
-        showMarker: true,
-        tone: "empty",
-      }),
-    );
-    return;
-  }
-
-  const language = getCurrentLanguage();
-  const entry = getBookStats(book);
-  const average = getAverageAttemptsForBook(book);
-  const solved = entry?.solves ?? 0;
-  const plays = entry?.plays ?? 0;
-  const bestAttempts = entry?.bestAttempts ?? "—";
-  const lastSolvedDate = entry?.lastSolvedDate ?? "Not yet solved";
-  const stateLabel = getArchiveCellStateLabel(book);
-
-  renderInto(
-    elements.archiveDetails,
-    `
-      <div class="archive-details-header">
-        <div class="archive-details-title">${getLocalizedBookName(book, language)}</div>
-        <div class="archive-details-subtitle">${getLocalizedTestament(book, language)} · ${getLocalizedSection(book, language)} · Canon #${book.order}</div>
-      </div>
-
-      <div class="archive-details-grid">
-        <div class="archive-detail-stat">
-          <span class="archive-detail-stat-value">${plays}</span>
-          <span class="archive-detail-stat-label">Daily plays</span>
-        </div>
-        <div class="archive-detail-stat">
-          <span class="archive-detail-stat-value">${solved}</span>
-          <span class="archive-detail-stat-label">Daily solves</span>
-        </div>
-        <div class="archive-detail-stat">
-          <span class="archive-detail-stat-value">${bestAttempts}</span>
-          <span class="archive-detail-stat-label">Best attempts</span>
-        </div>
-        <div class="archive-detail-stat">
-          <span class="archive-detail-stat-value">${average ? average.toFixed(1) : "—"}</span>
-          <span class="archive-detail-stat-label">Average attempts</span>
-        </div>
-      </div>
-
-      <p class="archive-details-copy">
-        Status: ${stateLabel}. Last solved date: ${lastSolvedDate}. This archive tracks Daily mode progress only.
-      </p>
-    `,
-  );
 }
 
 const MODAL_FOCUSABLE_SELECTOR = [
@@ -5524,7 +4627,7 @@ function syncModalEnvironment() {
 
 function handlePostGameLeaderboardOpen() {
   const trigger = document.activeElement;
-  closePostGamePanel();
+  postGameSurface?.closePostGamePanel?.();
   openLeaderboardModal(trigger);
 }
 
@@ -5532,317 +4635,43 @@ function handlePostGamePracticeStart() {
   resetPuzzle("practice");
 }
 
-async function openLeaderboardModal(trigger = document.activeElement) {
-  if (!elements.leaderboardModal) return;
-
-  modalService?.open("leaderboard", { trigger }) ??
-    setModalOpenState(elements.leaderboardModal, true, {
-      trigger,
-    });
-
-  renderBusyInto(
-    elements.leaderboardSummary,
-    renderLoadingBlock({
-      label: "Loading global stats",
-      variant: "kpis",
-      rows: 4,
-    }),
-    "Loading global stats",
-  );
-
-  renderBusyInto(
-    elements.leaderboardList,
-    renderLoadingBlock({
-      label: "Loading leaderboard",
-      variant: "list",
-      rows: 5,
-    }),
-    "Loading leaderboard",
-  );
-
-  renderBusyInto(
-    elements.leaderboardUserRank,
-    renderLoadingBlock({
-      label: "Loading placement",
-      variant: "rank",
-      rows: 1,
-    }),
-    "Loading placement",
-  );
-
-  if (!state.auth.enabled || !firebaseDb) {
-    clearBusyState(elements.leaderboardSummary);
-    clearBusyState(elements.leaderboardList);
-    clearBusyState(elements.leaderboardUserRank);
-
-    renderInto(
-      elements.leaderboardSummary,
-      renderEmptyState({
-        title: "Global stats unavailable",
-        body: "Global Daily leaderboard data is unavailable right now.",
-        compact: true,
-        showMarker: true,
-        tone: "error",
-      }),
-    );
-    renderInto(
-      elements.leaderboardList,
-      renderEmptyState({
-        title: "Leaderboard unavailable",
-        body: "Firebase is not available, but local gameplay still works.",
-        compact: true,
-        showMarker: true,
-        tone: "error",
-        actions: renderRetryButtonMarkup("Try again", "retry-leaderboard"),
-      }),
-    );
-    renderCurrentUserRank(null);
-    bindEmptyStateActions(elements.leaderboardSummary);
-    bindEmptyStateActions(elements.leaderboardList);
-    bindEmptyStateActions(elements.leaderboardUserRank);
-    return;
-  }
-
-  const dateKey = getDailyDateKey();
-
-  try {
-    const [stats, entries] = await Promise.all([
-      fetchDailyGlobalStats(dateKey),
-      fetchLeaderboardTopEntries(dateKey),
-    ]);
-
-    state.leaderboard.stats = stats;
-    state.leaderboard.entries = entries;
-
-    renderLeaderboardSummary(stats);
-    renderLeaderboardList(entries);
-  } catch (error) {
-    console.error("Leaderboard stats/list load failed:", error);
-
-    clearBusyState(elements.leaderboardSummary);
-    clearBusyState(elements.leaderboardList);
-    clearBusyState(elements.leaderboardUserRank);
-
-    renderInto(
-      elements.leaderboardSummary,
-      renderEmptyState({
-        title: "Could not load global stats",
-        body: "Today’s global Daily metrics are not available right now.",
-        compact: true,
-        showMarker: true,
-        tone: "error",
-      }),
-    );
-    renderInto(
-      elements.leaderboardList,
-      renderEmptyState({
-        title: "Could not load leaderboard",
-        body: "Please try again in a moment.",
-        compact: true,
-        showMarker: true,
-        tone: "error",
-        actions: renderRetryButtonMarkup("Try again", "retry-leaderboard"),
-      }),
-    );
-    renderCurrentUserRank(null);
-    bindEmptyStateActions(elements.leaderboardSummary);
-    bindEmptyStateActions(elements.leaderboardList);
-    bindEmptyStateActions(elements.leaderboardUserRank);
-    return;
-  }
-
-  if (!state.auth.user?.uid) {
-    clearBusyState(elements.leaderboardUserRank);
-    renderCurrentUserRank(null);
-    return;
-  }
-
-  renderBusyInto(
-    elements.leaderboardUserRank,
-    renderLoadingBlock({
-      label: "Loading placement",
-      variant: "rank",
-      rows: 1,
-    }),
-    "Loading placement",
-  );
-
-  try {
-    const userRank = await fetchCurrentUserRank(dateKey, state.auth.user.uid);
-    state.leaderboard.userRank = userRank;
-    renderCurrentUserRank(userRank);
-  } catch (error) {
-    console.error("Leaderboard rank load failed:", error);
-    clearBusyState(elements.leaderboardUserRank);
-    renderInto(
-      elements.leaderboardUserRank,
-      renderEmptyState({
-        title: "Could not load placement",
-        body: "Your personal Daily placement is not available yet.",
-        compact: true,
-        showMarker: true,
-        tone: "error",
-        actions: renderRetryButtonMarkup("Try again", "retry-leaderboard"),
-      }),
-    );
-    bindEmptyStateActions(elements.leaderboardUserRank);
-  }
-}
-
 function closeLeaderboardModal() {
-  modalService?.close("leaderboard") ?? closeModal(elements.leaderboardModal);
+  modalHelpers.closeModal("leaderboard");
 }
-
-
 
 function openArchiveModal(trigger = document.activeElement) {
   if (!elements.archiveModal) return;
 
-  const selectedBook =
-    books.find((book) => {
-      const entry = getBookStats(book);
-      return entry && entry.plays > 0;
-    }) || null;
+  const selectedBook = books.find((book) => {
+    const entry = getBookStats(book);
+    return entry && entry.plays > 0;
+  }) ?? null;
 
-  const selectedKey = selectedBook ? getBookStatsKey(selectedBook) : "";
+  const selectedKey = selectedBook ? getBookStatsKey(selectedBook) : null;
+  archiveSurface.renderArchiveSummary();
+  archiveSurface.renderArchiveGrid(selectedKey);
+  archiveSurface.renderArchiveDetails(selectedKey);
 
-  renderArchiveSummary();
-  renderArchiveGrid(selectedKey);
-  renderArchiveDetails(selectedKey);
-
-  modalService?.open("archive", { trigger }) ?? setModalOpenState(elements.archiveModal, true, { trigger });
+  modalHelpers.openModal("archive", { trigger });
 }
 
 function closeArchiveModal() {
-  modalService?.close("archive") ?? closeModal(elements.archiveModal);
+  modalHelpers.closeModal("archive");
 }
 
-function renderStatsModal() {
-  const dailyStats = computeModeStatsSummary("daily");
-  const practiceStats = computeModeStatsSummary("practice");
+async function openLeaderboardModal(trigger = document.activeElement) {
+  if (!elements.leaderboardModal) return;
 
-  if (elements.statsPlayed) {
-    elements.statsPlayed.textContent = String(dailyStats.played);
-  }
-  if (elements.statsWon) {
-    elements.statsWon.textContent = String(dailyStats.won);
-  }
-  if (elements.statsLost) {
-    elements.statsLost.textContent = String(dailyStats.lost);
-  }
-  if (elements.statsCurrentStreak) {
-    elements.statsCurrentStreak.textContent = String(dailyStats.currentStreak);
-  }
-  if (elements.statsBestStreak) {
-    elements.statsBestStreak.textContent = String(dailyStats.bestStreak);
-  }
-  if (elements.statsGuessDistribution) {
-    renderStatsSection(dailyStats, elements.statsGuessDistribution);
-  }
-  if (elements.statsModalAchievements) {
-    renderStatsModalBadges();
-  }
-
-  if (elements.practiceStatsPlayed) {
-    elements.practiceStatsPlayed.textContent = String(practiceStats.played);
-  }
-  if (elements.practiceStatsWon) {
-    elements.practiceStatsWon.textContent = String(practiceStats.won);
-  }
-  if (elements.practiceStatsLost) {
-    elements.practiceStatsLost.textContent = String(practiceStats.lost);
-  }
-  if (elements.practiceStatsGuessDistribution) {
-    renderStatsSection(practiceStats, elements.practiceStatsGuessDistribution);
-  }
+  modalHelpers.openModal("leaderboard", { trigger });
+  await leaderboardSurface.loadLeaderboard();
 }
+
 
 function getDailyStreakBadges() {
   return STREAK_BADGES.map((badge) => ({
     ...badge,
     earned: hasEarnedAchievement(badge.id),
   }));
-}
-
-function renderStatsModalBadges() {
-  if (!elements.statsModalAchievements) return;
-
-  const groupedAchievements = ACHIEVEMENTS.reduce((acc, achievement) => {
-    const category = achievement.category || "uncategorized";
-
-    if (!acc[category]) {
-      acc[category] = [];
-    }
-
-    acc[category].push(achievement);
-    return acc;
-  }, {});
-
-  const orderedCategories = Object.keys(groupedAchievements).sort(
-    (a, b) => getAchievementCategoryOrder(a) - getAchievementCategoryOrder(b),
-  );
-
-  const markup = `
-    <div class="achievement-groups">
-      ${orderedCategories
-      .map((category) =>
-        buildAchievementCategoryGroupMarkup(category, groupedAchievements[category]),
-      )
-      .join("")}
-    </div>
-  `;
-
-  renderInto(elements.statsModalAchievements, markup, {
-    visible: hasRenderableMarkup(markup),
-  });
-}
-
-function renderPostGameNewAchievements(container, achievements) {
-  if (!container) return;
-
-  if (!isNonEmptyArray(achievements)) {
-    renderInto(container, "", {
-      visible: false,
-    });
-    return;
-  }
-
-  const markup = achievements
-    .map((achievement) =>
-      buildAchievementCardMarkup(achievement, {
-        evaluation: getAchievementEvaluation(achievement),
-        isEarned: true,
-      }),
-    )
-    .join("");
-
-  renderInto(container, markup, {
-    visible: hasRenderableMarkup(markup),
-  });
-}
-
-function renderPostGameClosestAchievements(container, achievements) {
-  if (!container) return;
-
-  if (!isNonEmptyArray(achievements)) {
-    renderInto(container, "", {
-      visible: false,
-    });
-    return;
-  }
-
-  const markup = achievements
-    .map((entry) =>
-      buildAchievementCardMarkup(entry.achievement, {
-        evaluation: entry.evaluation,
-        isEarned: false,
-      }),
-    )
-    .join("");
-
-  renderInto(container, markup, {
-    visible: hasRenderableMarkup(markup),
-  });
 }
 
 function renderPostGameBadges(container, achievements) {
@@ -5933,6 +4762,7 @@ function renderPostGamePanel() {
 
   if (state.mode === "daily") {
     showWhen(elements.postGameLeaderboardSection, true);
+    ensureLeaderboardViewerUser();
     loadPostGameLeaderboardRank();
   } else {
     showWhen(elements.postGameLeaderboardSection, false);
@@ -5945,62 +4775,6 @@ function renderPostGamePanel() {
 
 function closePostGameModal() {
   modalService?.close("postGame") ?? closeModal(elements.postGameModal);
-}
-
-function closePostGamePanel() {
-  closePostGameModal();
-}
-
-function renderPuzzleView() {
-  applyLanguageToDocument();
-  applyModeTheme(state.mode);
-  renderLanguageControl();
-  renderMobileLanguageToggle();
-  renderPuzzleCard();
-
-  if (state.status === "won" || state.status === "lost") {
-    syncEndStateVisibility();
-    renderGuessRows();
-    syncPreferenceControls();
-    syncActionButtons();
-    renderPostGamePanel();
-
-    if (state.status === "won") {
-      renderStatus(
-        `Correct — ${getLocalizedValue(state.currentPuzzle.verse.book, state.currentPuzzle.verse.bookMl)} (${getLocalizedReference(state.currentPuzzle.verse, getCurrentLanguage())}).`,
-      );
-      publishBootSnapshot({ renderStatus: "won" });
-      return;
-    }
-
-    renderStatus(
-      `Out of guesses — the answer was ${getLocalizedValue(state.currentPuzzle.verse.book, state.currentPuzzle.verse.bookMl)} (${getLocalizedReference(state.currentPuzzle.verse, getCurrentLanguage())}).`,
-    );
-    publishBootSnapshot({ renderStatus: "lost" });
-    return;
-  }
-
-  syncEndStateVisibility();
-  renderHintBlock();
-  renderGuessRows();
-  renderProximityLine();
-  syncPreferenceControls();
-  syncActionButtons();
-  renderPostGamePanel();
-
-  const clueState = buildClueRevealState();
-  const newHintCount = clueState.newlyUnlockedKeys.length;
-
-  if (newHintCount > 0 && state.guesses.length > 0) {
-    renderStatus(
-      `${newHintCount} new ${newHintCount === 1 ? "clue" : "clues"} unlocked. Review the clue panel above.`,
-    );
-    publishBootSnapshot({ renderStatus: "new-clues" });
-    return;
-  }
-
-  renderStatus();
-  publishBootSnapshot({ renderStatus: "playing" });
 }
 
 function resetInput() {
@@ -6053,25 +4827,26 @@ function renderSuggestions() {
   if (!elements.autocomplete) return;
 
   if (!state.currentSuggestions.length) {
-    const query = elements.guessInput?.value?.trim() || "";
+    const query = elements.guessInput?.value?.trim();
 
     if (!query) {
       closeSuggestions();
       return;
     }
 
-    renderInto(
+    renderSurfaceEmptyState(
       elements.autocomplete,
-      renderEmptyState({
+      {
         title: "No matching books",
         body: "Try another spelling or a different Bible book name.",
         compact: true,
         showMarker: true,
         tone: "empty",
         actions: renderRetryButtonMarkup("Keep typing", "focus-guess-input"),
-      }),
+      },
+      bindEmptyStateActions,
     );
-    bindEmptyStateActions(elements.autocomplete);
+
     openSuggestions();
     updateComboboxA11y(false);
     return;
@@ -6085,17 +4860,20 @@ function renderSuggestions() {
         <button
           id="suggestion-${index}"
           type="button"
-          class="suggestion${active ? " is-active" : ""}"
+          class="suggestion${active ? ' is-active' : ''}"
           role="option"
           aria-selected="${active}"
           data-index="${index}"
         >
-          <span class="suggestion-primary">${suggestion.primaryLabel}</span>
-          ${suggestion.secondaryLabel ? `<span class="suggestion-secondary">${suggestion.secondaryLabel}</span>` : ""}
+          <span class="suggestion-primary">${escapeHtml(suggestion.primaryLabel)}</span>
+          ${suggestion.secondaryLabel
+          ? `<span class="suggestion-secondary">${escapeHtml(suggestion.secondaryLabel)}</span>`
+          : ''
+        }
         </button>
       `;
     })
-    .join("");
+    .join('');
 
   renderWhen(elements.autocomplete, hasRenderableMarkup(markup), markup);
   openSuggestions();
@@ -6129,100 +4907,89 @@ function handleDuplicateGuess(book) {
   renderStatus(`You already tried ${bookName}.`);
 }
 
-function refreshAfterGuess(message) {
-  syncEndStateVisibility();
 
-  if (state.status !== "won" && state.status !== "lost") {
-    renderHintBlock();
-    renderProximityLine();
+
+function getDefaultStatusMessage(status = state.status) {
+  const language = getCurrentLanguage();
+  const puzzle = state.currentPuzzle?.verse;
+
+  if (!puzzle) {
+    return "Guess the book from the verse above.";
   }
 
-  renderGuessRows(true);
-  syncPreferenceControls();
-  syncActionButtons();
-  renderStatus(message);
-  saveProgress();
-  renderPuzzleView();
-}
+  if (status === "won") {
+    return `Correct! ${getLocalizedValue(puzzle.book, puzzle.bookMl)} — ${getLocalizedReference(puzzle, language)}.`;
+  }
 
-async function handleSolvedGuess() {
-  state.status = "won";
-  await recordPuzzleCompletion("won");
-  refreshAfterGuess(
-    `Correct — ${state.currentPuzzle.verse.book} (${state.currentPuzzle.verse.reference}).`,
-  );
-}
+  if (status === "lost") {
+    return `Out of guesses — the answer was ${getLocalizedValue(puzzle.book, puzzle.bookMl)} — ${getLocalizedReference(puzzle, language)}.`;
+  }
 
-async function handleLostGuess() {
-  state.status = "lost";
-  await recordPuzzleCompletion("lost");
-  refreshAfterGuess(
-    `Out of guesses — the answer was ${state.currentPuzzle.verse.book} (${state.currentPuzzle.verse.reference}).`,
-  );
-}
-
-function handleIncorrectGuess(bookName) {
   const clueState = buildClueRevealState();
   const newHintCount = clueState.newlyUnlockedKeys.length;
-  const nearestDistance = getNearestGuessDistance();
 
-  renderHintBlock();
-  renderGuessRows(true);
-  renderProximityLine();
-  syncPreferenceControls();
-  syncActionButtons();
-
-  if (newHintCount > 0) {
-    renderStatus(
-      `${bookName} added. ${newHintCount} new ${newHintCount === 1 ? "clue" : "clues"} unlocked.`,
-    );
-  } else if (typeof nearestDistance === "number" && nearestDistance > 0) {
-    renderStatus(
-      `${bookName} added. Your nearest guess so far is ${nearestDistance} ${nearestDistance === 1 ? "book" : "books"} away.`,
-    );
-  } else {
-    renderStatus(`${bookName} added. Use the colors and clues for your next guess.`);
+  if (newHintCount > 0 && state.guesses.length > 0) {
+    return `${newHintCount} new ${newHintCount === 1 ? "clue" : "clues"} unlocked. Review the clue panel above.`;
   }
 
-  saveProgress();
+  return "Guess the book from the verse above.";
+}
+
+function refreshAfterGuess(message) {
+  puzzleSurface.renderAfterGuessOutcome({
+    status: state.status,
+    message,
+    animateLatest: true,
+    renderHints: state.status !== "won" && state.status !== "lost",
+    renderProximity: state.status !== "won" && state.status !== "lost",
+    renderPostGame: true,
+  });
+}
+
+function renderGuessTransitionResult(result) {
+  if (!result) return;
+
+  if (result.type === "guess-rejected") {
+    if (result.reason === "invalid") {
+      handleInvalidGuess();
+      return;
+    }
+
+    if (result.reason === "duplicate") {
+      handleDuplicateGuess(result.match);
+      return;
+    }
+
+    return;
+  }
+
+  if (
+    result.type === "guess-solved" ||
+    result.type === "guess-lost" ||
+    result.type === "guess-incorrect"
+  ) {
+    const message =
+      result.message || getDefaultStatusMessage(result.messageType || result.status);
+
+    puzzleSurface.renderAfterGuessOutcome({
+      status: result.status,
+      message,
+      animateLatest: !!result.animateLatest,
+      renderHints: !!result.renderHints,
+      renderProximity: !!result.renderProximity,
+      renderPostGame: !!result.renderPostGame,
+    });
+  }
 }
 
 async function applyGuess(rawGuess) {
   if (isGameOver()) {
-    renderPuzzleView();
+    puzzleSurface.renderPuzzleView();
     return;
   }
 
-  const match = typeof rawGuess === "object" ? rawGuess : getBookByName(rawGuess);
-  if (!match) {
-    handleInvalidGuess();
-    return;
-  }
-
-  if (isBookAlreadyGuessed(match.id)) {
-    handleDuplicateGuess(match);
-    return;
-  }
-
-  const result = compareGuess(match);
-  if (!result) return;
-
-  state.guesses.push(result);
-  resetInput();
-  resetSuggestionsState();
-  closeSuggestions();
-
-  if (result.solved) {
-    await handleSolvedGuess();
-    return;
-  }
-
-  if (state.guesses.length >= getMaxGuesses()) {
-    await handleLostGuess();
-    return;
-  }
-
-  handleIncorrectGuess(getLocalizedBookName(match, getCurrentLanguage()));
+  const result = await gameTransitions.applyGuess(rawGuess);
+  renderGuessTransitionResult(result);
 }
 
 function buildShareSummary() {
@@ -6335,34 +5102,50 @@ function setModalOpen(modal, isOpen) {
   setModalOpenState(modal, isOpen);
 }
 
+const modalHelpers = createModalHelpers({
+  elements,
+  modalService,
+  fallbackOpen: (modal, options) => setModalOpenState(modal, true, options),
+  fallbackClose: (modal, options) => setModalOpenState(modal, false, options)
+});
+
+const helpModalControls = modalHelpers.createModalPair("help");
+const settingsModalControls = modalHelpers.createModalPair("settings", () => {
+  syncSettingsControls();
+});
+const statsModalControls = modalHelpers.createModalPair(
+  "stats",
+  (...args) => statsSurface?.renderStatsModal?.(...args),
+);
+
 function openHelpModal(trigger = document.activeElement) {
-  modalService?.open("help", { trigger }) ?? setModalOpenState(elements.helpModal, true, { trigger });
+  helpModalControls.open(trigger);
 }
 
 function closeHelpModal() {
-  modalService?.close("help") ?? setModalOpen(elements.helpModal, false);
+  helpModalControls.close();
 }
 
 function openSettingsModal(trigger = document.activeElement) {
   if (!elements.settingsModal) return;
-
-  syncSettingsControls();
-  modalService?.open("settings", { trigger }) ?? setModalOpenState(elements.settingsModal, true, { trigger });
+  settingsModalControls.open(trigger);
 }
 
 function closeSettingsModal() {
-  modalService?.close("settings") ?? setModalOpen(elements.settingsModal, false);
+  settingsModalControls.close();
 }
 
 function openStatsModal(trigger = document.activeElement) {
   if (!elements.statsModal) return;
-
-  renderStatsModal();
-  modalService?.open("stats", { trigger }) ?? setModalOpenState(elements.statsModal, true, { trigger });
+  statsModalControls.open(trigger);
 }
 
 function closeStatsModal() {
-  modalService?.close("stats") ?? setModalOpen(elements.statsModal, false);
+  statsModalControls.close();
+}
+
+function closePostGamePanel() {
+  postGameSurface?.closePostGamePanel?.();
 }
 
 function syncSettingsControls() {
@@ -6381,54 +5164,41 @@ function syncSettingsControls() {
 }
 
 function applyAccessibilityPreferences() {
-  document.documentElement.classList.toggle(
-    "reduced-motion",
-    !!state.preferences.reducedAnimation,
-  );
-  document.documentElement.classList.toggle(
-    "high-contrast",
-    !!state.preferences.highContrast,
-  );
-  document.documentElement.classList.toggle(
-    "large-text",
-    !!state.preferences.largeText,
-  );
+  document.documentElement.classList.toggle("reduced-motion", !!state.preferences.reducedAnimation);
+  document.documentElement.classList.toggle("high-contrast", !!state.preferences.highContrast);
+  document.documentElement.classList.toggle("large-text", !!state.preferences.largeText);
 }
 
-function handleReducedMotionToggle(event) {
-  state.preferences.reducedAnimation = !!event.target.checked;
-  applyAccessibilityPreferences();
-  savePreferences();
-  renderPipeline.renderPreferencesChanged({
-    reason: "reduced-motion-toggle",
-  });
-}
+const updatePreference = createPreferenceUpdater({
+  state,
+  savePreferences,
+  renderPipeline,
+  applyAccessibilityPreferences
+});
 
-function handleHighContrastToggle(event) {
-  state.preferences.highContrast = !!event.target.checked;
-  applyAccessibilityPreferences();
-  savePreferences();
-  renderPipeline.renderPreferencesChanged({
-    reason: "high-contrast-toggle",
-  });
-}
+const handleReducedMotionToggle = createToggleHandler(
+  updatePreference,
+  "reducedAnimation",
+  "reduced-motion-toggle"
+);
 
-function handleLargeTextToggle(event) {
-  state.preferences.largeText = !!event.target.checked;
-  applyAccessibilityPreferences();
-  savePreferences();
-  renderPipeline.renderPreferencesChanged({
-    reason: "large-text-toggle",
-  });
-}
+const handleHighContrastToggle = createToggleHandler(
+  updatePreference,
+  "highContrast",
+  "high-contrast-toggle"
+);
 
-function handleSoundToggle(event) {
-  state.preferences.sound = !!event.target.checked;
-  savePreferences();
-  renderPipeline.renderPreferencesChanged({
-    reason: "sound-toggle",
-  });
-}
+const handleLargeTextToggle = createToggleHandler(
+  updatePreference,
+  "largeText",
+  "large-text-toggle"
+);
+
+const handleSoundToggle = createToggleHandler(
+  updatePreference,
+  "sound",
+  "sound-toggle"
+);
 
 async function handleGuessSubmit(event) {
   event.preventDefault();
@@ -6532,17 +5302,14 @@ function handleArchiveGridClick(event) {
   if (!button) return;
 
   const bookKey = button.dataset.bookKey || "";
-  renderArchiveGrid(bookKey);
-  renderArchiveDetails(bookKey);
+  archiveSurface.renderArchiveGrid(bookKey);
+  archiveSurface.renderArchiveDetails(bookKey);
 }
 
 function handleThemeToggle() {
   const nextTheme = state.preferences.theme === "dark" ? "light" : "dark";
   applyTheme(nextTheme);
-  savePreferences();
-  renderPipeline.renderPreferencesChanged({
-    reason: "theme-toggle",
-  });
+  updatePreference("theme", nextTheme, "theme-toggle");
 }
 
 function setLanguage(language) {
@@ -6574,9 +5341,7 @@ function handleLanguageChange(event) {
   const value = event.target.value === "ml" ? "ml" : "en";
   setLanguage(value);
   refreshGuessesForCurrentLanguage();
-  renderPipeline.renderPreferencesChanged({
-    reason: "language-change",
-  });
+  renderPipeline.renderPreferencesChanged({ reason: "language-change" });
 }
 
 function renderMobileLanguageToggle() {
@@ -6603,14 +5368,13 @@ function handleMobileLanguageToggle() {
   const nextLanguage = getCurrentLanguage() === "en" ? "ml" : "en";
   setLanguage(nextLanguage);
   refreshGuessesForCurrentLanguage();
-  renderPipeline.renderPreferencesChanged({
-    reason: "mobile-language-toggle",
-  });
+  renderPipeline.renderPreferencesChanged({ reason: "mobile-language-toggle" });
 }
 
 function handleDifficultyChange(event) {
   const value = event.target.value;
   if (!CONFIG.modes[value]) return;
+
   state.preferences.difficulty = value;
 
   const clueUiState = ensureClueUiState();
@@ -6618,54 +5382,41 @@ function handleDifficultyChange(event) {
   clueUiState.lastRenderSignature = "";
 
   savePreferences();
-  renderPipeline.renderPreferencesChanged({
-    reason: "difficulty-change",
-  });
-  resetPuzzle(state.mode);
+  renderPipeline.renderPreferencesChanged("difficulty-change");
+
+  const result = gameTransitions.resetPuzzle(state.mode);
+  renderPuzzleLifecycleResult(result, { source: "difficulty-change" });
 }
 
 function handleModeChange(event) {
   const value = event.target.value;
   if (value !== "daily" && value !== "practice") return;
 
-  markLifecycleStage("mode-switch", {
-    from: state.mode,
-    to: value,
-  });
-
-  state.mode = value;
+  markLifecycleStage("mode-switch", { from: state.mode, to: value });
   state.preferences.preferredMode = value;
   savePreferences();
 
-  renderPipeline.renderModeSwitch({
-    mode: value,
-  });
+  renderPipeline.renderModeSwitch(value);
 
-  resetPuzzle(value);
+  const result = gameTransitions.handleModeSwitch(value);
+  renderPuzzleLifecycleResult(result, { source: "mode-switch" });
 }
 
 function handleNextPracticePuzzle() {
   if (state.mode !== "practice") return;
 
-  markLifecycleStage("puzzle-reset", {
-    mode: "practice",
-    trigger: "next-practice",
-  });
-
-  startPuzzle("practice");
-  saveProgress();
-  renderPipeline.renderPuzzleReset({
-    mode: "practice",
-    source: "next-practice",
-  });
+  const result = gameTransitions.handleNextPracticePuzzle();
+  renderPuzzleLifecycleResult(result, { source: "next-practice" });
 }
 
 function handleTryPracticeRound() {
-  resetPuzzle("practice");
+  const result = gameTransitions.handleTryPracticeRound();
+  renderPuzzleLifecycleResult(result, { source: "try-practice" });
 }
 
 function handleTryTodaysBibdle() {
-  resetPuzzle("daily");
+  const result = gameTransitions.handleTryTodaysBibdle();
+  renderPuzzleLifecycleResult(result, { source: "today-bibdle" });
 }
 
 function bindBackdropClose(modal, onClose) {
@@ -6722,8 +5473,8 @@ async function loadCloudDataToLocal(user) {
   applyAccessibilityPreferences();
   initTheme();
   syncPreferenceControls();
-  renderPuzzleView();
-  renderStatsModal();
+  puzzleSurface.renderPuzzleView();
+  statsSurface.renderStatsModal();
 
   return true;
 }
@@ -6867,18 +5618,18 @@ function createRenderPipelineApi() {
     state,
     elements,
     modalService,
-    renderPuzzleView,
+    renderPuzzleView: (...args) => puzzleSurface?.renderPuzzleView?.(...args),
     renderAuthUI,
-    renderStatsModal,
+    renderStatsModal: (...args) => statsSurface?.renderStatsModal?.(...args),
     renderLanguageControl,
     renderMobileLanguageToggle,
     renderThemeToggle,
     syncPreferenceControls,
-    renderPostGamePanel,
+    renderPostGamePanel: (...args) => postGameSurface?.renderPostGamePanel?.(...args),
     renderStatus,
     bindEmptyStateActions,
     closeSuggestions,
-    closePostGamePanel,
+    closePostGamePanel: (...args) => postGameSurface?.closePostGamePanel?.(...args),
     publishBootSnapshot,
   };
 }
@@ -7011,28 +5762,31 @@ function handleAuthDisabled() {
   state.auth.enabled = false;
   state.auth.user = null;
   state.auth.syncing = false;
-  renderPipeline.renderAuthState("disabled");
+
   publishBootSnapshot({ firebase: "disabled" });
+  renderAfterAuthStateChange("auth-disabled");
 }
 
-function handleAuthInitialized(context = {}) {
-  firebaseApp = context.app || null;
-  firebaseAuth = context.auth || null;
-  firebaseDb = context.db || null;
-
+function handleAuthInitialized(context) {
+  firebaseApp = context.app ?? null;
+  firebaseAuth = context.auth ?? null;
+  firebaseDb = context.db ?? null;
   state.auth.enabled = !!context.enabled;
-  renderPipeline.renderAuthState("initialized");
+
   publishBootSnapshot({ firebase: "initialized" });
+  renderAfterAuthStateChange("auth-initialized");
 }
 
 function handleAuthInitFailure(error) {
-  console.error("Firebase init failed:", error);
+  console.error("Firebase init failed", error);
+
   state.auth.ready = true;
   state.auth.enabled = false;
   state.auth.user = null;
   state.auth.syncing = false;
-  renderPipeline.renderAuthState("init-failed");
+
   markLifecycleError("init-services", error, { service: "firebase-auth" });
+  renderAfterAuthStateChange("auth-init-failed");
 }
 
 function handleAuthStateSyncStart(user) {
@@ -7055,22 +5809,26 @@ function handleAuthStateSyncStart(user) {
   });
 }
 
-function handleAuthStateReady({ user, hadCloudProfile } = {}) {
-  state.auth.user = user || null;
+function handleAuthStateReady({ user, hadCloudProfile }) {
+  state.auth.user = user ?? null;
   state.auth.ready = true;
   state.auth.syncing = false;
 
-  renderPipeline.renderAuthState("ready");
   publishBootSnapshot({
     auth: "ready",
     hadCloudProfile: !!hadCloudProfile,
+    user: user
+      ? { uid: user.uid, isAnonymous: !!user.isAnonymous }
+      : null,
   });
+
+  renderAfterAuthStateChange("auth-ready");
 }
 
-function handleAuthStateSyncError({ user, error } = {}) {
-  console.error("Auth sync failed:", error);
+function handleAuthStateSyncError({ user, error }) {
+  console.error("Auth sync failed", error);
 
-  state.auth.user = user || null;
+  state.auth.user = user ?? null;
   state.auth.ready = true;
   state.auth.syncing = false;
 
@@ -7080,15 +5838,11 @@ function handleAuthStateSyncError({ user, error } = {}) {
     setAuthStatus("Signed in, cloud sync unavailable");
   }
 
-  renderPipeline.renderAuthState("sync-error");
   markLifecycleError("auth-ready", error, {
-    user: user
-      ? {
-        uid: user.uid,
-        isAnonymous: !!user.isAnonymous,
-      }
-      : null,
+    user: user ? { uid: user.uid, isAnonymous: !!user.isAnonymous } : null,
   });
+
+  renderAfterAuthStateChange("auth-sync-error");
 }
 
 function handleAuthActionError(type, error) {
@@ -7148,16 +5902,11 @@ function initAuthLifecycle() {
 function initGame() {
   markLifecycleStage("hydrate", { step: "progress-restore" });
 
-  const restored = loadProgress(state.mode);
+  const result = gameTransitions.resetPuzzle(state.mode);
+  const restored = !!result?.restored;
 
-  if (!restored) {
-    markLifecycleStage("puzzle-reset", { trigger: "boot", mode: state.mode });
-    startPuzzle(state.mode);
-    saveProgress();
-  }
-
-  renderPipeline.renderBootComplete({
-    restored,
+  renderPuzzleLifecycleResult(result, {
+    source: restored ? "boot-restore" : "boot-start",
   });
 
   if (restored) {
@@ -7186,77 +5935,49 @@ function initGame() {
     elements.postGameCopyOnlyBtn.hidden = true;
   }
 
-  if (elements.postGameCopyBtn && !elements.postGameShareBtn && !elements.postGameCopyOnlyBtn) {
+  if (
+    elements.postGameCopyBtn &&
+    !elements.postGameShareBtn &&
+    !elements.postGameCopyOnlyBtn
+  ) {
     elements.postGameCopyBtn.textContent = "Share result";
   }
 
   publishBootSnapshot({
     progressRestored: restored,
-    currentPuzzleId: state.currentPuzzle?.id || null,
+    currentPuzzleId: state.currentPuzzle?.id ?? null,
   });
+}
+
+function renderPuzzleLifecycleResult(result, options = {}) {
+  if (!result) return;
+
+  const source = options.source || result.type || "puzzle-lifecycle";
+
+  postGameSurface?.closePostGamePanel?.();
+
+  if (
+    result.type === "puzzle-reset" ||
+    result.type === "puzzle-restored" ||
+    result.type === "next-practice-puzzle" ||
+    result.type === "puzzle-started"
+  ) {
+    renderPipeline.renderPuzzleReset(result.mode, {
+      source,
+      restored: !!result.restored,
+    });
+  }
 }
 
 function startPuzzle(mode = state.mode) {
-  state.mode = mode;
-  applyModeTheme(mode);
-  state.currentPuzzle = buildCurrentPuzzle(mode);
-  state.guesses = [];
-  state.status = "playing";
-
-  const clueUiState = ensureClueUiState();
-  clueUiState.lastUnlockedKeys = [];
-  clueUiState.lastRenderSignature = "";
-
-  syncEndStateVisibility();
-  closePostGamePanel();
-  resetInput();
-  resetSuggestionsState();
-  closeSuggestions();
-  saveProgress();
-
-  renderPipeline.renderPuzzleReset({
-    mode,
-    source: "startPuzzle",
-  });
-
-  publishBootSnapshot({
-    action: "start-puzzle",
-    mode,
-    puzzleId: state.currentPuzzle?.id || null,
-  });
+  const result = gameTransitions.startPuzzle(mode);
+  renderPuzzleLifecycleResult(result, { source: "startPuzzle" });
 }
 
 function resetPuzzle(mode = state.mode) {
-  markLifecycleStage("puzzle-reset", { mode });
-
-  if (loadProgress(mode)) {
-    const clueUiState = ensureClueUiState();
-    clueUiState.lastUnlockedKeys = state.guesses
-      .map((guess) => guess)
-      .filter(Boolean)
-      .length
-      ? buildClueRevealState().items.filter((item) => item.unlocked).map((item) => item.key)
-      : [];
-
-    renderPipeline.renderPuzzleReset({
-      mode,
-      source: "resetPuzzle-restore",
-    });
-
-    publishBootSnapshot({
-      action: "restore-puzzle",
-      mode,
-      puzzleId: state.currentPuzzle?.id || null,
-    });
-
-    return;
-  }
-
-  startPuzzle(mode);
-  saveProgress();
-  renderPipeline.renderPuzzleReset({
-    mode,
-    source: "resetPuzzle",
+  const result = gameTransitions.resetPuzzle(mode);
+  renderPuzzleLifecycleResult(result, {
+    source: result.restored ? "resetPuzzle-restore" : "resetPuzzle",
   });
 }
 
@@ -7285,6 +6006,158 @@ function bindLifecycleEvents() {
   state.ui.lifecycleEventsBound = true;
 }
 
+function initializeRenderSurfaces() {
+  statsSurface = createStatsSurface({
+    elements,
+    ACHIEVEMENTS,
+    ACHIEVEMENT_CATEGORIES,
+    computeModeStatsSummary,
+    getAchievementEvaluation,
+    shouldTreatAchievementAsEarned,
+    getAchievementCategoryOrder,
+    buildAchievementCategoryGroupMarkup,
+    buildAchievementCardMarkup,
+    getNewlyEarnedAchievements,
+    getClosestIncompleteAchievements,
+    isNonEmptyArray,
+    hasRenderableMarkup,
+    renderInto,
+  });
+
+  leaderboardSurface = createLeaderboardSurface({
+    state,
+    elements,
+    bindEmptyStateActions,
+    formatLeaderboardTime,
+    renderPlacementCard,
+    escapeHtml,
+    renderInto,
+    clearBusyState,
+    renderSurfaceEmptyState,
+    renderSurfaceLoadingState,
+    renderRetryButtonMarkup,
+    fetchDailyGlobalStats,
+    fetchLeaderboardTopEntries,
+    fetchCurrentUserRank,
+    getDailyDateKey,
+    isLeaderboardAvailable: () => !!state.auth.enabled && !!firebaseDb,
+  });
+
+  archiveSurface = createArchiveSurface({
+    elements,
+    books,
+    getCurrentLanguage,
+    computeArchiveSummary,
+    buildArchiveBarsViewModel,
+    buildArchiveGridViewModel,
+    buildArchiveDetailsViewModel,
+    getBookStats,
+    getBookStatsKey,
+    getArchiveCellState,
+    getArchiveCellStateLabel,
+    getArchiveCellAriaLabel,
+    getAverageAttemptsForBook,
+    getLocalizedBookName,
+    getLocalizedTestament,
+    getLocalizedSection,
+    renderInto,
+    renderEmptyState,
+    escapeHtml,
+  });
+
+  postGameSurface = createPostGameSurface({
+    state,
+    elements,
+    getFirebaseAuth: () => firebaseAuth,
+    getFirebaseDb: () => firebaseDb,
+    bindEmptyStateActions,
+    isGameOver,
+    getPostGameContent,
+    getNewlyEarnedAchievements,
+    getClosestIncompleteAchievements,
+    isNonEmptyArray,
+    showWhen,
+    renderWhen,
+    renderInto,
+    clearBusyState,
+    renderSurfaceEmptyState,
+    renderSurfaceLoadingState,
+    renderRetryButtonMarkup,
+    setModalOpenState,
+    fetchCurrentUserRank,
+    getDailyDateKey,
+    renderPostGameNewAchievements: (...args) =>
+      statsSurface.renderPostGameNewAchievements(...args),
+    renderPostGameClosestAchievements: (...args) =>
+      statsSurface.renderPostGameClosestAchievements(...args),
+    renderPostGameStats,
+  });
+
+  puzzleSurface = createPuzzleSurface({
+    state,
+    elements,
+    applyLanguageToDocument,
+    applyModeTheme,
+    renderLanguageControl,
+    renderMobileLanguageToggle,
+    publishBootSnapshot,
+    renderStatus,
+    getDefaultStatusMessage,
+    syncEndStateVisibility,
+    syncPreferenceControls,
+    saveProgress,
+    isGameOver,
+    getCurrentLanguage,
+    getLocalizedVerseText,
+    formatDate,
+    startCountdownTimer,
+    stopCountdownTimer,
+    getHintLines,
+    getAttemptLabel,
+    renderEmptyGuessRows,
+    renderGuessRow,
+    getProximityDescription,
+    hasCompletedTodaysDaily,
+    showWhen,
+    renderPostGamePanel: (...args) => postGameSurface.renderPostGamePanel(...args),
+    buildClueRevealState,
+  });
+}
+
+function initializeGameTransitions() {
+  gameTransitions = createGameTransitions({
+    state,
+    CONFIG,
+    ensureClueUiState,
+    buildClueRevealState,
+    getLocalizedBookName,
+    getCurrentLanguage,
+    getBookByName,
+    getBookById,
+    isBookAlreadyGuessed,
+    compareGuess,
+    getMaxGuesses,
+    getTodayPuzzleDate,
+    pickPuzzle,
+    saveProgress,
+    clearSavedProgress,
+    loadProgress,
+    restoreProgressPayload,
+    canRestoreSavedPracticePuzzle,
+    readStoredProgressBuckets,
+    writeStoredProgressBuckets,
+    getProgressStorageKey,
+    applyModeTheme,
+    resetInput,
+    resetSuggestionsState,
+    closeSuggestions,
+    syncEndStateVisibility,
+    recordPuzzleCompletion,
+    markLifecycleStage,
+    publishBootSnapshot,
+  });
+}
+
 async function bootstrapApplication() {
   ensureBootDebugSurface();
 
@@ -7305,6 +6178,10 @@ async function bootstrapApplication() {
   renderPipeline = createRenderPipeline(createRenderPipelineApi());
 
   bindings = createBindings(createBindingsApi());
+
+  initializeRenderSurfaces();
+
+  initializeGameTransitions();
 
   const dependencies = {
     ...createStartupDependencies(),

@@ -1,198 +1,123 @@
 function isElement(node) {
-    return node instanceof HTMLElement;
+  return node instanceof HTMLElement;
 }
 
 function closest(target, selector) {
-    return isElement(target) ? target.closest(selector) : null;
+  return isElement(target) ? target.closest(selector) : null;
 }
 
-export function createBindings({
-    elements,
-    state,
-    modalService,
-    handlers,
-} = {}) {
-    let bound = false;
+function runIfMatch(target, selector, callback, event, options = {}) {
+  const match = closest(target, selector);
+  if (!match) return false;
 
-    function bindGameplay() {
-        elements.guessForm?.addEventListener("submit", handlers.handleGuessSubmit);
-        elements.guessInput?.addEventListener("input", handlers.handleGuessInput);
-        elements.guessInput?.addEventListener("keydown", handlers.handleGuessKeydown);
-        elements.autocomplete?.addEventListener("click", handlers.handleSuggestionClick);
-        elements.archiveGrid?.addEventListener("click", handlers.handleArchiveGridClick);
+  if (options.preventDefault) {
+    event.preventDefault();
+  }
+
+  callback(match, event);
+  return true;
+}
+
+export function createBindings({ elements, state, modalService, handlers }) {
+  let bound = false;
+
+  function bindGameplay() {
+    elements.guessForm?.addEventListener("submit", handlers.handleGuessSubmit);
+    elements.guessInput?.addEventListener("input", handlers.handleGuessInput);
+    elements.guessInput?.addEventListener("keydown", handlers.handleGuessKeydown);
+    elements.autocomplete?.addEventListener("click", handlers.handleSuggestionClick);
+    elements.archiveGrid?.addEventListener("click", handlers.handleArchiveGridClick);
+  }
+
+  function bindControls() {
+    elements.themeToggle?.addEventListener("click", handlers.handleThemeToggle);
+    elements.languageSelect?.addEventListener("change", handlers.handleLanguageChange);
+    elements.difficultySelect?.addEventListener("change", handlers.handleDifficultyChange);
+    elements.modeSelect?.addEventListener("change", handlers.handleModeChange);
+    elements.reducedMotionToggle?.addEventListener("change", handlers.handleReducedMotionToggle);
+    elements.highContrastToggle?.addEventListener("change", handlers.handleHighContrastToggle);
+    elements.largeTextToggle?.addEventListener("change", handlers.handleLargeTextToggle);
+    elements.soundToggle?.addEventListener("change", handlers.handleSoundToggle);
+    elements.settingsBtn?.addEventListener("click", (event) => handlers.openSettingsModal(event.currentTarget));
+  }
+
+  function getDelegatedActions(target, event) {
+    return [
+      { selector: "#helpBtn", run: (match) => handlers.openHelpModal(event.currentTarget ?? match) },
+      { selector: "#closeHelpBtn", run: () => handlers.closeHelpModal() },
+      { selector: "#settingsBtn", run: (match) => handlers.openSettingsModal(match) },
+      { selector: "#closeSettingsBtn", run: () => handlers.closeSettingsModal() },
+      { selector: "#statsBtn", run: (match) => handlers.openStatsModal(match) },
+      { selector: "#closeStatsBtn", run: () => handlers.closeStatsModal() },
+      { selector: "#archiveBtn", run: (match) => handlers.openArchiveModal(match) },
+      { selector: "#closeArchiveBtn", run: () => handlers.closeArchiveModal() },
+      { selector: "#leaderboardBtn", preventDefault: true, run: (match) => handlers.openLeaderboardModal(match) },
+      { selector: "#closeLeaderboardBtn", run: () => handlers.closeLeaderboardModal() },
+      { selector: "#todayBibdleBtn", preventDefault: true, run: () => handlers.handleTryTodaysBibdle() },
+      { selector: "#tryPracticeBtn", preventDefault: true, run: () => handlers.handleTryPracticeRound() },
+      { selector: "#postGameLeaderboardBtn", preventDefault: true, run: () => handlers.handlePostGameLeaderboardOpen() },
+      { selector: "#postGameCopyOnlyBtn", run: () => handlers.copyResult() },
+      { selector: "#shareBtn", run: () => handlers.shareResult() },
+      { selector: "#postGameShareBtn", run: () => handlers.shareResult() },
+      { selector: "#copyBtn", run: () => handlers.copyResult() },
+      { selector: "#signInBtn", run: () => handlers.handleSignIn() },
+      { selector: "#signOutBtn", run: () => handlers.handleSignOut() },
+      { selector: "#mobileLanguageToggle", run: () => handlers.handleMobileLanguageToggle() },
+      { selector: "#nextPracticeBtn, #postGameNextBtn", run: () => handlers.handleNextPracticePuzzle() },
+      { selector: "#postGamePracticeBtn", run: () => handlers.handlePostGamePracticeStart() },
+      { selector: "#postGameCloseBtn", run: () => handlers.closePostGamePanel() }
+    ];
+  }
+
+  function handleDelegatedClick(event) {
+    const target = event.target;
+    if (!isElement(target)) return;
+
+    const guessForm = elements.guessForm;
+    if (guessForm && !guessForm.contains(target)) {
+      handlers.handleDocumentClick(event);
     }
 
-    function bindControls() {
-        elements.themeToggle?.addEventListener("click", handlers.handleThemeToggle);
-        elements.languageSelect?.addEventListener("change", handlers.handleLanguageChange);
-        elements.difficultySelect?.addEventListener("change", handlers.handleDifficultyChange);
-        elements.modeSelect?.addEventListener("change", handlers.handleModeChange);
-        elements.reducedMotionToggle?.addEventListener("change", handlers.handleReducedMotionToggle);
-        elements.highContrastToggle?.addEventListener("change", handlers.handleHighContrastToggle);
-        elements.largeTextToggle?.addEventListener("change", handlers.handleLargeTextToggle);
-        elements.soundToggle?.addEventListener("change", handlers.handleSoundToggle);
-        elements.settingsBtn?.addEventListener("click", (event) => { handlers.openSettingsModal(event.currentTarget); });
+    const emptyAction = closest(target, "[data-empty-action]");
+    if (emptyAction) return;
+
+    const actions = getDelegatedActions(target, event);
+    for (const action of actions) {
+      const handled = runIfMatch(
+        target,
+        action.selector,
+        (match) => action.run(match, event),
+        event,
+        { preventDefault: !!action.preventDefault }
+      );
+
+      if (handled) return;
     }
+  }
 
-    function handleDelegatedClick(event) {
-        const target = event.target;
-        if (!isElement(target)) return;
+  function bindDocumentDelegation() {
+    document.addEventListener("click", handleDelegatedClick);
+  }
 
-        const guessForm = elements.guessForm;
-        if (guessForm && !guessForm.contains(target)) {
-            handlers.handleDocumentClick(event);
-        }
+  function bindModalDelegation() {
+    modalService?.bindGlobalHandlers?.();
+  }
 
-        const emptyAction = closest(target, "[data-empty-action]");
-        if (emptyAction) {
-            return;
-        }
+  function bindAll() {
+    if (bound || state.ui?.bindingsBound) return;
 
-        if (closest(target, "#helpBtn")) {
-            handlers.openHelpModal(event.currentTarget || target);
-            return;
-        }
+    bindGameplay();
+    bindControls();
+    bindDocumentDelegation();
+    bindModalDelegation();
+    handlers.bindEmptyStateActions?.(document);
 
-        if (closest(target, "#closeHelpBtn")) {
-            handlers.closeHelpModal();
-            return;
-        }
+    bound = true;
+    if (!state.ui) state.ui = {};
+    state.ui.bindingsBound = true;
+  }
 
-        if (closest(target, "#settingsBtn")) {
-            handlers.openSettingsModal(target);
-            return;
-        }
-
-        if (closest(target, "#closeSettingsBtn")) {
-            handlers.closeSettingsModal();
-            return;
-        }
-
-        if (closest(target, "#statsBtn")) {
-            handlers.openStatsModal(target);
-            return;
-        }
-
-        if (closest(target, "#closeStatsBtn")) {
-            handlers.closeStatsModal();
-            return;
-        }
-
-        if (closest(target, "#archiveBtn")) {
-            handlers.openArchiveModal(target);
-            return;
-        }
-
-        if (closest(target, "#closeArchiveBtn")) {
-            handlers.closeArchiveModal();
-            return;
-        }
-
-        if (closest(target, "#leaderboardBtn")) {
-            event.preventDefault();
-            handlers.openLeaderboardModal(target);
-            return;
-        }
-
-        if (closest(target, "#closeLeaderboardBtn")) {
-            handlers.closeLeaderboardModal();
-            return;
-        }
-
-        if (closest(target, "#todayBibdleBtn")) {
-            event.preventDefault();
-            handlers.handleTryTodaysBibdle();
-            return;
-        }
-
-        if (closest(target, "#tryPracticeBtn")) {
-            event.preventDefault();
-            handlers.handleTryPracticeRound();
-            return;
-        }
-
-        if (closest(target, "#postGameLeaderboardBtn")) {
-            event.preventDefault();
-            handlers.handlePostGameLeaderboardOpen();
-            return;
-        }
-
-        if (closest(target, "#postGameCopyOnlyBtn")) {
-            handlers.copyResult();
-            return;
-        }
-
-        if (closest(target, "#shareBtn")) {
-            handlers.shareResult();
-            return;
-        }
-
-        if (closest(target, "#postGameShareBtn")) {
-            handlers.shareResult();
-            return;
-        }
-
-        if (closest(target, "#copyBtn")) {
-            handlers.copyResult();
-            return;
-        }
-
-        if (closest(target, "#signInBtn")) {
-            handlers.handleSignIn();
-            return;
-        }
-
-        if (closest(target, "#signOutBtn")) {
-            handlers.handleSignOut();
-            return;
-        }
-
-        if (closest(target, "#mobileLanguageToggle")) {
-            handlers.handleMobileLanguageToggle();
-            return;
-        }
-
-        if (closest(target, "#nextPracticeBtn") || closest(target, "#postGameNextBtn")) {
-            handlers.handleNextPracticePuzzle();
-            return;
-        }
-
-        if (closest(target, "#postGamePracticeBtn")) {
-            handlers.handlePostGamePracticeStart();
-            return;
-        }
-
-        if (closest(target, "#postGameCloseBtn")) {
-            handlers.closePostGamePanel();
-            return;
-        }
-    }
-
-    function bindDocumentDelegation() {
-        document.addEventListener("click", handleDelegatedClick);
-    }
-
-    function bindModalDelegation() {
-        modalService?.bindGlobalHandlers?.();
-    }
-
-    function bindAll() {
-        if (bound || state.ui?.bindingsBound) {
-            return;
-        }
-
-        bindGameplay();
-        bindControls();
-        bindDocumentDelegation();
-        bindModalDelegation();
-        handlers.bindEmptyStateActions(document);
-
-        bound = true;
-        if (!state.ui) state.ui = {};
-        state.ui.bindingsBound = true;
-    }
-
-    return {
-        bindAll,
-    };
+  return {
+    bindAll
+  };
 }
