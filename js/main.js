@@ -26,23 +26,19 @@ import {
   runTransaction,
   increment,
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
-import { books } from "./data/books.js";
-import { verses } from "./data/verses.js";
+
+import {books} from "./data/books.js";
+import {verses} from "./data/verses.js";
+
 import {
   createAppShell,
   createBootLogger,
   createBootStateSnapshot,
-} from "./app-shell.js";
-import { createRenderPipeline } from "./render-pipeline.js";
-import { createModalService } from "./modal-service.js";
-import { createBindings } from "./bindings.js";
-import { createAuthService } from "./auth-service.js";
-import {
-  createModalHelpers,
-  createPreferenceUpdater,
-  createToggleHandler,
-  renderPlacementCard
-} from "./ui-refactor-helpers.js";
+} from "./app/bootstrap.js";
+
+import {createRenderPipeline} from "./core/dom/render-orchestrator.js";
+import {createModalService} from "./core/dom/modal-controller.js";
+import {createBindings} from "./core/dom/bindings-registry.js";
 import {
   clearBusyState,
   escapeHtml,
@@ -61,15 +57,31 @@ import {
   showWhen,
   showWhenHasItems,
   showWhenHasText,
-} from "./ui-render-utils.js";
-import { computeModeStatsSummary as buildModeStatsSummary } from "./stats-read-models.js";
+} from "./core/dom/ui-render-utils.js";
+
+import {createAuthService} from "./core/auth/auth-client.js";
+
+import {
+  createModalHelpers,
+  createPreferenceUpdater,
+  createToggleHandler,
+  renderPlacementCard,
+} from "./shared/ui-refactor-helpers.js";
+
+import {createGameTransitions} from "./shared/game-transitions.js";
+
+import {
+  computeModeStatsSummary as buildModeStatsSummary,
+} from "./features/stats/stats-read-models.js";
+
 import {
   computeArchiveSummary as buildArchiveSummary,
   formatArchiveAverage as formatArchiveAverageValue,
   buildArchiveBarsViewModel,
   buildArchiveGridViewModel,
   buildArchiveDetailsViewModel,
-} from "./archive-read-models.js";
+} from "./features/archive/archive-read-models.js";
+
 import {
   clampAchievementProgress as clampAchievementProgressValue,
   getAchievementCategoryLabel as getAchievementCategoryLabelValue,
@@ -81,18 +93,19 @@ import {
   buildAchievementCardViewModel,
   getClosestIncompleteAchievements as getClosestIncompleteAchievementsValue,
   buildAchievementCategoryGroups,
-} from "./achievement-read-models.js";
+} from "./features/achievements/achievement-read-models.js";
+
 import {
   formatTriviaLabel as formatTriviaLabelValue,
   buildTriviaContent as buildTriviaContentValue,
   buildPostGameContent,
-} from "./postgame-read-models.js";
-import { createPuzzleSurface } from "./puzzle-surface.js";
-import { createStatsSurface } from "./stats-surface.js";
-import { createPostGameSurface } from "./postgame-surface.js";
-import { createArchiveSurface } from "./archive-surface.js";
-import { createLeaderboardSurface } from "./leaderboard-surface.js";
-import { createGameTransitions } from "./game-transitions.js";
+} from "./features/postgame/postgame-read-models.js";
+
+import {createPuzzleSurface} from "./features/puzzle/puzzle-surface.js";
+import {createStatsSurface} from "./features/stats/stats-surface.js";
+import {createPostGameSurface} from "./features/postgame/postgame-surface.js";
+import {createArchiveSurface} from "./features/archive/archive-surface.js";
+import {createLeaderboardSurface} from "./features/leaderboard/leaderboard-surface.js";
 
 const CONFIG = {
   modes: {
