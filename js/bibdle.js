@@ -1449,25 +1449,31 @@ function buildAchievementCardMarkup(achievement, options = {}) {
     </article>
   `;
 }
+
 function getClosestIncompleteAchievements(limit = 3) {
   return ACHIEVEMENTS
     .map((achievement) => {
       const evaluation = getAchievementEvaluation(achievement);
       const progressState = clampAchievementProgress(evaluation.progress, evaluation.target);
+      const ratio = progressState.target > 0
+        ? Math.min(progressState.progress, progressState.target) / progressState.target
+        : 0;
 
       return {
         achievement,
         evaluation,
         isEarned: shouldTreatAchievementAsEarned(achievement, evaluation),
+        progress: progressState.progress,
         remaining: progressState.remaining,
-        ratio: progressState.target > 0 ? progressState.progress / progressState.target : 0,
+        ratio,
         target: progressState.target,
       };
     })
     .filter((entry) => !entry.isEarned && entry.target > 0)
     .sort((a, b) => {
-      if (a.remaining !== b.remaining) return a.remaining - b.remaining;
       if (b.ratio !== a.ratio) return b.ratio - a.ratio;
+      if (b.progress !== a.progress) return b.progress - a.progress;
+      if (a.remaining !== b.remaining) return a.remaining - b.remaining;
       if (a.target !== b.target) return a.target - b.target;
       return a.achievement.label.localeCompare(b.achievement.label);
     })
