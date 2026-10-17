@@ -1170,6 +1170,12 @@ const BOOKS_BASE = [
 ];
 
 export const books = BOOKS_BASE.map((book, index) => {
+    const {
+        bookIntroTexMl: bookIntroTextMl,
+        bookIntroTextEN: bookIntroText,
+        bookThemesEn: bookThemes,
+        ...metadata
+    } = book;
     const numericPrefix = book.name.match(/^([123])\s*(.+)$/);
     const displayName = numericPrefix ? numericPrefix[2] : book.name;
     const normalized = displayName
@@ -1181,7 +1187,10 @@ export const books = BOOKS_BASE.map((book, index) => {
     const firstLetter = displayName.trim().charAt(0).toLocaleUpperCase("ml-IN");
 
     return {
-        ...book,
+        ...metadata,
+        bookIntroTextMl,
+        bookIntroText,
+        bookThemes,
         order: index + 1,
         normalizedName: normalized,
         firstLetter
