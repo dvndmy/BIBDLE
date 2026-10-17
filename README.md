@@ -101,6 +101,8 @@ Localized book metadata includes fields such as:
 - `normalizedName`
 - `firstLetter`
 
+The exported `books` array normalizes intro and theme field names to `bookIntroTextMl`, `bookIntroText`, `bookThemesMl`, and `bookThemes`. Application code should use these canonical names.
+
 ### `verses.js`
 
 Localized verse content includes fields such as:
@@ -150,12 +152,36 @@ bibdle/
 ├── css/
 │   └── bibdle.css
 ├── js/
-│   └── bibdle.js
-└── data/
-    ├── books.js
-    └── verses.js
+│   ├── bibdle.js
+│   ├── config.js
+│   ├── app-shell.js
+│   ├── auth-service.js
+│   ├── bindings.js
+│   ├── game-rules.js
+│   ├── localization-service.js
+│   ├── modal-service.js
+│   ├── preferences-storage.js
+│   ├── progress-storage.js
+│   ├── render-pipeline.js
+│   └── data/
+│       ├── books.js
+│       └── verses.js
+└── assets/
+    └── achievements/
 ```
+
+`bibdle.js` is the browser entry point and coordinates application state and startup. Configuration, localization and autocomplete, authentication, modal behavior, event binding, and render transitions live in focused modules. The book and verse datasets stay under `js/data/`.
+
+## Verification
+
+There is no build step or package-based test runner. Serve the project from a local HTTP server and verify:
+
+- Daily and Practice puzzles, including a page reload to confirm saved progress restores.
+- Easy, Normal, and Hard clue timing.
+- English and Malayalam book search, duplicate-guess handling, and localized post-game content.
+- Settings, accessibility preferences, stats, archive, and modal keyboard/focus behavior.
+- Sign-in and leaderboard flows when Firebase is configured and available.
 
 ## Notes
 
-The app remains fully client-side for gameplay, rendering, and local persistence. Book and verse localization is implemented in the application layer without rewriting the source data files, and generic UI chrome intentionally remains in English while data-driven Bible content can switch between English and Malayalam.
+The app remains fully client-side for gameplay, rendering, and local persistence. The book data module normalizes intro and theme field aliases when exporting its data, while the content itself remains unchanged. Generic UI chrome intentionally remains in English while data-driven Bible content can switch between English and Malayalam.
