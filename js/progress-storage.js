@@ -197,20 +197,12 @@ export function createProgressStorage({
       }
 
       if (preferredKey === "daily" && buckets.daily) {
-        const nextBuckets = {
-          ...buckets,
-          daily: null,
-        };
-        writeStoredProgressBuckets(nextBuckets);
+        clearSavedProgress("daily");
         return false;
       }
 
       if (preferredKey === "practice" && buckets.practice) {
-        const nextBuckets = {
-          ...buckets,
-          practice: null,
-        };
-        writeStoredProgressBuckets(nextBuckets);
+        clearSavedProgress("practice");
         return false;
       }
 
