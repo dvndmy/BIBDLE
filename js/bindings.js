@@ -49,7 +49,7 @@ export function createBindings({
         }
 
         if (closest(target, "#helpBtn")) {
-            handlers.openHelpModal(event.currentTarget || target);
+            handlers.openHelpModal(target);
             return;
         }
 

@@ -174,13 +174,24 @@ bibdle/
 
 ## Verification
 
-There is no build step or package-based test runner. Serve the project from a local HTTP server and verify:
+The app remains a static site with no application build step. The automated test tooling is development-only:
 
-- Daily and Practice puzzles, including a page reload to confirm saved progress restores.
-- Easy, Normal, and Hard clue timing.
-- English and Malayalam book search, duplicate-guess handling, and localized post-game content.
-- Settings, accessibility preferences, stats, archive, and modal keyboard/focus behavior.
-- Sign-in and leaderboard flows when Firebase is configured and available.
+```sh
+npm ci
+npm run test:unit
+npm run test:e2e:install
+npm run test:e2e
+npm test
+npm run test:coverage
+```
+
+The Vitest unit suite covers the data model, localization and search, game rules, storage, authentication,
+rendering, modal behavior, application startup, and event bindings. Playwright runs the application in Chromium
+with Firebase Authentication and Firestore requests replaced by deterministic offline mocks; it exercises
+gameplay, clue progression, bilingual canonical duplicate handling, preferences and persistence, stats, archive,
+modal accessibility, sign-in, leaderboard rendering, and the expected Firestore queries and writes. GitHub Actions
+runs the unit and browser suites on pushes and pull requests. No live Firebase account or external Firebase
+service is required for tests.
 
 ## Notes
 
