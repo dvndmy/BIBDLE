@@ -1,18 +1,27 @@
 {
   "indexes": [
     {
-      "collectionGroup": "localRooms",
+      "collectionGroup": "scores",
       "queryScope": "COLLECTION",
       "fields": [
         {
-          "fieldPath": "visibility",
+          "fieldPath": "result",
           "order": "ASCENDING"
         },
         {
-          "fieldPath": "status",
+          "fieldPath": "guesses",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "completedAt",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "__name__",
           "order": "ASCENDING"
         }
-      ]
+      ],
+      "density": "SPARSE_ALL"
     }
   ],
   "fieldOverrides": []

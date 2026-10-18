@@ -33,6 +33,8 @@ const SAINT_NAMES = [
 
 const MAX_ROOM_PLAYERS = 200;
 const MAX_ROUNDS = 1000;
+const ROOM_TTL_MS = 24 * 60 * 60 * 1000;
+const FINAL_SCOREBOARD_MS = 5000;
 
 export function calculateLocalRoundPoints(guessCount) {
   return Number.isInteger(guessCount) && guessCount >= 1 && guessCount <= 10
@@ -85,6 +87,7 @@ export function createLocalGameController({
 } = {}) {
   const {
     collection,
+    deleteDoc,
     doc,
     getDoc,
     getDocs,
@@ -148,12 +151,17 @@ export function createLocalGameController({
     playersUnsubscribe: null,
     clockInterval: null,
     lastRound: 0,
+    readyRound: 0,
     timerExpired: false,
+    finalRoom: null,
+    finalPlayers: [],
+    cleanupTimeout: null,
+    finishing: false,
   };
 
   function isReady() {
     return !!(db && auth && collection && doc && getDoc && getDocs &&
-      onSnapshot && query && runTransaction && setDoc && updateDoc && where);
+      onSnapshot && query && runTransaction && setDoc && updateDoc && deleteDoc && where);
   }
 
   function isHost() {
@@ -187,7 +195,8 @@ export function createLocalGameController({
   }
 
   function renderLeaderboard() {
-    const sortedPlayers = [...state.players].sort((left, right) =>
+    const players = state.room?.status === "finished" ? state.finalPlayers : state.players;
+    const sortedPlayers = [...players].sort((left, right) =>
       right.score - left.score || left.name.localeCompare(right.name),
     );
     let lastScore = null;
@@ -196,9 +205,9 @@ export function createLocalGameController({
       if (index === 0 || player.score !== lastScore) lastRank = index + 1;
       lastScore = player.score;
       return `
-      <li class="room-leaderboard__row${player.uid === getUser()?.uid ? " is-you" : ""}">
+      <li class="room-leaderboard__row${player.uid === getUser()?.uid ? " is-you" : ""}${state.room?.status === "finished" ? " is-final" : ""}">
         <span class="room-leaderboard__rank">${lastRank}</span>
-        <span class="room-leaderboard__name">${escapeHtml(player.name)}${player.uid === state.room?.hostUid ? " · Host" : ""}</span>
+        <span class="room-leaderboard__name">${escapeHtml(player.name)}${player.uid === state.room?.hostUid ? " · Host" : ""}${player.uid === getUser()?.uid ? " · You" : ""}</span>
         <span class="room-leaderboard__score">${player.score} pts</span>
       </li>
       `;
@@ -206,11 +215,11 @@ export function createLocalGameController({
     [elements.leaderboard, elements.gameLeaderboard].forEach((list) => {
       if (list) list.innerHTML = markup || '<li class="room-empty">No players yet.</li>';
     });
-    const players = state.players.map((player) => `
+    const roomPlayers = state.players.map((player) => `
       <li class="room-player">${escapeHtml(player.name)}${player.uid === state.room?.hostUid ? " <span>Host</span>" : ""}</li>
     `).join("");
     if (elements.players) {
-      elements.players.innerHTML = players || '<li class="room-empty">Waiting for players to join.</li>';
+      elements.players.innerHTML = roomPlayers || '<li class="room-empty">Waiting for players to join.</li>';
     }
     const everybodyFinished = state.players.length > 0 &&
       state.players.filter((player) => player.active !== false)
@@ -249,7 +258,7 @@ export function createLocalGameController({
     elements.roomStatus.textContent = room.status === "lobby"
       ? `${room.gameType === "timed" ? `${room.durationMinutes} minute game` : `${room.roundsTotal} rounds`} · Waiting in lobby`
       : room.status === "finished"
-        ? "Game finished"
+        ? "Final scoreboard"
         : room.gameType === "rounds"
           ? `Round ${room.round} of ${room.roundsTotal}`
           : `Round ${room.round} · timed game`;
@@ -259,7 +268,7 @@ export function createLocalGameController({
     elements.nextRound.hidden = !(isHost() && room.status === "playing");
     elements.finish.hidden = !(isHost() && room.status === "playing");
     elements.roomName.textContent = room.name;
-    elements.gameBar.hidden = room.status !== "playing";
+    elements.gameBar.hidden = room.status === "lobby";
     elements.gameName.textContent = room.name;
     elements.gameRoom.hidden = false;
     elements.gameLeave.hidden = false;
@@ -271,11 +280,30 @@ export function createLocalGameController({
         : room.status === "finished" ? "Game finished" : "Waiting for host";
     }
     if (elements.gameScore) {
-      elements.gameScore.textContent = `${state.player?.score || 0} pts`;
+      const scoreboardPlayers = room.status === "finished" ? state.finalPlayers : state.players;
+      const currentPlayer = scoreboardPlayers.find((player) => player.uid === getUser()?.uid);
+      const rankedPlayers = [...scoreboardPlayers].sort((left, right) =>
+        right.score - left.score || left.name.localeCompare(right.name),
+      );
+      const rank = currentPlayer
+        ? rankedPlayers.findIndex((player) => player.score === currentPlayer.score) + 1
+        : 0;
+      elements.gameScore.textContent = room.status === "finished" && currentPlayer
+        ? `${currentPlayer.score} pts · Rank ${rank}`
+        : `${currentPlayer?.score ?? state.player?.score ?? 0} pts`;
+    }
+    const finalLabel = document.getElementById("localGameFinalLabel");
+    if (finalLabel) {
+      finalLabel.hidden = room.status !== "finished";
+    }
+    if (elements.gameLeave) {
+      elements.gameLeave.textContent = room.status === "finished"
+        ? "Close scoreboard"
+        : "Leave room";
     }
     renderLeaderboard();
     updateClock();
-    onActiveChange?.(isActive());
+    onActiveChange?.(isActive(), room.status);
   }
 
   function updateClock() {
@@ -302,15 +330,29 @@ export function createLocalGameController({
     state.roomUnsubscribe?.();
     state.playersUnsubscribe?.();
     window.clearInterval(state.clockInterval);
-    state.roomUnsubscribe = onSnapshot(roomRef(), (snapshot) => {
+    state.roomUnsubscribe = onSnapshot(roomRef(), async (snapshot) => {
       if (!snapshot.exists()) {
+        if (state.finalRoom) {
+          state.room = state.finalRoom;
+          state.players = state.finalPlayers;
+          state.roomUnsubscribe?.();
+          state.playersUnsubscribe?.();
+          window.clearInterval(state.clockInterval);
+          renderRoom();
+          return;
+        }
         setMessage("This room no longer exists.", true);
         leaveRoom(false);
         return;
       }
       const room = snapshot.data();
-      const roundChanged = room.round > 0 && room.round !== state.lastRound;
+      const roundChanged = room.status === "playing" && room.round > 0 &&
+        room.round !== state.lastRound;
       state.room = room;
+      if (room.status === "finished") {
+        state.finalRoom = room;
+        state.finalPlayers = [...state.players];
+      }
       if (roundChanged) {
         state.lastRound = room.round;
         const verse = verses.find((item) => item.id === room.verseId);
@@ -324,17 +366,23 @@ export function createLocalGameController({
             guesses: 0,
             roundCompleted: false,
             lastRoundScore: 0,
-          };
-          setDoc(playerRef(), {
-            activeRound: room.round,
-            guesses: 0,
-            roundCompleted: false,
-            lastRoundScore: 0,
             lastCorrect: false,
-          }, { merge: true }).catch((error) =>
-            reportError("Could not prepare your next round.", error),
-          );
-          onRoundStart?.(verse, room);
+            expiresAt: room.expiresAt || new Date(Date.now() + ROOM_TTL_MS),
+          };
+          try {
+            await setDoc(playerRef(), {
+              activeRound: room.round,
+              guesses: 0,
+              roundCompleted: false,
+              lastRoundScore: 0,
+              lastCorrect: false,
+              expiresAt: room.expiresAt || new Date(Date.now() + ROOM_TTL_MS),
+            }, { merge: true });
+            state.readyRound = room.round;
+            onRoundStart?.(verse, room);
+          } catch (error) {
+            reportError("Could not prepare your next round.", error);
+          }
         }
       }
       renderRoom();
@@ -368,6 +416,10 @@ export function createLocalGameController({
       if (!roomSnapshot.exists()) throw new Error("We couldn't find that room.");
       room = roomSnapshot.data();
       if (room.status === "finished") throw new Error("This game has already finished.");
+      if (room.expiresAt &&
+        (room.expiresAt.toMillis?.() ?? new Date(room.expiresAt).getTime()) <= Date.now()) {
+        throw new Error("This room has expired.");
+      }
       const prior = existing.exists() ? existing.data() : {};
       const alreadyActive = existing.exists() && prior.active !== false;
       if (!alreadyActive && (room.playerCount || 0) >= MAX_ROOM_PLAYERS) {
@@ -384,6 +436,7 @@ export function createLocalGameController({
         active: true,
         lastCorrect: false,
         joinedAt: prior.joinedAt || serverTimestamp(),
+        expiresAt: prior.expiresAt || room.expiresAt || new Date(Date.now() + ROOM_TTL_MS),
       };
       transaction.set(existingRef, player, { merge: true });
       if (!alreadyActive) {
@@ -394,7 +447,10 @@ export function createLocalGameController({
     state.room = room;
     state.player = player;
     state.lastRound = 0;
+    state.readyRound = 0;
     state.timerExpired = false;
+    state.finalRoom = null;
+    state.finalPlayers = [];
     subscribeToRoom();
     const url = new URL(window.location.href);
     url.searchParams.set("room", safeRoomId);
@@ -439,6 +495,7 @@ export function createLocalGameController({
         verseId: null,
         usedBookIds: [],
         createdAt: serverTimestamp(),
+        expiresAt: new Date(Date.now() + ROOM_TTL_MS),
       };
       const player = {
         uid: user.uid,
@@ -451,6 +508,7 @@ export function createLocalGameController({
         active: true,
         lastCorrect: false,
         joinedAt: serverTimestamp(),
+        expiresAt: room.expiresAt,
       };
       await runTransaction(db, async (transaction) => {
         transaction.set(roomDocument, room);
@@ -460,6 +518,7 @@ export function createLocalGameController({
       state.room = room;
       state.player = player;
       state.lastRound = 0;
+      state.readyRound = 0;
       subscribeToRoom();
       renderRoom();
       setMessage("Room created. Share the link or QR code to invite players.");
@@ -504,14 +563,51 @@ export function createLocalGameController({
     setMessage(`Round ${nextRound} is starting.`);
   }
 
+  async function deleteFinishedRoom(roomId, finalRoom, finalPlayers) {
+    if (!finalRoom || finalRoom.hostUid !== getUser()?.uid) return;
+    await Promise.all(finalPlayers.map((player) =>
+      deleteDoc(doc(db, "localRooms", roomId, "players", player.uid)),
+    ));
+    await deleteDoc(roomRef(roomId));
+  }
+
   async function finishGame() {
-    if (!state.room || state.room.status === "finished") return;
+    if (!state.room || state.room.status === "finished" || state.finishing) return;
     if (!isHost()) return;
-    await updateDoc(roomRef(), { status: "finished", finishedAt: serverTimestamp() });
+    state.finishing = true;
+    try {
+      await updateDoc(roomRef(), {
+        status: "finished",
+        finishedAt: serverTimestamp(),
+        expiresAt: serverTimestamp(),
+      });
+      state.room = {
+        ...state.room,
+        status: "finished",
+        finishedAt: new Date(),
+        expiresAt: new Date(),
+      };
+      state.finalRoom = state.room;
+      state.finalPlayers = [...state.players];
+      renderRoom();
+      setMessage("Game finished. View the final scoreboard.");
+      window.clearTimeout(state.cleanupTimeout);
+      const roomId = state.roomId;
+      const finalRoom = state.finalRoom;
+      const finalPlayers = [...state.finalPlayers];
+      state.cleanupTimeout = window.setTimeout(() => {
+        deleteFinishedRoom(roomId, finalRoom, finalPlayers).catch((error) =>
+          reportError("The finished room could not be deleted yet.", error),
+        );
+      }, FINAL_SCOREBOARD_MS);
+    } finally {
+      state.finishing = false;
+    }
   }
 
   async function recordGuess({ guessCount, completed, solved }) {
-    if (!state.room || state.room.status !== "playing" || state.timerExpired) return;
+    if (!state.room || state.room.status !== "playing" ||
+      state.readyRound !== state.room.round || state.timerExpired) return;
     const points = completed && solved ? calculateLocalRoundPoints(guessCount) : 0;
     const previousScore = Number.isFinite(state.player?.score) ? state.player.score : 0;
     const lastRound = state.room.round;
@@ -523,6 +619,7 @@ export function createLocalGameController({
       lastCorrect: completed && solved,
       score: completed ? previousScore + points : previousScore,
       active: true,
+      expiresAt: state.room.expiresAt || new Date(Date.now() + ROOM_TTL_MS),
     }, { merge: true });
     if (completed) {
       setMessage(solved
@@ -535,13 +632,11 @@ export function createLocalGameController({
     state.roomUnsubscribe?.();
     state.playersUnsubscribe?.();
     window.clearInterval(state.clockInterval);
-    if (updatePlayer && state.roomId && getUser()?.uid) {
+    if (updatePlayer && state.roomId && getUser()?.uid &&
+      state.room?.status !== "finished") {
       try {
         if (isHost()) {
-          await updateDoc(roomRef(), {
-            status: "finished",
-            finishedAt: serverTimestamp(),
-          });
+          await finishGame();
         }
         await runTransaction(db, async (transaction) => {
           const roomReference = roomRef();
@@ -567,7 +662,11 @@ export function createLocalGameController({
     state.players = [];
     state.player = null;
     state.lastRound = 0;
+    state.readyRound = 0;
     state.timerExpired = false;
+    state.finalRoom = null;
+    state.finalPlayers = [];
+    state.finishing = false;
     elements.setup.hidden = false;
     elements.roomView.hidden = true;
     elements.gameBar.hidden = true;
@@ -592,7 +691,9 @@ export function createLocalGameController({
       const availableRooms = publicRooms.docs
         .map((entry) => ({ entry, room: entry.data() }))
         .filter(({ room }) => room.visibility === "public" &&
-          (room.status === "lobby" || room.status === "playing"));
+          (room.status === "lobby" || room.status === "playing") &&
+          (!room.expiresAt || room.expiresAt.toMillis?.() > Date.now() ||
+            new Date(room.expiresAt).getTime() > Date.now()));
       if (!availableRooms.length) {
         elements.publicRooms.textContent = "No public rooms are open right now.";
         return;
@@ -706,7 +807,8 @@ export function createLocalGameController({
     isActive,
     describeError: describeLocalGameError,
     canGuess() {
-      return !isActive() || !!state.room && state.room.status === "playing" && !state.timerExpired;
+      return !isActive() || !!state.room && state.room.status === "playing" &&
+        state.readyRound === state.room.round && !state.timerExpired;
     },
     recordGuess,
     leaveRoom,

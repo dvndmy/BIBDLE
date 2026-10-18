@@ -304,6 +304,59 @@ test("creates a room, starts shared rounds, and updates the local leaderboard", 
   expect(nextAnswer.id).not.toBe(answer.id);
   await expect(page.locator("#localGameModal")).toHaveAttribute("data-open", "false");
 
+  await page.evaluate(() => {
+    globalThis.__firebaseMockState.auth.currentUser = {
+      uid: "mock-player-2",
+      isAnonymous: true,
+    };
+    document.querySelector("#joinRoomCode").value = "mock-room-1";
+    document.querySelector("#joinRoomForm").dispatchEvent(
+      new Event("submit", { bubbles: true, cancelable: true }),
+    );
+  });
+  await expect.poll(() => page.evaluate(() =>
+    globalThis.__firebaseMockState.documents.get(
+      "localRooms/mock-room-1/players/mock-player-2",
+    )?.activeRound,
+  )).toBe(2);
+  expect(await currentAnswer(page)).toMatchObject({ id: nextAnswer.id });
+  const wrongBook = books.find((book) => book.id !== nextAnswer.id);
+  await submitBook(page, wrongBook);
+  await expect.poll(() => page.evaluate(() =>
+    globalThis.__firebaseMockState.documents.get(
+      "localRooms/mock-room-1/players/mock-player-2",
+    )?.guesses,
+  )).toBe(1);
+  await page.evaluate(() => {
+    globalThis.__firebaseMockState.auth.currentUser = {
+      uid: "mock-anonymous-user",
+      isAnonymous: true,
+    };
+  });
+
+  await page.locator("#localGameRoomBtn").click();
+  await page.locator("#finishRoomGameBtn").evaluate((button) => {
+    button.hidden = false;
+  });
+  await expect(page.locator("#finishRoomGameBtn")).toBeVisible();
+  await page.locator("#finishRoomGameBtn").click();
+  await expect(page.locator("#localGameFinalLabel")).toBeVisible();
+  const finalStanding = page.locator("#localGameLeaderboard .room-leaderboard__row.is-you.is-final");
+  await expect(finalStanding).toContainText("10 pts");
+  await expect(finalStanding.locator(".room-leaderboard__rank")).toHaveText("1");
+  await expect(page.locator("#guessInput")).toBeDisabled();
+  await expect.poll(() => page.evaluate(() =>
+    globalThis.__firebaseMockState.documents.has("localRooms/mock-room-1"),
+  ), { timeout: 10_000 }).toBe(false);
+  expect(await page.evaluate(() =>
+    globalThis.__firebaseMockState.calls.filter((call) => call.method === "deleteDoc")
+      .map((call) => call.path),
+  )).toEqual(expect.arrayContaining([
+    "localRooms/mock-room-1/players/mock-anonymous-user",
+    "localRooms/mock-room-1/players/mock-player-2",
+    "localRooms/mock-room-1",
+  ]));
+
   const calls = await page.evaluate(() => globalThis.__firebaseMockState.calls);
   expect(calls.some((call) => call.method === "onSnapshot" && call.path === "localRooms/mock-room-1")).toBe(true);
   expect(pageErrors).toEqual([]);
@@ -337,4 +390,5 @@ test("supports custom timed rooms and signed-in player names", async ({ page }) 
     status: "playing",
     round: 1,
   });
+  expect(room.expiresAt).toBeTruthy();
 });

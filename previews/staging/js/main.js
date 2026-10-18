@@ -27,6 +27,7 @@ import {
   increment,
   onSnapshot,
   updateDoc,
+  deleteDoc,
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 
 import {books} from "./data/books.js";
@@ -5054,10 +5055,13 @@ function startLocalRoomRound(verse, room) {
   closeModal(elements.localGameModal);
 }
 
-function setLocalRoomActive(active) {
+function setLocalRoomActive(active, roomStatus = "lobby") {
   state.localGameActive = active;
   elements.modeSelect.disabled = active;
   elements.difficultySelect.disabled = active;
+  const guessSubmit = elements.guessForm?.querySelector('button[type="submit"]');
+  if (elements.guessInput) elements.guessInput.disabled = active && roomStatus === "finished";
+  if (guessSubmit) guessSubmit.disabled = active && roomStatus === "finished";
   const countdownLabel = elements.countdownTimer?.closest(".countdown-label");
   if (countdownLabel) countdownLabel.hidden = active;
 
@@ -5069,6 +5073,8 @@ function setLocalRoomActive(active) {
     return;
   }
 
+  if (elements.guessInput) elements.guessInput.disabled = false;
+  if (guessSubmit) guessSubmit.disabled = false;
   if (localPreviousMode) {
     const previousMode = localPreviousMode;
     localPreviousMode = null;
@@ -5091,6 +5097,7 @@ function handleAuthInitialized(context = {}) {
       auth: firebaseAuth,
       firestore: {
         collection,
+        deleteDoc,
         doc,
         getDoc,
         getDocs,

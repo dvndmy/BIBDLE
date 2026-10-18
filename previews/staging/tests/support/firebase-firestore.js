@@ -1,5 +1,6 @@
 export {
   collection,
+  deleteDoc,
   doc,
   getDoc,
   getDocs,

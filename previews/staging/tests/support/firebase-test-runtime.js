@@ -244,6 +244,12 @@ export async function updateDoc(reference, value) {
   notify(reference.path);
 }
 
+export async function deleteDoc(reference) {
+  record("deleteDoc", { path: reference.path });
+  state.documents.delete(reference.path);
+  notify(reference.path);
+}
+
 export async function runTransaction(_db, callback) {
   record("runTransaction");
   const writes = [];
