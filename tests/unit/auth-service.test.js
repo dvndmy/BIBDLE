@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createAuthService } from "../../js/auth-service.js";
+import { createAuthService } from "../../js/core/auth/auth-client.js";
 
 function createFirebaseMocks() {
   const auth = { currentUser: null };

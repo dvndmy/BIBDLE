@@ -92,17 +92,17 @@ Accessibility and typography options include:
 
 ### Core entry point
 
-`js/bibdle.js` is the main orchestration layer. It imports data, configures gameplay rules, initializes Firebase services, owns the in-memory application state, coordinates persistence, computes achievements and stats, and wires together the rendering and interaction modules.
+`js/main.js` is the browser entry point. It initializes the game state and Firebase services, coordinates puzzle lifecycle and persistence, and connects the focused UI and feature modules.
 
 ### Modal service
 
-`js/modal-service.js` centralizes modal registration and lifecycle behavior. It provides a reusable modal API for opening, closing, toggling, closing the topmost modal, closing all modals, handling Escape key dismissal, backdrop click dismissal, and delegated close-button handling.
+`js/core/dom/modal-controller.js` centralizes modal registration and lifecycle behavior. It provides a reusable modal API for opening, closing, toggling, closing the topmost modal, closing all modals, handling Escape key dismissal, backdrop click dismissal, and delegated close-button handling.
 
 This keeps modal behavior consistent across help, settings, stats, archive, leaderboard, and post-game dialogs without duplicating DOM logic in each feature module.
 
-### `books.js`
+### Bible data
 
-Localized book metadata includes fields such as:
+`js/data/books.js` contains localized book metadata, including:
 
 - `id`
 - `name`
@@ -123,9 +123,7 @@ Localized book metadata includes fields such as:
 
 The exported `books` array normalizes intro and theme field names to `bookIntroTextMl`, `bookIntroText`, `bookThemesMl`, and `bookThemes`. Application code should use these canonical names.
 
-### `verses.js`
-
-Localized verse content includes fields such as:
+`js/data/verses.js` contains localized verse content, including:
 
 - `id`
 - `book`
@@ -176,26 +174,42 @@ Bibdle stores the following in the browser:
 ├── css/
 │   └── bibdle.css
 ├── js/
-│   ├── bibdle.js
+│   ├── main.js
 │   ├── config.js
-│   ├── app-shell.js
-│   ├── auth-service.js
 │   ├── bindings.js
 │   ├── game-rules.js
 │   ├── localization-service.js
 │   ├── local-game.js
-│   ├── modal-service.js
 │   ├── preferences-storage.js
 │   ├── progress-storage.js
-│   ├── render-pipeline.js
 │   └── data/
 │       ├── books.js
 │       └── verses.js
+│   ├── app/
+│   │   └── bootstrap.js
+│   ├── core/
+│   │   ├── auth/
+│   │   │   └── auth-client.js
+│   │   └── dom/
+│   │       ├── bindings-registry.js
+│   │       ├── modal-controller.js
+│   │       ├── render-orchestrator.js
+│   │       └── ui-render-utils.js
+│   ├── features/
+│   │   ├── achievements/
+│   │   ├── archive/
+│   │   ├── leaderboard/
+│   │   ├── postgame/
+│   │   ├── puzzle/
+│   │   └── stats/
+│   └── shared/
+│       ├── game-transitions.js
+│       └── ui-refactor-helpers.js
 └── assets/
     └── achievements/
 ```
 
-`bibdle.js` is the browser entry point and coordinates application state and startup. Configuration, localization and autocomplete, authentication, modal behavior, event binding, render transitions, and Firestore-backed local room play live in focused modules. The book and verse datasets stay under `js/data/`.
+`main.js` coordinates startup and application state. Authentication, modal behavior, DOM bindings, rendering, game transitions, and feature surfaces are organized into focused modules. Configuration, localization, persistence, and Firestore-backed local room play remain at the top level of `js/`.
 
 ## Verification
 

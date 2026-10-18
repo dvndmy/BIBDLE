@@ -14,138 +14,95 @@ export function createRenderPipeline({
   bindEmptyStateActions,
   closeSuggestions,
   closePostGamePanel,
-  publishBootSnapshot
+  publishBootSnapshot,
 }) {
   function assertRenderable() {
     return !!state && !!elements && typeof renderPuzzleView === "function";
   }
 
   function renderControls() {
-    document.documentElement.setAttribute("data-mode", state?.mode === "practice" ? "practice" : "daily");
+    document.documentElement.setAttribute(
+      "data-mode",
+      state?.mode === "practice" ? "practice" : "daily",
+    );
     syncPreferenceControls?.();
     renderLanguageControl?.();
     renderMobileLanguageToggle?.();
     renderThemeToggle?.();
   }
 
-  function publish(type, payload = {}) {
-    publishBootSnapshot?.(type, payload);
+  function publish(payload) {
+    publishBootSnapshot?.(payload);
   }
 
   function renderAuthState(reason = "auth-update") {
     renderAuthUI?.();
-    publish("renderAuthState", { reason });
+    publish({ renderAuthState: reason });
   }
 
   function renderPuzzleSurface(reason = "puzzle-surface") {
     if (!assertRenderable()) return;
-    renderPuzzleView?.();
-    renderPostGamePanel?.({ loadLeaderboardRank: false });
-    publish("renderPuzzleSurface", { reason });
+    renderPuzzleView();
+    renderPostGamePanel?.();
+    publish({ renderPuzzleSurface: reason });
   }
 
   function renderStatsSurface(reason = "stats-surface") {
     renderStatsModal?.();
     bindEmptyStateActions?.(document);
-    publish("renderStatsSurface", { reason });
+    publish({ renderStatsSurface: reason });
   }
 
-  function runTransition({
-    reason,
-    mode = state?.mode,
-    renderPuzzle = true,
-    renderStats = false,
-    renderAuth = false,
-    closeTransient = false,
-    statusMessage = null,
-    publishType = "renderTransition",
-    extra = {}
-  }) {
-    if (closeTransient) {
-      closeSuggestions?.();
-      closePostGamePanel?.();
-    }
-
+  function renderBootComplete({ restored = false, bootReady = false } = {}) {
     renderControls();
-
-    if (statusMessage) {
-      renderStatus?.(statusMessage);
-    }
-
-    if (renderAuth) {
-      renderAuthState(reason);
-    }
-
-    if (renderPuzzle) {
-      renderPuzzleSurface(reason);
-    }
-
-    if (renderStats) {
-      renderStatsSurface(reason);
-    }
-
-    publish(publishType, { reason, mode, ...extra });
+    renderAuthState("boot-complete");
+    renderPuzzleSurface(restored ? "boot-restored" : "boot-new");
+    renderStatsSurface("boot-complete");
+    publish({ bootRender: "complete", restored, bootReady });
   }
 
-  function renderBootComplete(restored = false, bootReady = false) {
-    runTransition({
-      reason: restored ? "boot-restored" : "boot-new",
-      renderPuzzle: true,
-      renderStats: true,
-      renderAuth: true,
-      publishType: "bootRender",
-      extra: { complete: true, restored, bootReady }
-    });
+  function renderPuzzleReset(modeOrOptions = state?.mode, options = {}) {
+    const config = typeof modeOrOptions === "object" && modeOrOptions
+      ? modeOrOptions
+      : { ...options, mode: modeOrOptions };
+    const mode = config.mode ?? state?.mode;
+    const source = config.source || "puzzle-reset";
+
+    closeSuggestions?.();
+    closePostGamePanel?.();
+    renderControls();
+    renderPuzzleSurface(source);
+    renderStatsSurface(source);
+    publish({ renderTransition: "puzzle-reset", mode, source });
   }
 
-  function renderPuzzleReset(mode = state?.mode, options = {}) {
-    const source =
-      typeof options === "string"
-        ? options
-        : options?.source || "puzzle-reset";
-
-    runTransition({
-      reason: source,
-      mode,
-      closeTransient: true,
-      renderPuzzle: true,
-      renderStats: true,
-      extra:
-        typeof options === "object" && options
-          ? { ...options }
-          : undefined,
-    });
+  function renderModeSwitch(modeOrOptions = {}) {
+    const mode = typeof modeOrOptions === "string"
+      ? modeOrOptions
+      : modeOrOptions.mode ?? state?.mode;
+    renderControls();
+    renderStatus?.("");
+    publish({ renderTransition: "mode-switch", mode });
   }
 
-  function renderModeSwitch({ mode = state?.mode } = {}) {
-    runTransition({
-      reason: "mode-switch",
-      mode,
-      renderPuzzle: false,
-      renderStats: false,
-      publishType: "renderTransition"
-    });
+  function renderPreferencesChanged(reasonOrOptions = {}) {
+    const reason = typeof reasonOrOptions === "string"
+      ? reasonOrOptions
+      : reasonOrOptions.reason || "preferences-changed";
+    renderControls();
+    renderPuzzleSurface(reason);
+    publish({ renderTransition: "preferences-changed", reason });
   }
 
-  function renderPreferencesChanged({ reason = "preferences-changed" } = {}) {
-    runTransition({
-      reason,
-      renderPuzzle: true,
-      renderStats: false
-    });
-  }
-
-  function renderSyncState({ reason = "sync-state" } = {}) {
-    runTransition({
-      reason,
-      renderPuzzle: false,
-      renderStats: false,
-      renderAuth: true
-    });
+  function renderSyncState(reason = "sync-state") {
+    renderAuthState(reason);
+    publish({ renderTransition: "sync-state", reason });
   }
 
   function closeAllTransientUi() {
-    modalService?.closeAll?.({ restoreFocus: false });
+    modalService?.closeAll?.({
+      restoreFocus: false,
+    });
   }
 
   return {

@@ -43,7 +43,7 @@ export function createBindings({ elements, state, modalService, handlers }) {
 
   function getDelegatedActions(target, event) {
     return [
-      { selector: "#helpBtn", run: (match) => handlers.openHelpModal(event.currentTarget ?? match) },
+      { selector: "#helpBtn", run: (match) => handlers.openHelpModal(match) },
       { selector: "#closeHelpBtn", run: () => handlers.closeHelpModal() },
       { selector: "#settingsBtn", run: (match) => handlers.openSettingsModal(match) },
       { selector: "#closeSettingsBtn", run: () => handlers.closeSettingsModal() },
