@@ -34,150 +34,16 @@ import {
   createAppShell,
   createBootLogger,
   createBootStateSnapshot,
-} from "./app/bootstrap.js";
-
-import {createRenderPipeline} from "./core/dom/render-orchestrator.js";
-import {createModalService} from "./core/dom/modal-controller.js";
-import {createBindings} from "./core/dom/bindings-registry.js";
-import {
-  clearBusyState,
-  escapeHtml,
-  hasRenderableMarkup,
-  hasTextContent,
-  isNonEmptyArray,
-  renderBusyInto,
-  renderEmptyState,
-  renderInto,
-  renderLoadingBlock,
-  renderRetryButtonMarkup,
-  renderSurfaceEmptyState,
-  renderSurfaceLoadingState,
-  renderWhen,
-  setHidden,
-  showWhen,
-  showWhenHasItems,
-  showWhenHasText,
-} from "./core/dom/ui-render-utils.js";
-
-import {createAuthService} from "./core/auth/auth-client.js";
-
-import {
-  createModalHelpers,
-  createPreferenceUpdater,
-  createToggleHandler,
-  renderPlacementCard,
-} from "./shared/ui-refactor-helpers.js";
-
-import {createGameTransitions} from "./shared/game-transitions.js";
-
-import {
-  computeModeStatsSummary as buildModeStatsSummary,
-} from "./features/stats/stats-read-models.js";
-
-import {
-  computeArchiveSummary as buildArchiveSummary,
-  formatArchiveAverage as formatArchiveAverageValue,
-  buildArchiveBarsViewModel,
-  buildArchiveGridViewModel,
-  buildArchiveDetailsViewModel,
-} from "./features/archive/archive-read-models.js";
-
-import {
-  clampAchievementProgress as clampAchievementProgressValue,
-  getAchievementCategoryLabel as getAchievementCategoryLabelValue,
-  getAchievementCategoryDescription as getAchievementCategoryDescriptionValue,
-  getAchievementCategoryOrder as getAchievementCategoryOrderValue,
-  getAchievementDescriptionForUi as getAchievementDescriptionForUiValue,
-  formatAchievementProgressText as formatAchievementProgressTextValue,
-  getAchievementStatusCopy as getAchievementStatusCopyValue,
-  buildAchievementCardViewModel,
-  getClosestIncompleteAchievements as getClosestIncompleteAchievementsValue,
-  buildAchievementCategoryGroups,
-} from "./features/achievements/achievement-read-models.js";
-
-import {
-  formatTriviaLabel as formatTriviaLabelValue,
-  buildTriviaContent as buildTriviaContentValue,
-  buildPostGameContent,
-} from "./features/postgame/postgame-read-models.js";
-
-import {createPuzzleSurface} from "./features/puzzle/puzzle-surface.js";
-import {createStatsSurface} from "./features/stats/stats-surface.js";
-import {createPostGameSurface} from "./features/postgame/postgame-surface.js";
-import {createArchiveSurface} from "./features/archive/archive-surface.js";
-import {createLeaderboardSurface} from "./features/leaderboard/leaderboard-surface.js";
-
-const CONFIG = {
-  modes: {
-    normal: {
-      maxGuesses: 8,
-      progressiveHints: true,
-      hintSchedule: {
-        testamentAt: 1,
-        sectionAt: 3,
-        firstLetterAt: 7,
-        referenceAt: 4,
-        distanceAt: 3,
-        distanceRequiresBookPartial: false,
-      },
-    },
-    easy: {
-      maxGuesses: 8,
-      progressiveHints: true,
-      hintSchedule: {
-        testamentAt: 1,
-        sectionAt: 3,
-        firstLetterAt: 6,
-        referenceAt: 4,
-        distanceAt: 1,
-        distanceRequiresBookPartial: false,
-      },
-    },
-    hard: {
-      maxGuesses: 8,
-      progressiveHints: true,
-      hintSchedule: {
-        testamentAt: 1,
-        sectionAt: 5,
-        firstLetterAt: 7,
-        referenceAt: 3,
-        distanceAt: null,
-        distanceRequiresBookPartial: true,
-      },
-    },
-  },
-  proximityBands: {
-    exact: 0,
-    veryClose: 1,
-    near: 3,
-  },
-  ui: {
-    maxSuggestions: 10,
-  },
-  daily: {
-    epochYear: 2026,
-    epochMonth: 0,
-    epochDay: 1,
-  },
-  storageKeys: {
-    progress: "bibdle-progress",
-    preferences: "bibdle-preferences",
-    stats: "bibdle-stats",
-  },
-};
-
-const FIREBASE_CONFIG = {
-  apiKey: "AIzaSyC8Mo3GyKwFLvJU5npB_ZwlApJkDqnRrMY",
-  authDomain: "bibdle-db7ae.firebaseapp.com",
-  projectId: "bibdle-db7ae",
-  storageBucket: "bibdle-db7ae.firebasestorage.app",
-  messagingSenderId: "278845724002",
-  appId: "1:278845724002:web:0842b72515b58791d0883b",
-};
-
-const FIREBASE_ENABLED =
-  FIREBASE_CONFIG.apiKey !== "REPLACE_ME" &&
-  FIREBASE_CONFIG.projectId !== "REPLACE_ME";
+} from "./app-shell.js";
+import { createRenderPipeline } from "./render-pipeline.js";
+import { createModalService } from "./modal-service.js";
+import { createBindings } from "./bindings.js";
+import { createAuthService } from "./auth-service.js";
+import { createLocalizationService } from "./localization-service.js";
+import { createPreferencesStorage } from "./preferences-storage.js";
+import { createProgressStorage } from "./progress-storage.js";
+import { createGameRules } from "./game-rules.js";
+import { CONFIG, FIREBASE_CONFIG, FIREBASE_ENABLED } from "./config.js";
 
 let firebaseApp = null;
 let firebaseAuth = null;
@@ -1929,6 +1795,98 @@ const elements = {
   appShellRoot: document.getElementById("appShell")
 };
 
+const {
+  applyLanguageToDocument,
+  getBookAliases,
+  getBookById,
+  getBookByName,
+  getCanonicalBookId,
+  getCurrentLanguage,
+  getDisplayBookNameFromGuess,
+  getLocalizedBookIntroText,
+  getLocalizedBookIntroTitle,
+  getLocalizedBookName,
+  getLocalizedClue,
+  getLocalizedExplanation,
+  getLocalizedFirstLetter,
+  getLocalizedReference,
+  getLocalizedSection,
+  getLocalizedTestament,
+  getLocalizedThemes,
+  getLocalizedValue,
+  getLocalizedVerseText,
+  getSafeString,
+  getSuggestionCandidates,
+  isBookAlreadyGuessed,
+  normalizeBookName,
+  renderLanguageControl,
+} = createLocalizationService({
+  books,
+  state,
+  config: CONFIG,
+  elements,
+});
+
+const {
+  clearSavedProgress,
+  loadProgress,
+  saveProgress,
+} = createProgressStorage({
+  state,
+  elements,
+  config: CONFIG,
+  getPuzzleById,
+  pickPuzzle,
+  getTodayPuzzleDate,
+  applyModeTheme,
+  resetSuggestionsState,
+  closeSuggestions,
+});
+
+const { loadPreferences, savePreferences } = createPreferencesStorage({
+  state,
+  config: CONFIG,
+  getSystemTheme,
+  getCurrentLanguage,
+  syncCurrentStateToCloudIfSignedIn,
+});
+
+const {
+  buildClueRevealState,
+  canChangeDifficulty,
+  compareGuess,
+  getAttemptLabel,
+  getCurrentModeConfig,
+  getHintLines,
+  getHintSchedule,
+  getMaxGuesses,
+  getNearestGuessDistance,
+  getReferenceWithoutBookName,
+  hasBookPartialGuess,
+  hasCompletedTodaysDaily,
+  hasCorrectFirstLetterGuess,
+  hasCorrectSectionGuess,
+  isAdjacentSection,
+  isCurrentDailyPuzzle,
+  isCurrentPracticePuzzle,
+  isGameOver,
+} = createGameRules({
+  state,
+  config: CONFIG,
+  getCurrentLanguage,
+  getLocalizedReference,
+  getBookByName,
+  getLocalizedBookName,
+  getLocalizedTestament,
+  getLocalizedSection,
+  getLocalizedFirstLetter,
+  getTodayPuzzleDate,
+  ensureClueUiState,
+  getBookDistance,
+  getProximityLabel,
+  isSameSection,
+});
+
 function getRequiredBootElements() {
   return {
     appShell: elements.appShell,
@@ -2232,336 +2190,6 @@ function sanitizeCloudProfile(data) {
         : null,
     stats: data.stats && typeof data.stats === "object" ? data.stats : null,
   };
-}
-
-function getCurrentLanguage() {
-  return state.preferences?.language === "ml" ? "ml" : "en";
-}
-
-function getSafeString(value) {
-  return typeof value === "string" ? value.trim() : "";
-}
-
-function getLocalizedValue(primary, fallback) {
-  return getSafeString(primary) || getSafeString(fallback) || "";
-}
-
-const LOCALIZED_FIELD_MAP = {
-  bookName: { en: "name", ml: "nameMl" },
-  testament: { en: "testament", ml: "testamentMl" },
-  section: { en: "section", ml: "sectionMl" },
-  bookIntroTitle: { en: "bookIntroTitle", ml: "bookIntroTitleMl" },
-  bookIntroText: { en: "bookIntroText", ml: "bookIntroTextMl" },
-  reference: { en: "reference", ml: "referenceMl" },
-  verseText: { en: "text", ml: "textMl" },
-  clue: { en: "clue", ml: "clueMl" },
-  explanation: { en: "explanation", ml: "explanationMl" },
-};
-
-function getLocalizedFieldValue(item, fieldKey, language = getCurrentLanguage()) {
-  if (!item) return "";
-
-  const fieldConfig = LOCALIZED_FIELD_MAP[fieldKey];
-  if (!fieldConfig) return "";
-
-  const requestedLanguage = language === "ml" ? "ml" : "en";
-  const fallbackLanguage = requestedLanguage === "ml" ? "en" : "ml";
-
-  return getLocalizedValue(
-    item[fieldConfig[requestedLanguage]],
-    item[fieldConfig[fallbackLanguage]]
-  );
-}
-
-function getLocalizedFirstLetter(book, language = getCurrentLanguage()) {
-  if (!book) return "";
-
-  const localizedName = getLocalizedBookName(book, language);
-  const displayName = getSafeString(localizedName).replace(/^[123]\s*/, "").trim();
-
-  if (!displayName) return "";
-
-  const locale = language === "ml" ? "ml-IN" : "en-US";
-  return displayName.charAt(0).toLocaleUpperCase(locale);
-}
-
-function normalizeBookName(value) {
-  return String(value ?? "")
-    .normalize("NFKC")
-    .toLowerCase()
-    .replace(/[\u200B-\u200D\uFEFF]/g, "")
-    .replace(/[^\p{L}\p{N}]+/gu, "");
-}
-
-function buildBookLookupIndex() {
-  const byId = new Map();
-  const byNormalizedName = new Map();
-  const aliasesByBookId = new Map();
-
-  if (!Array.isArray(books) || !books.length) {
-    return {
-      byId,
-      byNormalizedName,
-      aliasesByBookId,
-    };
-  }
-
-  books.forEach((book) => {
-    if (!book?.id) {
-      return;
-    }
-
-    byId.set(book.id, book);
-
-    const aliases = [];
-    const seenAliases = new Set();
-
-    const addAlias = (label, source) => {
-      const value = getSafeString(label);
-      const normalized = normalizeBookName(value);
-
-      if (!value || !normalized || seenAliases.has(normalized)) {
-        return;
-      }
-
-      const alias = {
-        value,
-        normalized,
-        source,
-        bookId: book.id,
-      };
-
-      seenAliases.add(normalized);
-      aliases.push(alias);
-
-      if (!byNormalizedName.has(normalized)) {
-        byNormalizedName.set(normalized, book);
-      }
-    };
-
-    addAlias(book.normalizedName, 'normalized');
-    addAlias(book.name, 'en');
-    addAlias(book.nameMl, 'ml');
-
-    aliasesByBookId.set(book.id, aliases);
-  });
-
-  return {
-    byId,
-    byNormalizedName,
-    aliasesByBookId,
-  };
-}
-
-function getBookLookupIndex() {
-  if (!state.ui) {
-    state.ui = {};
-  }
-
-  if (!state.ui.bookLookupIndex) {
-    state.ui.bookLookupIndex = buildBookLookupIndex();
-  }
-
-  return state.ui.bookLookupIndex;
-}
-
-function getLocalizedBookName(book, language = getCurrentLanguage()) {
-  return getLocalizedFieldValue(book, "bookName", language);
-}
-
-function getLocalizedTestament(book, language = getCurrentLanguage()) {
-  return getLocalizedFieldValue(book, "testament", language);
-}
-
-function getLocalizedSection(book, language = getCurrentLanguage()) {
-  return getLocalizedFieldValue(book, "section", language);
-}
-
-function getLocalizedBookIntroTitle(book, language = getCurrentLanguage()) {
-  return getLocalizedFieldValue(book, "bookIntroTitle", language);
-}
-
-function getLocalizedBookIntroText(book, language = getCurrentLanguage()) {
-  return getLocalizedFieldValue(book, "bookIntroText", language);
-}
-
-function getLocalizedReference(verse, language = getCurrentLanguage()) {
-  return getLocalizedFieldValue(verse, "reference", language);
-}
-
-function getLocalizedVerseText(verse, language = getCurrentLanguage()) {
-  return getLocalizedFieldValue(verse, "verseText", language);
-}
-
-function getLocalizedClue(verse, language = getCurrentLanguage()) {
-  return getLocalizedFieldValue(verse, "clue", language);
-}
-
-function getLocalizedExplanation(verse, language = getCurrentLanguage()) {
-  return getLocalizedFieldValue(verse, "explanation", language);
-}
-
-function getLocalizedThemes(item, language = getCurrentLanguage()) {
-  const englishThemes = Array.isArray(item?.themes)
-    ? item.themes
-    : Array.isArray(item?.bookThemes)
-      ? item.bookThemes
-      : [];
-
-  const malayalamThemes = Array.isArray(item?.themesMl)
-    ? item.themesMl
-    : Array.isArray(item?.bookThemesMl)
-      ? item.bookThemesMl
-      : [];
-
-  const source = language === "ml" ? malayalamThemes : englishThemes;
-  const fallback = language === "ml" ? englishThemes : [];
-
-  return (source.length ? source : fallback).filter(
-    (value) => typeof value === "string" && value.trim().length > 0,
-  );
-}
-
-function getBookAliases(book) {
-  if (!book?.id) {
-    return [];
-  }
-
-  const { aliasesByBookId } = getBookLookupIndex();
-  return aliasesByBookId.get(book.id) ?? [];
-}
-
-function getBookById(bookId) {
-  if (!bookId) {
-    return null;
-  }
-
-  const { byId } = getBookLookupIndex();
-  return byId.get(bookId) ?? null;
-}
-
-function getCanonicalBookId(input) {
-  if (!input) {
-    return '';
-  }
-
-  if (typeof input === 'object' && input.id) {
-    return input.id;
-  }
-
-  const byName = getBookByName(input);
-  return byName?.id ?? '';
-}
-
-function getBookByName(name) {
-  const normalized = normalizeBookName(name);
-  if (!normalized) {
-    return null;
-  }
-
-  const { byNormalizedName } = getBookLookupIndex();
-  return byNormalizedName.get(normalized) ?? null;
-}
-
-function isBookAlreadyGuessed(bookId) {
-  return state.guesses.some((guess) => guess.bookId === bookId);
-}
-
-function getSuggestionCandidates(query, language = getCurrentLanguage()) {
-  const normalizedQuery = normalizeBookName(query);
-  if (!normalizedQuery) {
-    return [];
-  }
-
-  const { aliasesByBookId } = getBookLookupIndex();
-  const ranked = [];
-
-  books.forEach((book) => {
-    if (!book?.id || isBookAlreadyGuessed(book.id)) {
-      return;
-    }
-
-    const aliases = aliasesByBookId.get(book.id) ?? [];
-    const matchingAliases = aliases.filter((alias) =>
-      alias.normalized.includes(normalizedQuery)
-    );
-
-    if (!matchingAliases.length) {
-      return;
-    }
-
-    const exactMatch = matchingAliases.some(
-      (alias) => alias.normalized === normalizedQuery
-    );
-    const startsWithMatch = matchingAliases.some((alias) =>
-      alias.normalized.startsWith(normalizedQuery)
-    );
-    const matchedMl = matchingAliases.some((alias) => alias.source === 'ml');
-    const matchedEn = matchingAliases.some(
-      (alias) => alias.source === 'en' || alias.source === 'normalized'
-    );
-
-    if (language === 'en') {
-      if (!matchedEn) {
-        return;
-      }
-
-      ranked.push({
-        bookId: book.id,
-        primaryLabel: getLocalizedBookName(book, 'en'),
-        secondaryLabel: '',
-        matchSource: 'en',
-        score: exactMatch ? 0 : startsWithMatch ? 1 : 2,
-      });
-
-      return;
-    }
-
-    ranked.push({
-      bookId: book.id,
-      primaryLabel: getLocalizedBookName(book, 'ml'),
-      secondaryLabel:
-        getLocalizedBookName(book, 'ml') !== getLocalizedBookName(book, 'en')
-          ? getLocalizedBookName(book, 'en')
-          : '',
-      matchSource: matchedMl ? 'ml' : 'en',
-      score: exactMatch ? 0 : startsWithMatch ? 1 : 2,
-    });
-  });
-
-  return ranked
-    .sort((a, b) => {
-      if (a.score !== b.score) {
-        return a.score - b.score;
-      }
-
-      if (language === 'ml' && a.matchSource !== b.matchSource) {
-        return a.matchSource === 'ml' ? -1 : 1;
-      }
-
-      return a.primaryLabel.localeCompare(
-        b.primaryLabel,
-        language === 'ml' ? 'ml' : 'en'
-      );
-    })
-    .slice(0, CONFIG.ui.maxSuggestions);
-}
-
-function applyLanguageToDocument() {
-  const language = getCurrentLanguage();
-  document.documentElement.lang = language;
-  document.documentElement.setAttribute("lang-mode", language);
-}
-
-function renderLanguageControl() {
-  if (elements.languageSelect) {
-    elements.languageSelect.value = getCurrentLanguage();
-  }
-}
-
-function getDisplayBookNameFromGuess(guess) {
-  const book = getBookById(guess?.bookId);
-  return getLocalizedBookName(book, getCurrentLanguage()) || guess?.book || "";
 }
 
 function mergePreferenceData(localPreferences, cloudPreferences) {
@@ -3198,290 +2826,21 @@ async function ensureLeaderboardViewerUser() {
 
     return null;
   } catch (error) {
-    console.error("Anonymous sign-in for leaderboard failed", error);
-    return null;
-  }
-}
-
-function clearSavedProgress(mode = null) {
-  try {
-    if (!mode) {
-      localStorage.removeItem(CONFIG.storageKeys.progress);
-      return;
-    }
-
-    const buckets = readStoredProgressBuckets();
-    const storageKey = getProgressStorageKey(mode);
-
-    buckets[storageKey] = null;
-
-    if (!buckets.daily && !buckets.practice) {
-      localStorage.removeItem(CONFIG.storageKeys.progress);
-      return;
-    }
-
-    writeStoredProgressBuckets(buckets);
-  } catch { }
-}
-
-function buildProgressPayload() {
-  if (!state.currentPuzzle) return null;
-
-  return {
-    mode: state.mode,
-    currentPuzzle: {
-      id: state.currentPuzzle.id,
-      date: state.currentPuzzle.date,
-      mode: state.currentPuzzle.mode,
-    },
-    guesses: state.guesses,
-    status: state.status,
-    inputDraft: elements.guessInput?.value ?? "",
-  };
-}
-
-function canRestoreSavedPracticePuzzle(saved) {
-  if (!saved || saved.currentPuzzle?.mode !== "practice") return false;
-  if (!saved.currentPuzzle?.id) return false;
-  return !!getPuzzleById(saved.currentPuzzle.id);
-}
-
-function restoreDraftInput(saved) {
-  if (!elements.guessInput) return;
-  elements.guessInput.value =
-    typeof saved?.inputDraft === "string" ? saved.inputDraft : "";
-}
-
-function getProgressStorageKey(mode) {
-  return mode === "practice" ? "practice" : "daily";
-}
-
-function isProgressBucketShape(value) {
-  return !!value && typeof value === "object" && ("daily" in value || "practice" in value);
-}
-
-function readStoredProgressBuckets() {
-  try {
-    const raw = localStorage.getItem(CONFIG.storageKeys.progress);
-    if (!raw) {
-      return {
-        daily: null,
-        practice: null,
-      };
-    }
-
-    const parsed = JSON.parse(raw);
-
-    if (isProgressBucketShape(parsed)) {
-      return {
-        daily: parsed.daily ?? null,
-        practice: parsed.practice ?? null,
-      };
-    }
-
-    return {
-      daily: parsed ?? null,
-      practice: null,
-    };
-  } catch {
-    return {
-      daily: null,
-      practice: null,
-    };
-  }
-}
-
-function writeStoredProgressBuckets(buckets) {
-  try {
-    localStorage.setItem(
-      CONFIG.storageKeys.progress,
-      JSON.stringify({
-        daily: buckets?.daily ?? null,
-        practice: buckets?.practice ?? null,
+    console.error("Post-game rank load failed:", error);
+    clearBusyState(elements.postGameLeaderboardRank);
+    renderInto(
+      elements.postGameLeaderboardRank,
+      renderEmptyState({
+        title: "Could not load placement",
+        body: "Your result was saved locally, but your current global placement is not available yet.",
+        compact: true,
+        showMarker: true,
+        tone: "error",
+        actions: renderRetryButtonMarkup("Try again", "retry-postgame-rank"),
       }),
     );
-  } catch { }
-}
-
-function restoreProgressPayload(saved) {
-  if (!saved || !saved.currentPuzzle?.id) {
-    return false;
+    bindEmptyStateActions(elements.postGameLeaderboardRank);
   }
-
-  const savedPuzzle = getPuzzleById(saved.currentPuzzle.id);
-  if (!savedPuzzle) {
-    return false;
-  }
-
-  const savedStatus = ["playing", "won", "lost"].includes(saved.status)
-    ? saved.status
-    : "playing";
-
-  if (saved.currentPuzzle.mode === "daily") {
-    const todayPuzzle = pickPuzzle("daily");
-    const todayDate = getTodayPuzzleDate();
-    const isMatchingDailyPuzzle =
-      saved.currentPuzzle.date === todayDate &&
-      saved.currentPuzzle.id === todayPuzzle.id;
-
-    if (!isMatchingDailyPuzzle) {
-      return false;
-    }
-
-    state.mode = "daily";
-    applyModeTheme("daily");
-    state.currentPuzzle = {
-      id: savedPuzzle.id,
-      date: saved.currentPuzzle.date,
-      mode: "daily",
-      verse: savedPuzzle,
-    };
-  } else if (canRestoreSavedPracticePuzzle(saved)) {
-    state.mode = "practice";
-    applyModeTheme("practice");
-    state.currentPuzzle = {
-      id: savedPuzzle.id,
-      date: null,
-      mode: "practice",
-      verse: savedPuzzle,
-    };
-  } else {
-    return false;
-  }
-
-  state.guesses = Array.isArray(saved.guesses) ? saved.guesses : [];
-  state.status = savedStatus;
-  restoreDraftInput(saved);
-  resetSuggestionsState();
-  closeSuggestions();
-
-  return true;
-}
-
-function saveProgress() {
-  const payload = buildProgressPayload();
-  if (!payload) return;
-
-  const buckets = readStoredProgressBuckets();
-  const storageKey = getProgressStorageKey(payload.currentPuzzle?.mode || state.mode);
-
-  buckets[storageKey] = payload;
-  writeStoredProgressBuckets(buckets);
-}
-
-function loadProgress(mode = state.mode) {
-  try {
-    const buckets = readStoredProgressBuckets();
-    const preferredKey = getProgressStorageKey(mode);
-    const preferredSaved = buckets[preferredKey];
-
-    if (restoreProgressPayload(preferredSaved)) {
-      return true;
-    }
-
-    if (preferredKey === "daily" && buckets.daily) {
-      const nextBuckets = {
-        ...buckets,
-        daily: null,
-      };
-      writeStoredProgressBuckets(nextBuckets);
-      return false;
-    }
-
-    if (preferredKey === "practice" && buckets.practice) {
-      const nextBuckets = {
-        ...buckets,
-        practice: null,
-      };
-      writeStoredProgressBuckets(nextBuckets);
-      return false;
-    }
-
-    return false;
-  } catch {
-    clearSavedProgress();
-    return false;
-  }
-}
-
-function savePreferences() {
-  const payload = {
-    theme: state.preferences.theme,
-    difficulty: state.preferences.difficulty,
-    preferredMode: state.preferences.preferredMode,
-    language: getCurrentLanguage(),
-    sound: state.preferences.sound,
-    reducedAnimation: state.preferences.reducedAnimation,
-    highContrast: state.preferences.highContrast,
-    largeText: state.preferences.largeText,
-  };
-
-  try {
-    localStorage.setItem(
-      CONFIG.storageKeys.preferences,
-      JSON.stringify(payload),
-    );
-  } catch { }
-
-  syncCurrentStateToCloudIfSignedIn();
-}
-
-function loadPreferences() {
-  const defaults = {
-    theme: getSystemTheme(),
-    difficulty: "normal",
-    preferredMode: "daily",
-    language: "en",
-    sound: false,
-    reducedAnimation: false,
-    highContrast: false,
-    largeText: false,
-  };
-
-  try {
-    const raw = localStorage.getItem(CONFIG.storageKeys.preferences);
-
-    if (!raw) {
-      state.preferences = defaults;
-      state.mode = defaults.preferredMode;
-      return;
-    }
-
-    const saved = JSON.parse(raw);
-
-    state.preferences = {
-      theme:
-        saved?.theme === "light" || saved?.theme === "dark"
-          ? saved.theme
-          : defaults.theme,
-      difficulty:
-        saved?.difficulty && CONFIG.modes[saved.difficulty]
-          ? saved.difficulty
-          : defaults.difficulty,
-      preferredMode:
-        saved?.preferredMode === "practice"
-          ? "practice"
-          : defaults.preferredMode,
-      language: saved?.language === "ml" ? "ml" : defaults.language,
-      sound: typeof saved?.sound === "boolean" ? saved.sound : defaults.sound,
-      reducedAnimation:
-        typeof saved?.reducedAnimation === "boolean"
-          ? saved.reducedAnimation
-          : defaults.reducedAnimation,
-      highContrast:
-        typeof saved?.highContrast === "boolean"
-          ? saved.highContrast
-          : defaults.highContrast,
-      largeText:
-        typeof saved?.largeText === "boolean"
-          ? saved.largeText
-          : defaults.largeText,
-    };
-  } catch {
-    state.preferences = defaults;
-  }
-
-  state.mode = state.preferences.preferredMode;
 }
 
 function saveStats() {
@@ -3757,315 +3116,6 @@ function formatDate() {
     month: "short",
     day: "numeric",
   });
-}
-
-function getMaxGuesses() {
-  return (
-    CONFIG.modes[state.preferences.difficulty]?.maxGuesses
-    ?? CONFIG.modes.normal.maxGuesses
-  );
-}
-
-function getCurrentModeConfig() {
-  return CONFIG.modes[state.preferences.difficulty] ?? CONFIG.modes.normal;
-}
-
-function getHintSchedule() {
-  return getCurrentModeConfig().hintSchedule ?? {
-    testamentAt: 1,
-    sectionAt: 3,
-    firstLetterAt: 7,
-    referenceAt: 4,
-    distanceAt: 3,
-    distanceRequiresBookPartial: false,
-  };
-}
-
-function getReferenceWithoutBookName(verse, language = getCurrentLanguage()) {
-  const localizedReference = getLocalizedReference(verse, language);
-  const targetBook = getBookByName(verse?.book);
-
-  if (!localizedReference || !targetBook) {
-    return localizedReference || "";
-  }
-
-  const localizedBookName = getLocalizedBookName(targetBook, language);
-  if (!localizedBookName) {
-    return localizedReference;
-  }
-
-  const escapedBookName = localizedBookName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const withoutBook = localizedReference.replace(new RegExp(`^${escapedBookName}\\s*`, "i"), "").trim();
-
-  return withoutBook || localizedReference;
-}
-
-function getNearestGuessDistance() {
-  if (!Array.isArray(state.guesses) || !state.guesses.length) {
-    return null;
-  }
-
-  const distances = state.guesses
-    .map((guess) => (typeof guess?.distance === "number" ? guess.distance : null))
-    .filter((distance) => distance !== null);
-
-  if (!distances.length) {
-    return null;
-  }
-
-  return Math.min(...distances);
-}
-
-function hasBookPartialGuess() {
-  return state.guesses.some((guess) => guess?.bookResult?.state === "partial");
-}
-
-function hasCorrectSectionGuess() {
-  return state.guesses.some((guess) => guess?.section?.state === "correct");
-}
-
-function hasCorrectFirstLetterGuess() {
-  return state.guesses.some((guess) => guess?.firstLetter?.state === "correct");
-}
-
-function buildClueRevealState() {
-  const target = getBookByName(state.currentPuzzle?.verse.book);
-  if (!target || !state.currentPuzzle?.verse) {
-    return {
-      items: [],
-      newlyUnlockedKeys: [],
-    };
-  }
-
-  const language = getCurrentLanguage();
-  const guessCount = state.guesses.length;
-  const schedule = getHintSchedule();
-  const clueUiState = ensureClueUiState();
-
-  const nearestDistance = getNearestGuessDistance();
-  const distanceEligibleBySchedule =
-    Number.isInteger(schedule.distanceAt) && guessCount >= schedule.distanceAt;
-  const distanceEligibleByRule =
-    schedule.distanceRequiresBookPartial === true
-      ? hasBookPartialGuess()
-      : distanceEligibleBySchedule;
-
-  const items = [
-    {
-      key: "testament",
-      label: language === "ml" ? "നിയമം" : "Testament",
-      unlocked:
-        Number.isInteger(schedule.testamentAt) && guessCount >= schedule.testamentAt,
-      value: `It is in the ${getLocalizedTestament(target, language)}`,
-      lockedText:
-        Number.isInteger(schedule.testamentAt)
-          ? `Unlocks after guess ${schedule.testamentAt}.`
-          : "Not available in this mode.",
-      reason: guessCount >= schedule.testamentAt ? "scheduled" : "locked",
-    },
-    {
-      key: "section",
-      label: language === "ml" ? "വിഭാഗം" : "Section",
-      unlocked:
-        (Number.isInteger(schedule.sectionAt) && guessCount >= schedule.sectionAt) ||
-        hasCorrectSectionGuess(),
-      value: `It is in the ${getLocalizedSection(target, language)} section`,
-      lockedText:
-        Number.isInteger(schedule.sectionAt)
-          ? `Unlocks after guess ${schedule.sectionAt}, or earlier if you identify the section.`
-          : "Not available in this mode.",
-      reason: hasCorrectSectionGuess() ? "inferred" : guessCount >= schedule.sectionAt ? "scheduled" : "locked",
-    },
-    {
-      key: "distance",
-      label: language === "ml" ? "ദൂരം" : "Nearest distance",
-      unlocked: distanceEligibleByRule && typeof nearestDistance === "number",
-      value: `Nearest guess: ${nearestDistance} ${nearestDistance === 1 ? "book" : "books"} away`,
-      lockedText:
-        schedule.distanceRequiresBookPartial
-          ? "Unlocks after you earn a gold Book tile."
-          : Number.isInteger(schedule.distanceAt)
-            ? `Unlocks after guess ${schedule.distanceAt}.`
-            : "Not available in this mode.",
-      reason: schedule.distanceRequiresBookPartial
-        ? hasBookPartialGuess()
-          ? "inferred"
-          : "locked"
-        : guessCount >= schedule.distanceAt
-          ? "scheduled"
-          : "locked",
-    },
-    {
-      key: "reference",
-      label: language === "ml" ? "റഫറൻസ്" : "Reference",
-      unlocked:
-        Number.isInteger(schedule.referenceAt) && guessCount >= schedule.referenceAt,
-      value: `Reference: ${getReferenceWithoutBookName(state.currentPuzzle.verse, language)}`,
-      lockedText:
-        Number.isInteger(schedule.referenceAt)
-          ? `Unlocks after guess ${schedule.referenceAt}.`
-          : "Not available in this mode.",
-      reason: guessCount >= schedule.referenceAt ? "scheduled" : "locked",
-    },
-    {
-      key: "firstLetter",
-      label: language === "ml" ? "ആദ്യക്ഷരം" : "First letter",
-      unlocked:
-        (Number.isInteger(schedule.firstLetterAt) && guessCount >= schedule.firstLetterAt) ||
-        hasCorrectFirstLetterGuess(),
-      value: `Its first letter is ${getLocalizedFirstLetter(target, language)}.`,
-      lockedText:
-        Number.isInteger(schedule.firstLetterAt)
-          ? `Unlocks after guess ${schedule.firstLetterAt}, or earlier if you identify the first letter.`
-          : "Not available in this mode.",
-      reason: hasCorrectFirstLetterGuess()
-        ? "inferred"
-        : guessCount >= schedule.firstLetterAt
-          ? "scheduled"
-          : "locked",
-    },
-  ];
-
-  const unlockedKeys = items.filter((item) => item.unlocked).map((item) => item.key);
-  const newlyUnlockedKeys = unlockedKeys.filter(
-    (key) => !clueUiState.lastUnlockedKeys.includes(key),
-  );
-
-  clueUiState.lastUnlockedKeys = unlockedKeys;
-
-  return {
-    items,
-    newlyUnlockedKeys,
-  };
-}
-
-function isGameOver() {
-  return state.status === "won" || state.status === "lost";
-}
-
-function hasCompletedTodaysDaily() {
-  return state.stats.daily.lastDailySolvedDate === getTodayPuzzleDate();
-}
-
-function isCurrentDailyPuzzle() {
-  return state.currentPuzzle?.mode === "daily";
-}
-
-function isCurrentPracticePuzzle() {
-  return state.currentPuzzle?.mode === "practice";
-}
-
-function canChangeDifficulty() {
-  return state.guesses.length === 0 && state.status === "playing";
-}
-
-function getHintLines() {
-  const clueState = buildClueRevealState();
-  const schedule = getHintSchedule();
-
-  return clueState.items.map((item) => {
-    let unlockAt = null;
-    let lockVariant = "standard";
-
-    if (item.key === "testament") {
-      unlockAt = schedule.testamentAt;
-    } else if (item.key === "section") {
-      unlockAt = schedule.sectionAt;
-    } else if (item.key === "distance") {
-      unlockAt = schedule.distanceAt;
-      if (schedule.distanceRequiresBookPartial) {
-        lockVariant = "gold-star";
-      }
-    } else if (item.key === "reference") {
-      unlockAt = schedule.referenceAt;
-    } else if (item.key === "firstLetter") {
-      unlockAt = schedule.firstLetterAt;
-    }
-
-    return {
-      key: item.key,
-      unlocked: item.unlocked,
-      value: item.unlocked ? item.value : item.lockedText,
-      isNew: clueState.newlyUnlockedKeys.includes(item.key),
-      unlockAt,
-      lockVariant,
-    };
-  });
-}
-
-function isAdjacentSection(guess, target) {
-  if (!guess || !target) return false;
-  if (guess.testament !== target.testament) return false;
-
-  const sectionOrderByTestament = {
-    "Old Testament": ["pentateuch", "historical-books", "wisdom-books", "major-prophets", "minor-prophets"],
-    "New Testament": ["gospels", "historical-books", "pauline-letters", "general-epistles", "revelation"],
-  };
-
-  const order = sectionOrderByTestament[target.testament];
-  if (!order) return false;
-
-  const guessIndex = order.indexOf(guess.sectionKey);
-  const targetIndex = order.indexOf(target.sectionKey);
-
-  if (guessIndex < 0 || targetIndex < 0) return false;
-
-  return Math.abs(guessIndex - targetIndex) === 1;
-}
-
-function compareGuess(guessInput) {
-  const language = getCurrentLanguage();
-  const target = getBookByName(state.currentPuzzle?.verse.book);
-  const guess = typeof guessInput === "object" ? guessInput : getBookByName(guessInput);
-
-  if (!target || !guess) return null;
-
-  const distance = getBookDistance(target, guess);
-  const sameTestament = guess.testament === target.testament;
-  const proximity = getProximityLabel(distance, sameTestament);
-
-  const guessFirstLetter = getLocalizedFirstLetter(guess, language);
-  const targetFirstLetter = getLocalizedFirstLetter(target, language);
-
-  return {
-    bookId: guess.id,
-    book: getLocalizedBookName(guess, language),
-    distance,
-    proximity,
-    testament: {
-      value: getLocalizedTestament(guess, language),
-      state: sameTestament ? "correct" : "wrong",
-    },
-    section: {
-      value: getLocalizedSection(guess, language),
-      state: isSameSection(guess, target)
-        ? "correct"
-        : isAdjacentSection(guess, target)
-          ? "partial"
-          : "wrong",
-    },
-    firstLetter: {
-      value: guessFirstLetter,
-      state: guessFirstLetter === targetFirstLetter ? "correct" : "wrong",
-    },
-    bookResult: {
-      value: getLocalizedBookName(guess, language),
-      state:
-        proximity === "exact"
-          ? "correct"
-          : proximity === "very close" || proximity === "near"
-            ? "partial"
-            : "wrong",
-    },
-    solved: guess.id === target.id,
-  };
-}
-
-function getAttemptLabel() {
-  if (state.status === "won") return "You solved it";
-  if (state.status === "lost") return "Out of guesses";
-  if (state.guesses.length === 0) return "Start guessing";
-  return "Guess again";
 }
 
 function syncPreferenceControls() {

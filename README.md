@@ -31,31 +31,52 @@ At runtime, the app loads book and verse data, hydrates saved preferences and st
 
 This keeps modal behavior consistent across help, settings, stats, archive, leaderboard, and post-game dialogs without duplicating DOM logic in each feature module.
 
-### Render pipeline
+### `books.js`
 
-`js/render-pipeline.js` acts as a lightweight UI orchestration layer. Instead of letting every feature mutate the interface independently, the render pipeline coordinates control rendering, auth rendering, puzzle rendering, stats rendering, preference-driven rerenders, mode switches, and transient UI cleanup.
+Localized book metadata includes fields such as:
 
-This creates a predictable rendering flow and helps keep `bibdle.js` focused on application state and rules instead of direct DOM sequencing.
+- `id`
+- `name`
+- `nameMl`
+- `testament`
+- `testamentMl`
+- `section`
+- `sectionMl`
+- `sectionKey`
+- `bookIntroTitle`
+- `bookIntroTitleMl`
+- `bookIntroText`
+- `bookIntroTextMl`
+- `bookThemes`
+- `bookThemesMl`
+- `normalizedName`
+- `firstLetter`
 
-### Bindings-oriented structure
+The exported `books` array normalizes intro and theme field names to `bookIntroTextMl`, `bookIntroText`, `bookThemesMl`, and `bookThemes`. Application code should use these canonical names.
 
-`js/bindings.js` implements a bindings-oriented event layer. It centralizes event subscription for gameplay inputs, settings controls, delegated document clicks, archive interactions, modal actions, share/copy actions, auth controls, and post-game actions.
+### `verses.js`
 
-That structure makes the app easier to maintain because event wiring is separated from rendering and from the underlying game rules. In practice, `bibdle.js` defines handlers, `bindings.js` connects them to the DOM, and the surface modules render the resulting UI.
+Localized verse content includes fields such as:
 
-### Surface and read-model modules
+- `id`
+- `book`
+- `bookMl`
+- `bookId`
+- `reference`
+- `referenceMl`
+- `text`
+- `textMl`
+- `difficulty`
+- `themes`
+- `themesMl`
+- `clue`
+- `clueMl`
+- `explanation`
+- `explanationMl`
 
-The project also follows a surface/read-model pattern in several areas:
+## Persistence
 
-- **Surface modules** render specific UI regions, such as `puzzle-surface.js`, `stats-surface.js`, `postgame-surface.js`, `archive-surface.js`, and `leaderboard-surface.js`.
-- **Read-model modules** prepare UI-friendly data structures, such as `achievement-read-models.js`, `archive-read-models.js`, `postgame-read-models.js`, and `stats-read-models.js`.
-- **Utility modules** such as `ui-render-utils.js` and `ui-refactor-helpers.js` provide shared rendering helpers, empty/loading states, and small view utilities.
-
-This separation reduces coupling between raw state and final markup, making feature-specific UI easier to reason about and extend.
-
-## Features
-
-The following features are implemented in the provided code:
+Bibdle stores the following in the browser:
 
 - Daily puzzle mode with date-based puzzle selection
 - Practice mode for non-daily play
@@ -85,79 +106,48 @@ The following features are implemented in the provided code:
 ├── README.md
 ├── css/
 │   └── bibdle.css
-└── js/
-    ├── data/
-    │   ├── books.js
-    │   └── verses.js
-    ├── achievement-read-models.js
-    ├── app-shell.js
-    ├── archive-read-models.js
-    ├── archive-surface.js
-    ├── auth-service.js
-    ├── bibdle.js
-    ├── bindings.js
-    ├── game-transitions.js
-    ├── leaderboard-surface.js
-    ├── modal-service.js
-    ├── postgame-read-models.js
-    ├── postgame-surface.js
-    ├── puzzle-surface.js
-    ├── render-pipeline.js
-    ├── stats-read-models.js
-    ├── stats-surface.js
-    ├── ui-refactor-helpers.js
-    └── ui-render-utils.js
+├── js/
+│   ├── bibdle.js
+│   ├── config.js
+│   ├── app-shell.js
+│   ├── auth-service.js
+│   ├── bindings.js
+│   ├── game-rules.js
+│   ├── localization-service.js
+│   ├── modal-service.js
+│   ├── preferences-storage.js
+│   ├── progress-storage.js
+│   ├── render-pipeline.js
+│   └── data/
+│       ├── books.js
+│       └── verses.js
+└── assets/
+    └── achievements/
 ```
 
-## Running the Project
+`bibdle.js` is the browser entry point and coordinates application state and startup. Configuration, localization and autocomplete, authentication, modal behavior, event binding, and render transitions live in focused modules. The book and verse datasets stay under `js/data/`.
 
-Because Bibdle is a browser-based ES module application, it should be served from a local web server rather than opened directly from the filesystem.
+## Verification
 
-### Option 1: VS Code Live Server
+The app remains a static site with no application build step. The automated test tooling is development-only:
 
-1. Open the project folder in VS Code.
-2. Install the **Live Server** extension if needed.
-3. Start Live Server from `index.html` or from the project root.
-4. Open the local URL in your browser.
-
-### Option 2: Simple local server
-
-From the project root, run one of the following:
-
-```bash
-# Python 3
-python -m http.server 8000
+```sh
+npm ci
+npm run test:unit
+npm run test:e2e:install
+npm run test:e2e
+npm test
+npm run test:coverage
 ```
 
-Then open:
+The Vitest unit suite covers the data model, localization and search, game rules, storage, authentication,
+rendering, modal behavior, application startup, and event bindings. Playwright runs the application in Chromium
+with Firebase Authentication and Firestore requests replaced by deterministic offline mocks; it exercises
+gameplay, clue progression, bilingual canonical duplicate handling, preferences and persistence, stats, archive,
+modal accessibility, sign-in, leaderboard rendering, and the expected Firestore queries and writes. GitHub Actions
+runs the unit and browser suites on pushes and pull requests. No live Firebase account or external Firebase
+service is required for tests.
 
-```text
-http://localhost:8000/
-```
+## Notes
 
-### Build/deploy notes
-
-This project does not require a JavaScript build step based on the provided files. It is written as a static front-end app using native ES modules.
-
-For production hosting, deploy the project as static files to any web host that can serve `index.html`, the `css/` directory, and the `js/` directory.
-
-## Firebase Notes
-
-The provided code includes Firebase configuration and optional cloud features. When Firebase is available and correctly configured, the app can:
-
-- Authenticate users
-- Sync local preferences and stats to a cloud profile
-- Load cloud profile data back into the app
-- Store and retrieve Daily leaderboard data
-
-If Firebase is unavailable, the game still supports local gameplay and browser-based persistence.
-
-## Development Notes
-
-A few implementation characteristics are especially useful when working on the project:
-
-- The central state object in `bibdle.js` is the source of truth for gameplay, preferences, stats, auth state, leaderboard state, and transient UI state.
-- Rendering is intentionally split into surface modules and coordinated through the render pipeline.
-- Modal behavior is abstracted behind the modal service rather than being implemented ad hoc per dialog.
-- Event hookup is centralized in the bindings layer, which keeps the DOM event map easier to audit.
-- View-model/read-model helpers are used to transform raw state into presentational data before rendering.
+The app remains fully client-side for gameplay, rendering, and local persistence. The book data module normalizes intro and theme field aliases when exporting its data, while the content itself remains unchanged. Generic UI chrome intentionally remains in English while data-driven Bible content can switch between English and Malayalam.
