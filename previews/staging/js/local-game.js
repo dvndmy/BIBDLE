@@ -450,8 +450,20 @@ export function createLocalGameController({
       if (!roomSnapshot.exists()) throw new Error("We couldn't find that room.");
       room = roomSnapshot.data();
       if (room.status === "finished") throw new Error("This game has already finished.");
-      if (room.expiresAt &&
-        (room.expiresAt.toMillis?.() ?? new Date(room.expiresAt).getTime()) <= Date.now()) {
+      let roomExpiryMigration = null;
+      if (!room.expiresAt) {
+        if (room.hostUid !== user.uid) {
+          throw new Error("This older room needs its host to reopen it before players can join.");
+        }
+        const createdAt = room.createdAt?.toMillis?.() ?? new Date(room.createdAt).getTime();
+        const expiresAt = new Date(createdAt + ROOM_TTL_MS);
+        if (!Number.isFinite(createdAt) || expiresAt.getTime() <= Date.now()) {
+          throw new Error("This older room has expired. Ask the host to create a new room.");
+        }
+        roomExpiryMigration = expiresAt;
+        room = { ...room, expiresAt };
+      }
+      if ((room.expiresAt.toMillis?.() ?? new Date(room.expiresAt).getTime()) <= Date.now()) {
         throw new Error("This room has expired.");
       }
       const prior = existing.exists() ? existing.data() : {};
@@ -461,6 +473,9 @@ export function createLocalGameController({
       }
       if (alreadyActive) {
         player = prior;
+        if (roomExpiryMigration) {
+          transaction.update(roomDocument, { expiresAt: roomExpiryMigration });
+        }
         return;
       }
       player = {
@@ -477,9 +492,10 @@ export function createLocalGameController({
         expiresAt: room.expiresAt || new Date(Date.now() + ROOM_TTL_MS),
       };
       transaction.set(existingRef, player, { merge: true });
-      if (!alreadyActive) {
-        transaction.update(roomDocument, { playerCount: (room.playerCount || 0) + 1 });
-      }
+      transaction.update(roomDocument, {
+        playerCount: (room.playerCount || 0) + 1,
+        ...(roomExpiryMigration ? { expiresAt: roomExpiryMigration } : {}),
+      });
     });
     state.roomId = safeRoomId;
     state.room = room;
