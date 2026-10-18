@@ -3678,6 +3678,16 @@ html[lang-mode="ml"] .suggestion-secondary {
     border-color: var(--color-primary);
 }
 
+.room-leaderboard__row.is-final {
+    background: var(--surface-panel);
+}
+
+.room-leaderboard__row.is-you.is-final {
+    background: color-mix(in srgb, var(--color-primary) 14%, var(--surface-panel-strong));
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 1px var(--color-primary);
+}
+
 .room-empty,
 .room-scoring-note {
     margin: 0;
@@ -3711,6 +3721,13 @@ html[lang-mode="ml"] .suggestion-secondary {
     color: var(--color-text-muted);
     font-family: var(--font-ui);
     font-size: var(--text-sm);
+}
+
+.local-game-bar__final-label {
+    margin: var(--space-2) 0 0;
+    color: var(--color-primary);
+    font-family: var(--font-ui);
+    font-size: var(--text-md);
 }
 
 .local-game-bar__stats strong {
