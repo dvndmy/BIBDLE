@@ -57,6 +57,50 @@ test("room creation, lobby and mid-game joins, scoring, listing, and host cleanu
   const guestPlayer = doc(guest, `${roomPath}/players/guest-user`);
   const batch = writeBatch(host);
 
+  const legacyRoomId = "legacy-room-001";
+  const legacyRoomPath = `localRooms/${legacyRoomId}`;
+  const legacyCreatedAt = Timestamp.fromMillis(Date.now() - 1000);
+  const legacyExpiry = Timestamp.fromMillis(
+    legacyCreatedAt.toMillis() + 24 * 60 * 60 * 1000,
+  );
+  await environment.withSecurityRulesDisabled(async (context) => {
+    const legacyDb = context.firestore();
+    await setDoc(doc(legacyDb, legacyRoomPath), {
+      name: "Legacy Room",
+      visibility: "link",
+      gameType: "rounds",
+      durationMinutes: null,
+      roundsTotal: 3,
+      maxPlayers: 200,
+      playerCount: 0,
+      hostUid: "host-user",
+      status: "lobby",
+      round: 0,
+      bookId: null,
+      verseId: null,
+      usedBookIds: [],
+      createdAt: legacyCreatedAt,
+    });
+    await setDoc(doc(legacyDb, `${legacyRoomPath}/players/host-user`), player(
+      "host-user",
+      { active: false, joinedAt: legacyCreatedAt, expiresAt: legacyCreatedAt },
+    ));
+  });
+
+  const legacyRejoin = writeBatch(host);
+  legacyRejoin.set(doc(host, `${legacyRoomPath}/players/host-user`), player(
+    "host-user",
+    { active: true, joinedAt: legacyCreatedAt, expiresAt: legacyExpiry },
+  ), { merge: true });
+  legacyRejoin.update(doc(host, legacyRoomPath), {
+    playerCount: 1,
+    expiresAt: legacyExpiry,
+  });
+  await assertSucceeds(legacyRejoin.commit());
+  await assertFails(updateDoc(doc(host, legacyRoomPath), {
+    expiresAt: Timestamp.fromMillis(legacyExpiry.toMillis() + 60 * 60 * 1000),
+  }));
+
   batch.set(hostRoom, {
     name: "Rule Test",
     visibility: "public",
@@ -81,6 +125,26 @@ test("room creation, lobby and mid-game joins, scoring, listing, and host cleanu
   lobbyJoin.set(guestPlayer, player("guest-user"));
   lobbyJoin.update(doc(guest, roomPath), { playerCount: 2 });
   await assertSucceeds(lobbyJoin.commit());
+
+  const leaveLobby = writeBatch(guest);
+  leaveLobby.update(guestPlayer, { active: false });
+  leaveLobby.update(doc(guest, roomPath), { playerCount: 1 });
+  await assertSucceeds(leaveLobby.commit());
+
+  const priorGuest = (await getDoc(guestPlayer)).data();
+  const rejoinLobby = writeBatch(guest);
+  rejoinLobby.set(guestPlayer, {
+    ...priorGuest,
+    active: true,
+    activeRound: 0,
+    guesses: 0,
+    roundCompleted: false,
+    lastRoundScore: 0,
+    lastCorrect: false,
+    expiresAt,
+  }, { merge: true });
+  rejoinLobby.update(doc(guest, roomPath), { playerCount: 2 });
+  await assertSucceeds(rejoinLobby.commit());
 
   await assertSucceeds(updateDoc(hostRoom, {
     status: "playing",

@@ -26,6 +26,20 @@ service cloud.firestore {
         && get(playerPath(roomId, request.auth.uid)).data.active == true;
     }
 
+    function validLegacyRoomExpiryMigration() {
+      let changed = request.resource.data.diff(resource.data).affectedKeys();
+
+      return signedIn()
+        && changed.hasOnly(['expiresAt'])
+        && !('expiresAt' in resource.data)
+        && resource.data.hostUid == request.auth.uid
+        && resource.data.createdAt is timestamp
+        && request.resource.data.expiresAt is timestamp
+        && request.resource.data.expiresAt > request.time
+        && request.resource.data.expiresAt
+          <= resource.data.createdAt + duration.value(24, 'h');
+    }
+
     function validRoomCreate() {
       return signedIn()
         && request.resource.data.keys().hasAll([
@@ -127,13 +141,24 @@ service cloud.firestore {
     function validRoomPlayerCountUpdate(roomId) {
       let changed = request.resource.data.diff(resource.data).affectedKeys();
       let member = playerPath(roomId, request.auth.uid);
+      let legacyExpiryMigration =
+        !('expiresAt' in resource.data)
+        && resource.data.hostUid == request.auth.uid
+        && resource.data.createdAt is timestamp
+        && request.resource.data.expiresAt is timestamp
+        && request.resource.data.expiresAt > request.time
+        && request.resource.data.expiresAt
+          <= resource.data.createdAt + duration.value(24, 'h');
 
       let addedMember =
         (!exists(member) || get(member).data.active == false)
         && existsAfter(member)
         && getAfter(member).data.active == true
         && resource.data.status in ['lobby', 'playing']
-        && resource.data.expiresAt > request.time;
+        && (legacyExpiryMigration
+          || ('expiresAt' in resource.data
+            && resource.data.expiresAt > request.time
+            && request.resource.data.expiresAt == resource.data.expiresAt));
 
       let removedMember =
         exists(member)
@@ -142,11 +167,12 @@ service cloud.firestore {
         && getAfter(member).data.active == false;
 
       return signedIn()
-        && changed.hasOnly(['playerCount'])
+        && changed.hasOnly(['playerCount', 'expiresAt'])
         && (addedMember
           ? request.resource.data.playerCount == resource.data.playerCount + 1
             && request.resource.data.playerCount <= resource.data.maxPlayers
           : removedMember
+            && changed.hasOnly(['playerCount'])
             && request.resource.data.playerCount == resource.data.playerCount - 1
             && request.resource.data.playerCount >= 0);
     }
@@ -299,9 +325,16 @@ service cloud.firestore {
         !resource.data.active
         && request.resource.data.active
         && room.status in ['lobby', 'playing']
-        && room.expiresAt > request.time
+        && (!('expiresAt' in room)
+          ? room.hostUid == request.auth.uid
+          : room.expiresAt > request.time)
         && roomAfter.playerCount == room.playerCount + 1
-        && roomAfter.expiresAt == room.expiresAt
+        && roomAfter.expiresAt is timestamp
+        && roomAfter.expiresAt > request.time
+        && (('expiresAt' in room)
+          ? roomAfter.expiresAt == room.expiresAt
+          : roomAfter.expiresAt
+            <= room.createdAt + duration.value(24, 'h'))
         && request.resource.data.uid == resource.data.uid
         && request.resource.data.joinedAt == resource.data.joinedAt
         && request.resource.data.score == resource.data.score
@@ -310,7 +343,7 @@ service cloud.firestore {
         && request.resource.data.activeRound == 0
         && request.resource.data.roundCompleted == false
         && request.resource.data.lastCorrect == false
-        && request.resource.data.expiresAt == room.expiresAt;
+        && request.resource.data.expiresAt == roomAfter.expiresAt;
 
       let leaving =
         resource.data.active
@@ -416,7 +449,8 @@ service cloud.firestore {
         && resource.data.status in ['lobby', 'playing'];
       allow create: if validRoomCreate();
       allow update: if validRoomGameUpdate()
-        || validRoomPlayerCountUpdate(roomId);
+        || validRoomPlayerCountUpdate(roomId)
+        || validLegacyRoomExpiryMigration();
       allow delete: if signedIn()
         && resource.data.hostUid == request.auth.uid
         && resource.data.status in ['lobby', 'finished'];

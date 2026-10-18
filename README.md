@@ -68,6 +68,8 @@ gcloud firestore fields ttls update expiresAt --collection-group=players --enabl
 
 Run `npm run test:rules` to exercise room creation, lobby and in-progress joins, round writes, public discovery, scoring, and host cleanup against the Firestore Emulator; this requires the Firebase CLI and Java. Firestore TTL deletion is eventual. When a game ends, the host deletes the room and player records after a short scoreboard display delay; TTL provides cleanup for abandoned rooms. A `permission-denied` room error usually means the rules were not deployed to `bibdle-db7ae` or the required Authentication provider is disabled. The rules preserve signed-in profile sync and the daily leaderboard while restricting room membership and writes.
 
+Rooms created by an older app version may not have an `expiresAt` field. The host can rejoin an unexpired legacy room to migrate its expiry from the original `createdAt` time; rooms already older than 24 hours must be recreated.
+
 The invite QR code is rendered from the full room URL by QRServer. The unique room link grants access to anyone who receives it, including the room's public scores and player names.
 
 ## Canon Coverage
