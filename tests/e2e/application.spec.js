@@ -260,3 +260,81 @@ test("traps focus in modals and restores focus after Escape", async ({ page }) =
   await page.keyboard.press("Tab");
   await expect(firstSettingsControl).toBeFocused();
 });
+
+test("creates a room, starts shared rounds, and updates the local leaderboard", async ({ page }) => {
+  const pageErrors = await openApp(page);
+  await page.locator("#localGameBtn").click();
+  await expect(page.locator("#localGameModal")).toHaveAttribute("data-open", "true");
+  await page.locator("#roomVisibility").selectOption("public");
+  await page.locator("#roomGameType").selectOption("rounds");
+  await page.locator("#roomRounds").fill("3");
+  await page.locator("#createRoomForm button[type='submit']").click();
+
+  await expect(page.locator("#localRoomView")).toBeVisible();
+  await expect(page.locator("#localRoomTitle")).toHaveText("BIBDLE room");
+  await expect(page.locator("#roomPlayers")).toContainText("St.");
+  await expect(page.locator("#roomInviteLink")).toHaveValue(/room=mock-room-1/);
+  await expect(page.locator("#roomQrCode")).toHaveAttribute("src", /create-qr-code/);
+  const hostPlayer = await page.evaluate(() =>
+    globalThis.__firebaseMockState.documents.get(
+      "localRooms/mock-room-1/players/mock-anonymous-user",
+    ),
+  );
+  expect(hostPlayer).toMatchObject({
+    lastCorrect: false,
+    roundCompleted: false,
+  });
+
+  await page.locator("#startRoomGameBtn").click();
+  await expect(page.locator("#localGameBar")).toBeVisible();
+  await expect(page.locator("#localGameRound")).toHaveText("Round 1 of 3");
+  const answer = await currentAnswer(page);
+  await submitBook(page, answer);
+  await expect(page.locator("#localGameLeaderboard")).toContainText("10 pts");
+  await expect(page.locator("#localGameNextRoundBtn")).toBeEnabled();
+
+  await page.locator("#localGameNextRoundBtn").click();
+  await expect(page.locator("#localGameRound")).toHaveText("Round 2 of 3");
+  await expect.poll(() => page.evaluate(() =>
+    globalThis.__firebaseMockState.documents.get(
+      "localRooms/mock-room-1/players/mock-anonymous-user",
+    )?.lastCorrect,
+  )).toBe(false);
+  const nextAnswer = await currentAnswer(page);
+  expect(nextAnswer.id).not.toBe(answer.id);
+  await expect(page.locator("#localGameModal")).toHaveAttribute("data-open", "false");
+
+  const calls = await page.evaluate(() => globalThis.__firebaseMockState.calls);
+  expect(calls.some((call) => call.method === "onSnapshot" && call.path === "localRooms/mock-room-1")).toBe(true);
+  expect(pageErrors).toEqual([]);
+});
+
+test("supports custom timed rooms and signed-in player names", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await openApp(page);
+  await page.locator("#localGameBtn").click();
+  await page.locator("#roomSignInBtn").click();
+  await expect(page.locator("#authStatus")).toContainText("Test Player");
+  await page.locator("#roomDuration").selectOption("custom");
+  await expect(page.locator("#customDuration")).toBeVisible();
+  await page.locator("#customDuration").fill("2");
+  await page.locator("#createRoomForm button[type='submit']").click();
+
+  await expect(page.locator("#localRoomView")).toBeVisible();
+  await expect(page.locator("#localRoomStatus")).toContainText("2 minute game");
+  await expect(page.locator("#roomPlayers")).toContainText("Test Player");
+  await page.locator("#startRoomGameBtn").click();
+  await expect(page.locator("#localGameBar")).toBeVisible();
+  await expect(page.locator("#localGameClock")).not.toBeEmpty();
+
+  const room = await page.evaluate(() =>
+    [...globalThis.__firebaseMockState.documents.entries()]
+      .find(([path]) => path.startsWith("localRooms/") && !path.includes("/players/"))?.[1],
+  );
+  expect(room).toMatchObject({
+    gameType: "timed",
+    durationMinutes: 2,
+    status: "playing",
+    round: 1,
+  });
+});

@@ -1,0 +1,297 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function roomPath(roomId) {
+      return /databases/$(database)/documents/localRooms/$(roomId);
+    }
+
+    function playerPath(roomId, uid) {
+      return /databases/$(database)/documents/localRooms/$(roomId)/players/$(uid);
+    }
+
+    function isRoomMember(roomId) {
+      return signedIn()
+        && exists(playerPath(roomId, request.auth.uid))
+        && get(playerPath(roomId, request.auth.uid)).data.active == true;
+    }
+
+    function isRoomHost(roomId) {
+      return signedIn()
+        && get(roomPath(roomId)).data.hostUid == request.auth.uid;
+    }
+
+    function validRoomCreate() {
+      return signedIn()
+        && request.resource.data.keys().hasAll([
+          'name', 'visibility', 'gameType', 'durationMinutes', 'roundsTotal',
+          'maxPlayers', 'playerCount', 'hostUid', 'status', 'round',
+          'verseId', 'usedBookIds', 'createdAt'
+        ])
+        && request.resource.data.keys().hasOnly([
+          'name', 'visibility', 'gameType', 'durationMinutes', 'roundsTotal',
+          'maxPlayers', 'playerCount', 'hostUid', 'status', 'round',
+          'verseId', 'usedBookIds', 'createdAt'
+        ])
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 48
+        && request.resource.data.visibility in ['link', 'public']
+        && request.resource.data.gameType in ['timed', 'rounds']
+        && request.resource.data.maxPlayers == 200
+        && request.resource.data.playerCount == 1
+        && request.resource.data.hostUid == request.auth.uid
+        && request.resource.data.status == 'lobby'
+        && request.resource.data.round == 0
+        && request.resource.data.verseId == null
+        && request.resource.data.usedBookIds is list
+        && request.resource.data.usedBookIds.size() == 0
+        && request.resource.data.createdAt is timestamp
+        && (request.resource.data.gameType == 'timed'
+          ? request.resource.data.durationMinutes is int
+            && request.resource.data.durationMinutes >= 1
+            && request.resource.data.durationMinutes <= 240
+            && request.resource.data.roundsTotal == null
+          : request.resource.data.durationMinutes == null
+            && request.resource.data.roundsTotal is int
+            && request.resource.data.roundsTotal >= 1
+            && request.resource.data.roundsTotal <= 1000);
+    }
+
+    function validRoomGameUpdate(roomId) {
+      let changed = request.resource.data.diff(resource.data).affectedKeys();
+      return isRoomHost(roomId)
+        && changed.hasOnly([
+          'status', 'round', 'verseId', 'usedBookIds', 'startedAt',
+          'deadlineAt', 'finishedAt'
+        ])
+        && (request.resource.data.status == 'finished'
+          ? changed.hasOnly(['status', 'finishedAt'])
+            && request.resource.data.finishedAt is timestamp
+          : request.resource.data.status == 'playing'
+            && resource.data.status in ['lobby', 'playing']
+            && request.resource.data.round == resource.data.round + 1
+            && request.resource.data.round >= 1
+            && request.resource.data.verseId is string
+            && request.resource.data.usedBookIds is list
+            && request.resource.data.usedBookIds.size() <= 73
+            && (resource.data.gameType != 'rounds'
+              || request.resource.data.round <= resource.data.roundsTotal)
+            && (resource.data.gameType != 'timed'
+              || resource.data.deadlineAt == null
+              || request.resource.data.deadlineAt == resource.data.deadlineAt)
+            && (request.resource.data.round == 1
+              ? resource.data.gameType != 'timed'
+                || request.resource.data.startedAt is int
+                  && request.resource.data.deadlineAt is int
+                  && request.resource.data.deadlineAt > request.time.toMillis()
+              : !changed.hasAny(['startedAt', 'deadlineAt']));
+    }
+
+    function validRoomPlayerCountUpdate(roomId) {
+      let changed = request.resource.data.diff(resource.data).affectedKeys();
+      let member = playerPath(roomId, request.auth.uid);
+      let addedMember = (!exists(member) || get(member).data.active == false)
+        && existsAfter(member)
+        && getAfter(member).data.active == true;
+      let removedMember = exists(member)
+        && get(member).data.active == true
+        && existsAfter(member)
+        && getAfter(member).data.active == false;
+      return signedIn()
+        && changed.hasOnly(['playerCount'])
+        && (addedMember
+          ? request.resource.data.playerCount == resource.data.playerCount + 1
+            && request.resource.data.playerCount <= resource.data.maxPlayers
+          : removedMember
+            && request.resource.data.playerCount == resource.data.playerCount - 1
+            && request.resource.data.playerCount >= 0);
+    }
+
+    function validPlayer(data) {
+      return data.keys().hasAll([
+          'uid', 'name', 'score', 'lastRoundScore', 'guesses',
+          'activeRound', 'roundCompleted', 'active', 'joinedAt'
+        ])
+        && data.keys().hasOnly([
+          'uid', 'name', 'score', 'lastRoundScore', 'guesses',
+          'activeRound', 'roundCompleted', 'active', 'lastCorrect',
+          'joinedAt'
+        ])
+        && data.uid == request.auth.uid
+        && data.name is string
+        && data.name.size() > 0
+        && data.name.size() <= 32
+        && data.score is int
+        && data.score >= 0
+        && data.lastRoundScore is int
+        && data.lastRoundScore >= 0
+        && data.lastRoundScore <= 10
+        && data.guesses is int
+        && data.guesses >= 0
+        && data.guesses <= 10
+        && data.activeRound is int
+        && data.activeRound >= 0
+        && data.roundCompleted is bool
+        && data.active is bool
+        && data.joinedAt is timestamp;
+    }
+
+    function validPlayerCreate(roomId, uid) {
+      let room = getAfter(roomPath(roomId));
+      return signedIn()
+        && uid == request.auth.uid
+        && room.data.hostUid == request.auth.uid
+        && room.data.playerCount == 1
+        && room.data.status == 'lobby'
+        && validPlayer(request.resource.data)
+        && request.resource.data.score == 0
+        && request.resource.data.activeRound == 0
+        && request.resource.data.active == true;
+    }
+
+    function validPlayerUpdate(roomId, uid) {
+      let changed = request.resource.data.diff(resource.data).affectedKeys();
+      let room = get(roomPath(roomId)).data;
+      let sameScore = request.resource.data.score == resource.data.score;
+      let completedRound = !resource.data.roundCompleted
+        && request.resource.data.roundCompleted
+        && request.resource.data.activeRound == room.round
+        && room.status == 'playing'
+        && request.resource.data.score == resource.data.score
+          + (request.resource.data.lastCorrect
+            ? 11 - request.resource.data.guesses
+            : 0)
+        && request.resource.data.lastRoundScore
+          == (request.resource.data.lastCorrect
+            ? 11 - request.resource.data.guesses
+            : 0)
+        && (!('deadlineAt' in room)
+          || request.time.toMillis() <= room.deadlineAt);
+      let nextRound = room.status == 'playing'
+        && request.resource.data.activeRound == room.round
+        && resource.data.activeRound < room.round
+        && request.resource.data.score == resource.data.score;
+      let leaving = resource.data.active
+        && !request.resource.data.active
+        && request.resource.data.score == resource.data.score;
+      return signedIn()
+        && uid == request.auth.uid
+        && validPlayer(request.resource.data)
+        && request.resource.data.uid == resource.data.uid
+        && changed.hasOnly([
+          'name', 'score', 'lastRoundScore', 'guesses', 'activeRound',
+          'roundCompleted', 'active', 'lastCorrect'
+        ])
+        && (sameScore || completedRound || nextRound || leaving);
+    }
+
+    function dailyScorePath(dateKey, uid) {
+      return /databases/$(database)/documents/dailyStats/$(dateKey)/scores/$(uid);
+    }
+
+    function validDailyScore(dateKey, uid) {
+      return signedIn()
+        && uid == request.auth.uid
+        && request.resource.data.keys().hasAll([
+          'uid', 'displayName', 'result', 'guesses', 'completedAt', 'puzzleId'
+        ])
+        && request.resource.data.keys().hasOnly([
+          'uid', 'displayName', 'result', 'guesses', 'completedAt', 'puzzleId'
+        ])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.displayName is string
+        && request.resource.data.displayName.size() <= 32
+        && request.resource.data.result in ['won', 'lost']
+        && (request.resource.data.result == 'won'
+          ? request.resource.data.guesses is int
+            && request.resource.data.guesses >= 1
+            && request.resource.data.guesses <= 8
+          : request.resource.data.guesses == null)
+        && request.resource.data.completedAt is timestamp
+        && request.resource.data.puzzleId is string;
+    }
+
+    function validDailyStats(dateKey, creating) {
+      let scorePath = dailyScorePath(dateKey, request.auth.uid);
+      let score = getAfter(scorePath).data;
+      let oldPlayers = creating ? 0 : resource.data.players;
+      let oldSolvers = creating ? 0 : resource.data.solvers;
+      let oldTotal = creating ? 0 : resource.data.totalWinningGuesses;
+      return signedIn()
+        && existsAfter(scorePath)
+        && score.uid == request.auth.uid
+        && request.resource.data.keys().hasAll([
+          'date', 'puzzleId', 'players', 'solvers',
+          'totalWinningGuesses', 'averageWinningGuesses', 'updatedAt'
+        ])
+        && request.resource.data.keys().hasOnly([
+          'date', 'puzzleId', 'players', 'solvers',
+          'totalWinningGuesses', 'averageWinningGuesses', 'updatedAt'
+        ])
+        && request.resource.data.date == dateKey
+        && request.resource.data.puzzleId == score.puzzleId
+        && request.resource.data.players == oldPlayers + 1
+        && request.resource.data.solvers == oldSolvers
+          + (score.result == 'won' ? 1 : 0)
+        && request.resource.data.totalWinningGuesses == oldTotal
+          + (score.result == 'won' ? score.guesses : 0)
+        && request.resource.data.averageWinningGuesses
+          == (request.resource.data.solvers > 0
+            ? request.resource.data.totalWinningGuesses
+              / request.resource.data.solvers
+            : 0)
+        && request.resource.data.updatedAt is timestamp;
+    }
+
+    match /users/{uid}/profile/{profileId} {
+      allow read, create, update: if signedIn() && request.auth.uid == uid;
+      allow delete: if false;
+    }
+
+    match /dailyStats/{dateKey} {
+      allow get: if true;
+      allow list: if false;
+      allow create: if validDailyStats(dateKey, true);
+      allow update: if !exists(dailyScorePath(dateKey, request.auth.uid))
+        && validDailyStats(dateKey, false);
+      allow delete: if false;
+
+      match /scores/{uid} {
+        allow get, list: if true;
+        allow create: if validDailyScore(dateKey, uid);
+        allow update, delete: if false;
+      }
+    }
+
+    match /localRooms/{roomId} {
+      allow get: if signedIn();
+      allow list: if signedIn()
+        && resource.data.visibility == 'public'
+        && resource.data.status in ['lobby', 'playing'];
+      allow create: if validRoomCreate();
+      allow update: if validRoomGameUpdate(roomId)
+        || validRoomPlayerCountUpdate(roomId);
+      allow delete: if isRoomHost(roomId)
+        && resource.data.status == 'lobby';
+
+      match /players/{uid} {
+        allow get: if signedIn()
+          && (request.auth.uid == uid || isRoomMember(roomId));
+        allow list: if isRoomMember(roomId);
+        allow create: if validPlayerCreate(roomId, uid)
+          || (signedIn()
+            && uid == request.auth.uid
+            && get(roomPath(roomId)).data.status in ['lobby', 'playing']
+            && validPlayer(request.resource.data)
+            && request.resource.data.score == 0);
+        allow update: if validPlayerUpdate(roomId, uid);
+        allow delete: if false;
+      }
+    }
+  }
+}

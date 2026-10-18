@@ -6,10 +6,12 @@ export {
   getFirestore,
   increment,
   limit,
+  onSnapshot,
   orderBy,
   query,
   runTransaction,
   serverTimestamp,
   setDoc,
+  updateDoc,
   where,
 } from "./firebase-test-runtime.js";

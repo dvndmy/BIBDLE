@@ -2,13 +2,82 @@
 
 Bibdle is a browser-based Catholic Bible verse guessing game inspired by daily deduction games. Each round presents a verse and challenges the player to identify the correct Bible book using structured feedback such as testament, section, first-letter clues, and canonical proximity.
 
-The project is a client-side web application built with plain HTML, CSS, and JavaScript. It uses a modular, surface-oriented architecture that separates rendering, modal orchestration, event bindings, read-model/view-model generation, and gameplay logic while keeping deployment lightweight.
+## Features
 
-## Overview
+- Daily puzzle mode with streaks, stats, leaderboard submission, and archive progress.
+- Practice mode with separate stats.
+- Easy, Normal, and Hard difficulty modes.
+- Bilingual Bible data support with English (`en`) and Malayalam (`ml`) language modes.
+- Language-aware book search and autocomplete with keyboard support.
+- Malayalam mode accepts guesses in either English or Malayalam while resolving both to the same canonical book.
+- Canonical duplicate protection, so a book guessed in one language is treated as already guessed in the other.
+- Light/dark theme toggle.
+- Accessibility settings for reduced motion, high contrast, and larger text.
+- Post-game panel with localized verse reference, verse text, explanation, book intro, trivia, and stats.
+- Stats modal for historical progress and streak badges.
+- Archive map showing Daily solved progress across the Catholic canon, with localized book, testament, and section metadata.
+- Responsive layout for desktop and mobile.
+- Firebase-backed global daily leaderboard alongside local browser persistence.
+- Realtime local rooms with invite links and QR codes, timed or round-count games, saint-named guests, and a live room leaderboard.
 
-Bibdle supports both **Daily** and **Practice** play modes, multiple difficulty settings, persistent local progress, and optional Firebase-backed authentication and cloud features. The codebase is organized around a central application module (`bibdle.js`) that coordinates state, game rules, persistence, localization, rendering, and Firebase integration.
+## Language Support
 
-At runtime, the app loads book and verse data, hydrates saved preferences and stats, initializes render services, binds UI events, and then renders the active puzzle state. UI behavior is split into focused modules so that surfaces such as stats, archive, leaderboard, and post-game content can evolve independently.
+Catholic Bibdle now supports two language modes for **book- and verse-derived content only**:
+
+- `en` — English mode.
+- `ml` — Malayalam mode.
+
+The broader UI remains in English. Buttons, settings labels, leaderboard chrome, auth labels, modal action buttons, and other generic interface text are not translated.
+
+When Malayalam mode is active:
+
+- Book names, verse references, verse text, clue text, explanation text, book intro title/text, themes, testament labels, and section labels are shown in Malayalam when Malayalam fields are available.
+- Search and guessing accept either English or Malayalam book names.
+- Autocomplete can match both languages, prefers Malayalam display labels, and avoids duplicate canonical suggestions where possible.
+- Duplicate guesses are enforced by canonical `book.id`, so English and Malayalam aliases of the same book count as one book.
+- If Malayalam data is missing for a field, the app falls back safely to English.
+
+When English mode is active:
+
+- Autocomplete suggestions display English only.
+- Guessed books display in English.
+- Book- and verse-derived content displays in English.
+
+## How to Play Bibdle
+
+1. Choose Daily or Practice mode.
+2. Choose a difficulty.
+3. Choose English or Malayalam for book and verse content display.
+4. Read the verse.
+5. Guess the Bible book.
+6. Use the clue tiles and proximity feedback to narrow the answer.
+7. Review the post-game explanation, book intro, trivia, leaderboard placement, and stats when the puzzle ends.
+
+## Local Games
+
+Choose **Play with friends** to create a room or join one with an invite link or room code. Hosts can choose a room name, whether the room is public or invite-only, a 5-, 10-, or 15-minute game (or a custom 1–240 minute duration), or a custom number of rounds (1–1,000). Public rooms can be discovered from the join form. Rooms support up to 200 players.
+
+Players who join without an account receive a Catholic saint name, which they can edit. Signing in with Google before joining uses the account display name. The host starts the game and each book; each new round selects a book not yet used in that room, until all books have been used. A correct answer earns 10 points for one guess, decreasing by one point per guess through the tenth; unanswered rounds earn no points. The live leaderboard sorts by total score and gives tied scores the same rank.
+
+Local games require the provided Firestore rules and composite index. From this project folder, deploy them to the configured Firebase project with `firebase deploy --only firestore:rules,firestore:indexes --project bibdle-db7ae`. Enable **Anonymous** and **Google** under Firebase Console → Authentication → Sign-in method. A `permission-denied` room error usually means the rules were not deployed to `bibdle-db7ae` or Anonymous Authentication is disabled. The rules preserve signed-in profile sync and the daily leaderboard while restricting room membership and writes.
+
+The invite QR code is rendered from the full room URL by QRServer. The unique room link grants access to anyone who receives it, including the room's public scores and player names.
+
+## Canon Coverage
+
+Bibdle uses the Catholic canon, including the Deuterocanonical books. Book order, sections, and testament groupings are normalized so clue feedback, archive progress, and canonical proximity all follow Catholic Bible structure.
+
+## Accessibility
+
+Bibdle includes accessible modal dialogs, keyboard-friendly autocomplete, screen-reader-friendly status updates, and user-controlled visual preferences.
+
+Accessibility and typography options include:
+
+- Reduced motion.
+- High contrast.
+- Larger text.
+- Language-aware document attributes using `document.documentElement.lang` and a `lang-mode` attribute for script-sensitive styling.
+- Malayalam-capable typography for verse text, autocomplete suggestions, guess tiles, archive content, and post-game content.
 
 ## Tech Stack
 
@@ -114,6 +183,7 @@ Bibdle stores the following in the browser:
 │   ├── bindings.js
 │   ├── game-rules.js
 │   ├── localization-service.js
+│   ├── local-game.js
 │   ├── modal-service.js
 │   ├── preferences-storage.js
 │   ├── progress-storage.js
@@ -125,7 +195,7 @@ Bibdle stores the following in the browser:
     └── achievements/
 ```
 
-`bibdle.js` is the browser entry point and coordinates application state and startup. Configuration, localization and autocomplete, authentication, modal behavior, event binding, and render transitions live in focused modules. The book and verse datasets stay under `js/data/`.
+`bibdle.js` is the browser entry point and coordinates application state and startup. Configuration, localization and autocomplete, authentication, modal behavior, event binding, render transitions, and Firestore-backed local room play live in focused modules. The book and verse datasets stay under `js/data/`.
 
 ## Verification
 

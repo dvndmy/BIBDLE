@@ -78,6 +78,14 @@ describe("game rules", () => {
     });
   });
 
+  it("allows ten guesses only during local room rounds", () => {
+    expect(rules.getMaxGuesses()).toBe(8);
+    state.localGameActive = true;
+    expect(rules.getMaxGuesses()).toBe(10);
+    state.localGameActive = false;
+    expect(rules.getMaxGuesses()).toBe(8);
+  });
+
   it("reveals normal clues on schedule and infers matching clues early", () => {
     const noGuesses = rules.buildClueRevealState();
     expect(noGuesses.items.filter((item) => item.unlocked)).toHaveLength(0);

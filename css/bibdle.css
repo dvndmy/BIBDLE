@@ -3523,3 +3523,235 @@ html[lang-mode="ml"] .suggestion-secondary {
         line-height: 1.5;
     }
 }
+
+.local-game-modal {
+    width: min(100%, 680px);
+}
+
+.local-game-setup {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-4);
+}
+
+.room-form,
+.room-section,
+.local-game-bar {
+    display: grid;
+    gap: var(--space-3);
+    min-width: 0;
+    padding: var(--card-padding-md);
+    background: var(--surface-panel);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-card);
+}
+
+.room-form h3,
+.room-section h3,
+.local-room-view h3 {
+    margin: 0;
+    font-family: var(--font-ui);
+    color: var(--color-text);
+}
+
+.room-form label {
+    font-family: var(--font-ui);
+    font-size: var(--text-sm);
+    font-weight: 700;
+    color: var(--color-text-muted);
+}
+
+.room-form label span {
+    font-weight: 400;
+}
+
+.room-form .control-select {
+    width: 100%;
+    min-height: 44px;
+    border-radius: var(--radius-md);
+}
+
+.room-form__actions,
+.local-game-bar__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+}
+
+.room-form--join {
+    align-content: start;
+}
+
+.room-action-status {
+    min-height: 1.4em;
+    margin: 0;
+    font-family: var(--font-ui);
+    color: var(--color-text-muted);
+}
+
+.room-action-status[data-error="true"] {
+    color: var(--color-error);
+}
+
+.local-room-view {
+    display: grid;
+    gap: var(--space-4);
+}
+
+.local-room-view__header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+    align-items: start;
+    gap: var(--space-4);
+}
+
+.room-qr-card {
+    display: grid;
+    justify-items: center;
+    gap: var(--space-2);
+    min-width: 0;
+}
+
+.room-qr-card img {
+    width: 120px;
+    height: 120px;
+    padding: var(--space-2);
+    background: #fff;
+    border-radius: var(--radius-md);
+}
+
+.room-qr-card input {
+    width: 100%;
+    min-width: 0;
+    font-size: var(--text-xs);
+}
+
+.room-player-list,
+.public-room-list,
+.room-leaderboard {
+    display: grid;
+    gap: var(--space-2);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.room-player,
+.public-room-list li,
+.room-leaderboard__row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+    min-width: 0;
+    padding: var(--space-2) var(--space-3);
+    background: var(--surface-panel-strong);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    font-family: var(--font-ui);
+}
+
+.room-player span {
+    color: var(--color-text-muted);
+    font-size: var(--text-xs);
+}
+
+.room-leaderboard__rank {
+    flex: 0 0 1.5rem;
+    color: var(--color-text-muted);
+    font-variant-numeric: tabular-nums;
+}
+
+.room-leaderboard__name {
+    flex: 1 1 auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.room-leaderboard__score {
+    flex: 0 0 auto;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+}
+
+.room-leaderboard__row.is-you {
+    border-color: var(--color-primary);
+}
+
+.room-empty,
+.room-scoring-note {
+    margin: 0;
+    color: var(--color-text-muted);
+    font-family: var(--font-ui);
+    font-size: var(--text-sm);
+    line-height: 1.55;
+}
+
+.local-game-bar {
+    width: 100%;
+}
+
+.local-game-bar__header,
+.local-game-bar__stats {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+}
+
+.local-game-bar__title {
+    margin: 0.15rem 0;
+    font-family: var(--font-ui);
+    font-size: var(--text-lg);
+}
+
+.local-game-bar__round,
+.local-game-clock {
+    margin: 0;
+    color: var(--color-text-muted);
+    font-family: var(--font-ui);
+    font-size: var(--text-sm);
+}
+
+.local-game-bar__stats strong {
+    color: var(--color-primary);
+    font-family: var(--font-ui);
+    white-space: nowrap;
+}
+
+.local-game-bar .room-leaderboard {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
+}
+
+.local-game-bar .room-leaderboard__row {
+    padding: var(--space-2);
+    font-size: var(--text-sm);
+}
+
+@media (max-width: 640px) {
+    .local-game-setup,
+    .local-room-view__header {
+        grid-template-columns: 1fr;
+    }
+
+    .room-qr-card {
+        justify-items: stretch;
+    }
+
+    .room-qr-card img {
+        justify-self: center;
+    }
+
+    .local-game-bar__header {
+        align-items: flex-start;
+    }
+
+    .local-game-bar__stats {
+        flex-direction: column;
+        align-items: flex-end;
+    }
+
+    #localGameBtn {
+        flex: 1 1 100%;
+    }
+}
