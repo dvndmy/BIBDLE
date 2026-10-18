@@ -155,7 +155,7 @@ export async function getDocs(reference) {
     path: reference.path,
     constraints: reference.constraints || [],
   });
-  const docs = reference.path.endsWith("/scores")
+  let docs = reference.path.endsWith("/scores")
     ? [{
       id: "mock-leaderboard-entry",
       data: () => ({
@@ -167,6 +167,18 @@ export async function getDocs(reference) {
       }),
     }]
     : getCollectionDocs(reference.path);
+  (reference.constraints || []).forEach((constraint) => {
+    if (constraint.type === "where") {
+      docs = docs.filter((entry) => {
+        const value = entry.data()[constraint.field];
+        return constraint.operator === "=="
+          ? value === constraint.value
+          : constraint.operator === "in" && constraint.value.includes(value);
+      });
+    } else if (constraint.type === "limit") {
+      docs = docs.slice(0, constraint.count);
+    }
+  });
   return { docs, size: docs.length, empty: docs.length === 0 };
 }
 
@@ -222,7 +234,7 @@ export function onSnapshot(reference, callback, onError = () => {}) {
 }
 
 export function serverTimestamp() {
-  return new Date("2026-01-01T00:00:00Z");
+  return new Date();
 }
 
 export function increment(amount) {
@@ -241,6 +253,12 @@ export async function updateDoc(reference, value) {
   const existing = state.documents.get(reference.path);
   if (!existing) throw new Error(`Document does not exist: ${reference.path}`);
   state.documents.set(reference.path, { ...existing, ...value });
+  notify(reference.path);
+}
+
+export async function deleteDoc(reference) {
+  record("deleteDoc", { path: reference.path });
+  state.documents.delete(reference.path);
   notify(reference.path);
 }
 
@@ -264,6 +282,7 @@ export async function runTransaction(_db, callback) {
     },
   };
   const result = await callback(transaction);
+  const changedPaths = new Set();
   for (const { reference, value, options } of writes) {
     const existing = state.documents.get(reference.path) || {};
     const nextValue = { ...(options.merge ? existing : {}) };
@@ -274,7 +293,8 @@ export async function runTransaction(_db, callback) {
           : fieldValue;
     }
     state.documents.set(reference.path, nextValue);
-    notify(reference.path);
+    changedPaths.add(reference.path);
   }
+  changedPaths.forEach(notify);
   return result;
 }
