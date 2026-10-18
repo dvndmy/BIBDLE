@@ -2,9 +2,11 @@ const state = {
   calls: [],
   documents: new Map(),
   authListeners: new Set(),
+  snapshotListeners: new Map(),
   auth: { currentUser: null },
   app: { name: "firebase-test-app" },
   db: { name: "firebase-test-db" },
+  nextDocumentId: 0,
 };
 
 globalThis.__firebaseMockState = state;
@@ -106,9 +108,19 @@ export async function fetchSignInMethodsForEmail() {
 }
 
 export function doc(_db, ...segments) {
-  const path = segments.join("/");
+  const collectionReference = _db?.kind === "collection" && segments.length === 0
+    ? _db
+    : segments.length === 1 && segments[0]?.kind === "collection"
+      ? segments[0]
+      : null;
+  const generatedId = collectionReference
+    ? `mock-room-${++state.nextDocumentId}`
+    : null;
+  const path = generatedId
+    ? `${collectionReference.path}/${generatedId}`
+    : segments.join("/");
   record("doc", { path });
-  return { path, kind: "document" };
+  return { path, id: generatedId || path.split("/").pop(), kind: "document" };
 }
 
 export function collection(_db, ...segments) {
@@ -154,8 +166,59 @@ export async function getDocs(reference) {
         completedAt: new Date("2026-01-01T12:00:00Z"),
       }),
     }]
-    : [];
+    : getCollectionDocs(reference.path);
   return { docs, size: docs.length, empty: docs.length === 0 };
+}
+
+function getCollectionDocs(path) {
+  const prefix = `${path}/`;
+  return [...state.documents.entries()]
+    .filter(([documentPath]) => documentPath.startsWith(prefix) &&
+      !documentPath.slice(prefix.length).includes("/"))
+    .map(([documentPath, value]) => ({
+      id: documentPath.slice(prefix.length),
+      data: () => value,
+      exists: () => true,
+    }));
+}
+
+function notify(path) {
+  for (const [listenerPath, listeners] of state.snapshotListeners.entries()) {
+    if (listenerPath === path || path.startsWith(`${listenerPath}/`) &&
+      !path.slice(listenerPath.length + 1).includes("/")) {
+      const ref = { path: listenerPath };
+      listeners.forEach(({ callback, kind }) => {
+        if (kind === "document") {
+          callback(snapshot(listenerPath, state.documents.get(listenerPath)));
+        } else {
+          const docs = getCollectionDocs(listenerPath);
+          callback({ docs, size: docs.length, empty: docs.length === 0 });
+        }
+      });
+    }
+  }
+}
+
+export function onSnapshot(reference, callback, onError = () => {}) {
+  record("onSnapshot", { path: reference.path });
+  if (!state.snapshotListeners.has(reference.path)) {
+    state.snapshotListeners.set(reference.path, new Set());
+  }
+  const listener = {
+    callback,
+    kind: reference.kind === "document" ? "document" : "collection",
+    onError,
+  };
+  state.snapshotListeners.get(reference.path).add(listener);
+  queueMicrotask(() => {
+    if (listener.kind === "document") {
+      callback(snapshot(reference.path, state.documents.get(reference.path)));
+    } else {
+      const docs = getCollectionDocs(reference.path);
+      callback({ docs, size: docs.length, empty: docs.length === 0 });
+    }
+  });
+  return () => state.snapshotListeners.get(reference.path)?.delete(listener);
 }
 
 export function serverTimestamp() {
@@ -170,6 +233,15 @@ export async function setDoc(reference, value, options = {}) {
   record("setDoc", { path: reference.path, merge: !!options.merge });
   const existing = state.documents.get(reference.path) || {};
   state.documents.set(reference.path, options.merge ? { ...existing, ...value } : value);
+  notify(reference.path);
+}
+
+export async function updateDoc(reference, value) {
+  record("updateDoc", { path: reference.path });
+  const existing = state.documents.get(reference.path);
+  if (!existing) throw new Error(`Document does not exist: ${reference.path}`);
+  state.documents.set(reference.path, { ...existing, ...value });
+  notify(reference.path);
 }
 
 export async function runTransaction(_db, callback) {
@@ -202,6 +274,7 @@ export async function runTransaction(_db, callback) {
           : fieldValue;
     }
     state.documents.set(reference.path, nextValue);
+    notify(reference.path);
   }
   return result;
 }

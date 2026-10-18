@@ -25,6 +25,8 @@ import {
   getDocs,
   runTransaction,
   increment,
+  onSnapshot,
+  updateDoc,
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 
 import {books} from "./data/books.js";
@@ -43,12 +45,15 @@ import { createLocalizationService } from "./localization-service.js";
 import { createPreferencesStorage } from "./preferences-storage.js";
 import { createProgressStorage } from "./progress-storage.js";
 import { createGameRules } from "./game-rules.js";
+import { createLocalGameController } from "./local-game.js";
 import { CONFIG, FIREBASE_CONFIG, FIREBASE_ENABLED } from "./config.js";
 
 let firebaseApp = null;
 let firebaseAuth = null;
 let firebaseDb = null;
 let authService = null;
+let localGameController = null;
+let localPreviousMode = null;
 
 const BOOT_DEBUG =
   typeof window !== "undefined" &&
@@ -1714,6 +1719,8 @@ const elements = {
   statsBtn: document.getElementById("statsBtn"),
   tryPracticeBtn: document.getElementById("tryPracticeBtn"),
   todayBibdleBtn: document.getElementById("todayBibdleBtn"),
+  localGameBtn: document.getElementById("localGameBtn"),
+  localGameModal: document.getElementById("localGameModal"),
 
   difficultySelect: document.getElementById("difficultySelect"),
   modeSelect: document.getElementById("modeSelect"),
@@ -1919,6 +1926,7 @@ function getOptionalBootElements() {
     archiveModal: elements.archiveModal,
     leaderboardModal: elements.leaderboardModal,
     postGameModal: elements.postGameModal,
+    localGameModal: elements.localGameModal,
   };
 }
 
@@ -3840,10 +3848,83 @@ function closePostGameModal() {
   modalService?.close("postGame") ?? closeModal(elements.postGameModal);
 }
 
+function closePostGamePanel() {
+  closePostGameModal();
+}
+
+function renderPuzzleView() {
+  applyLanguageToDocument();
+  applyModeTheme(state.mode);
+  renderLanguageControl();
+  renderMobileLanguageToggle();
+  renderPuzzleCard();
+
+  if (state.status === "won" || state.status === "lost") {
+    syncEndStateVisibility();
+    renderGuessRows();
+    syncPreferenceControls();
+    syncActionButtons();
+    if (localGameController?.isActive()) {
+      closePostGamePanel();
+    } else {
+      renderPostGamePanel();
+    }
+
+    if (state.status === "won") {
+      renderStatus(
+        state.localGameSyncError ||
+          `Correct — ${getLocalizedValue(state.currentPuzzle.verse.book, state.currentPuzzle.verse.bookMl)} (${getLocalizedReference(state.currentPuzzle.verse, getCurrentLanguage())}).`,
+      );
+      state.localGameSyncError = null;
+      publishBootSnapshot({ renderStatus: "won" });
+      return;
+    }
+
+    renderStatus(
+      state.localGameSyncError ||
+        `Out of guesses — the answer was ${getLocalizedValue(state.currentPuzzle.verse.book, state.currentPuzzle.verse.bookMl)} (${getLocalizedReference(state.currentPuzzle.verse, getCurrentLanguage())}).`,
+    );
+    state.localGameSyncError = null;
+    publishBootSnapshot({ renderStatus: "lost" });
+    return;
+  }
+
+  syncEndStateVisibility();
+  renderHintBlock();
+  renderGuessRows();
+  renderProximityLine();
+  syncPreferenceControls();
+  syncActionButtons();
+  if (localGameController?.isActive()) {
+    closePostGamePanel();
+  } else {
+    renderPostGamePanel();
+  }
+
+  const clueState = buildClueRevealState();
+  const newHintCount = clueState.newlyUnlockedKeys.length;
+
+  if (newHintCount > 0 && state.guesses.length > 0) {
+    renderStatus(
+      `${newHintCount} new ${newHintCount === 1 ? "clue" : "clues"} unlocked. Review the clue panel above.`,
+    );
+    publishBootSnapshot({ renderStatus: "new-clues" });
+    return;
+  }
+
+  if (state.localGameSyncError) {
+    renderStatus(state.localGameSyncError);
+  } else {
+    renderStatus();
+  }
+  state.localGameSyncError = null;
+  publishBootSnapshot({ renderStatus: "playing" });
+}
+
 function resetInput() {
   elements.guessInput.value = "";
   updateComboboxA11y(false);
-  saveProgress();
+  if (!localGameController?.isActive()) saveProgress();
 }
 
 function resetSuggestionsState() {
@@ -3970,53 +4051,109 @@ function handleDuplicateGuess(book) {
   renderStatus(`You already tried ${bookName}.`);
 }
 
+function refreshAfterGuess(message) {
+  syncEndStateVisibility();
 
-
-function getDefaultStatusMessage(status = state.status) {
-  const language = getCurrentLanguage();
-  const puzzle = state.currentPuzzle?.verse;
-
-  if (!puzzle) {
-    return "Guess the book from the verse above.";
+  if (state.status !== "won" && state.status !== "lost") {
+    renderHintBlock();
+    renderProximityLine();
   }
 
-  if (status === "won") {
-    return `Correct! ${getLocalizedValue(puzzle.book, puzzle.bookMl)} — ${getLocalizedReference(puzzle, language)}.`;
-  }
+  renderGuessRows(true);
+  syncPreferenceControls();
+  syncActionButtons();
+  renderStatus(message);
+  if (!localGameController?.isActive()) saveProgress();
+  renderPuzzleView();
+}
 
-  if (status === "lost") {
-    return `Out of guesses — the answer was ${getLocalizedValue(puzzle.book, puzzle.bookMl)} — ${getLocalizedReference(puzzle, language)}.`;
+async function handleSolvedGuess() {
+  state.status = "won";
+  if (localGameController?.isActive()) {
+    try {
+      await localGameController.recordGuess({
+        guessCount: state.guesses.length,
+        completed: true,
+        solved: true,
+      });
+    } catch (error) {
+      console.error("Local game score sync failed:", error);
+      state.localGameSyncError = localGameController.describeError(
+        "Room score sync failed.",
+        error,
+      );
+    }
+  } else {
+    await recordPuzzleCompletion("won");
   }
+  refreshAfterGuess(
+    `Correct — ${state.currentPuzzle.verse.book} (${state.currentPuzzle.verse.reference}).`,
+  );
+}
 
+async function handleLostGuess() {
+  state.status = "lost";
+  if (localGameController?.isActive()) {
+    try {
+      await localGameController.recordGuess({
+        guessCount: state.guesses.length,
+        completed: true,
+        solved: false,
+      });
+    } catch (error) {
+      console.error("Local game score sync failed:", error);
+      state.localGameSyncError = localGameController.describeError(
+        "Room score sync failed.",
+        error,
+      );
+    }
+  } else {
+    await recordPuzzleCompletion("lost");
+  }
+  refreshAfterGuess(
+    `Out of guesses — the answer was ${state.currentPuzzle.verse.book} (${state.currentPuzzle.verse.reference}).`,
+  );
+}
+
+function handleIncorrectGuess(bookName) {
   const clueState = buildClueRevealState();
   const newHintCount = clueState.newlyUnlockedKeys.length;
+  const nearestDistance = getNearestGuessDistance();
 
-  if (newHintCount > 0 && state.guesses.length > 0) {
-    return `${newHintCount} new ${newHintCount === 1 ? "clue" : "clues"} unlocked. Review the clue panel above.`;
+  renderHintBlock();
+  renderGuessRows(true);
+  renderProximityLine();
+  syncPreferenceControls();
+  syncActionButtons();
+
+  if (state.localGameSyncError) {
+    renderStatus(state.localGameSyncError);
+    state.localGameSyncError = null;
+  } else if (newHintCount > 0) {
+    renderStatus(
+      `${bookName} added. ${newHintCount} new ${newHintCount === 1 ? "clue" : "clues"} unlocked.`,
+    );
+  } else if (typeof nearestDistance === "number" && nearestDistance > 0) {
+    renderStatus(
+      `${bookName} added. Your nearest guess so far is ${nearestDistance} ${nearestDistance === 1 ? "book" : "books"} away.`,
+    );
+  } else {
+    renderStatus(`${bookName} added. Use the colors and clues for your next guess.`);
   }
 
-  return "Guess the book from the verse above.";
+  if (!localGameController?.isActive()) saveProgress();
 }
 
-function refreshAfterGuess(message) {
-  puzzleSurface.renderAfterGuessOutcome({
-    status: state.status,
-    message,
-    animateLatest: true,
-    renderHints: state.status !== "won" && state.status !== "lost",
-    renderProximity: state.status !== "won" && state.status !== "lost",
-    renderPostGame: true,
-  });
-}
+async function applyGuess(rawGuess) {
+  if (localGameController?.isActive() && !localGameController.canGuess()) {
+    renderStatus("Wait for the host to start the next book.");
+    return;
+  }
 
-function renderGuessTransitionResult(result) {
-  if (!result) return;
-
-  if (result.type === "guess-rejected") {
-    if (result.reason === "invalid") {
-      handleInvalidGuess();
-      return;
-    }
+  if (isGameOver()) {
+    renderPuzzleView();
+    return;
+  }
 
     if (result.reason === "duplicate") {
       handleDuplicateGuess(result.match);
@@ -4026,28 +4163,37 @@ function renderGuessTransitionResult(result) {
     return;
   }
 
-  if (
-    result.type === "guess-solved" ||
-    result.type === "guess-lost" ||
-    result.type === "guess-incorrect"
-  ) {
-    const message =
-      result.message || getDefaultStatusMessage(result.messageType || result.status);
+  const result = compareGuess(match);
+  if (!result) return;
 
-    puzzleSurface.renderAfterGuessOutcome({
-      status: result.status,
-      message,
-      animateLatest: !!result.animateLatest,
-      renderHints: !!result.renderHints,
-      renderProximity: !!result.renderProximity,
-      renderPostGame: !!result.renderPostGame,
-    });
+  state.guesses.push(result);
+  if (localGameController?.isActive() && !result.solved &&
+    state.guesses.length < getMaxGuesses()) {
+    try {
+      await localGameController.recordGuess({
+        guessCount: state.guesses.length,
+        completed: false,
+        solved: false,
+      });
+    } catch (error) {
+      console.error("Local game progress sync failed:", error);
+      state.localGameSyncError = localGameController.describeError(
+        "Room progress sync failed.",
+        error,
+      );
+    }
   }
-}
+  resetInput();
+  resetSuggestionsState();
+  closeSuggestions();
 
-async function applyGuess(rawGuess) {
-  if (isGameOver()) {
-    puzzleSurface.renderPuzzleView();
+  if (result.solved) {
+    await handleSolvedGuess();
+    return;
+  }
+
+  if (state.guesses.length >= getMaxGuesses()) {
+    await handleLostGuess();
     return;
   }
 
@@ -4272,7 +4418,7 @@ function handleGuessInput(event) {
   if (isGameOver()) return;
 
   updateSuggestions(event.target.value);
-  saveProgress();
+  if (!localGameController?.isActive()) saveProgress();
 }
 
 function moveSuggestion(nextIndex) {
@@ -4435,6 +4581,10 @@ function handleMobileLanguageToggle() {
 }
 
 function handleDifficultyChange(event) {
+  if (localGameController?.isActive()) {
+    event.target.value = state.preferences.difficulty;
+    return;
+  }
   const value = event.target.value;
   if (!CONFIG.modes[value]) return;
 
@@ -4452,6 +4602,10 @@ function handleDifficultyChange(event) {
 }
 
 function handleModeChange(event) {
+  if (localGameController?.isActive()) {
+    event.target.value = state.mode;
+    return;
+  }
   const value = event.target.value;
   if (value !== "daily" && value !== "practice") return;
 
@@ -4651,6 +4805,10 @@ async function handleSignIn() {
 }
 
 async function handleSignOut() {
+  if (localGameController?.isActive()) {
+    await localGameController.leaveRoom();
+    closeModal(elements.localGameModal);
+  }
   if (!authService) {
     setAuthStatus("Playing anonymously");
     return;
@@ -4673,6 +4831,7 @@ function getModalRegistry() {
     archive: elements.archiveModal,
     leaderboard: elements.leaderboardModal,
     postGame: elements.postGameModal,
+    localGame: elements.localGameModal,
   };
 }
 
@@ -4830,12 +4989,105 @@ function handleAuthDisabled() {
   renderAfterAuthStateChange("auth-disabled");
 }
 
-function handleAuthInitialized(context) {
-  firebaseApp = context.app ?? null;
-  firebaseAuth = context.auth ?? null;
-  firebaseDb = context.db ?? null;
-  state.auth.enabled = !!context.enabled;
+function startLocalRoomRound(verse, room) {
+  state.mode = "practice";
+  elements.modeSelect.value = "practice";
+  state.currentPuzzle = {
+    id: verse.id,
+    date: null,
+    mode: "practice",
+    verse,
+  };
+  state.guesses = [];
+  state.status = "playing";
+  const clueUiState = ensureClueUiState();
+  clueUiState.lastUnlockedKeys = [];
+  clueUiState.lastRenderSignature = "";
+  syncEndStateVisibility();
+  closePostGamePanel();
+  resetInput();
+  resetSuggestionsState();
+  closeSuggestions();
+  renderPipeline.renderPuzzleReset({
+    mode: "practice",
+    source: "local-room-round",
+  });
+  elements.dateLabel.textContent = `${room.name} · Round ${room.round}`;
+  closeModal(elements.localGameModal);
+}
 
+function setLocalRoomActive(active) {
+  state.localGameActive = active;
+  elements.modeSelect.disabled = active;
+  elements.difficultySelect.disabled = active;
+  const countdownLabel = elements.countdownTimer?.closest(".countdown-label");
+  if (countdownLabel) countdownLabel.hidden = active;
+
+  if (active) {
+    if (!localPreviousMode) localPreviousMode = state.mode;
+    state.mode = "practice";
+    elements.modeSelect.value = "practice";
+    stopCountdownTimer();
+    return;
+  }
+
+  if (localPreviousMode) {
+    const previousMode = localPreviousMode;
+    localPreviousMode = null;
+    state.mode = previousMode;
+    elements.modeSelect.value = previousMode;
+    resetPuzzle(previousMode);
+    startCountdownTimer();
+  }
+}
+
+function handleAuthInitialized(context = {}) {
+  firebaseApp = context.app || null;
+  firebaseAuth = context.auth || null;
+  firebaseDb = context.db || null;
+
+  state.auth.enabled = !!context.enabled;
+  if (firebaseDb && firebaseAuth) {
+    localGameController = createLocalGameController({
+      db: firebaseDb,
+      auth: firebaseAuth,
+      firestore: {
+        collection,
+        doc,
+        getDoc,
+        getDocs,
+        limit,
+        onSnapshot,
+        query,
+        runTransaction,
+        serverTimestamp,
+        setDoc,
+        updateDoc,
+        where,
+      },
+      verses,
+      getUser: () => firebaseAuth?.currentUser || state.auth.user,
+      ensureGuestAuth: async () => {
+        if (!firebaseAuth) throw new Error("Sign-in is not available right now.");
+        if (!firebaseAuth.currentUser) await signInAnonymously(firebaseAuth);
+        const user = firebaseAuth.currentUser;
+        if (!user?.uid) throw new Error("Could not create a guest account.");
+        return user;
+      },
+      onRoundStart: startLocalRoomRound,
+      onTimeExpired: () => {
+        if (state.status === "playing") {
+          state.status = "lost";
+          renderPuzzleView();
+          renderStatus("Time is up. Your score is on the room leaderboard.");
+        }
+      },
+      onActiveChange: setLocalRoomActive,
+      openModal: (...args) => modalService?.open(...args),
+      closeModal: (...args) => modalService?.close(...args),
+    });
+  }
+  renderPipeline.renderAuthState("initialized");
   publishBootSnapshot({ firebase: "initialized" });
   renderAfterAuthStateChange("auth-initialized");
 }

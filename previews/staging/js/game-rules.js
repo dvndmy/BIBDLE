@@ -15,6 +15,7 @@ export function createGameRules({
   isSameSection,
 } = {}) {
   function getMaxGuesses() {
+    if (state.localGameActive) return 10;
     return (
       config.modes[state.preferences.difficulty]?.maxGuesses ??
       config.modes.normal.maxGuesses
