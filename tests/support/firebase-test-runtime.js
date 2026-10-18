@@ -198,14 +198,16 @@ function notify(path) {
   for (const [listenerPath, listeners] of state.snapshotListeners.entries()) {
     if (listenerPath === path || path.startsWith(`${listenerPath}/`) &&
       !path.slice(listenerPath.length + 1).includes("/")) {
-      const ref = { path: listenerPath };
-      listeners.forEach(({ callback, kind }) => {
-        if (kind === "document") {
-          callback(snapshot(listenerPath, state.documents.get(listenerPath)));
-        } else {
-          const docs = getCollectionDocs(listenerPath);
-          callback({ docs, size: docs.length, empty: docs.length === 0 });
-        }
+      listeners.forEach((listener) => {
+        queueMicrotask(() => {
+          if (!state.snapshotListeners.get(listenerPath)?.has(listener)) return;
+          if (listener.kind === "document") {
+            listener.callback(snapshot(listenerPath, state.documents.get(listenerPath)));
+          } else {
+            const docs = getCollectionDocs(listenerPath);
+            listener.callback({ docs, size: docs.length, empty: docs.length === 0 });
+          }
+        });
       });
     }
   }

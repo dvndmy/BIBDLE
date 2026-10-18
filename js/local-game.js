@@ -150,8 +150,9 @@ export function createLocalGameController({
     roomUnsubscribe: null,
     playersUnsubscribe: null,
     clockInterval: null,
-    lastRound: 0,
     readyRound: 0,
+    preparingRound: 0,
+    startedRound: 0,
     timerExpired: false,
     finalRoom: null,
     finalPlayers: [],
@@ -326,6 +327,71 @@ export function createLocalGameController({
     }
   }
 
+  function launchRound(room, resetPlayer = false) {
+    if (!state.roomId || state.room?.round !== room.round ||
+      state.room?.status !== "playing" || state.startedRound === room.round) return;
+    const verse = verses.find((item) => item.id === room.verseId);
+    if (!verse) {
+      setMessage("This room's current puzzle could not be loaded.", true);
+      return;
+    }
+    state.readyRound = room.round;
+    state.startedRound = room.round;
+    state.timerExpired = false;
+    if (resetPlayer) {
+      state.player = {
+        ...state.player,
+        activeRound: room.round,
+        guesses: 0,
+        roundCompleted: false,
+        lastRoundScore: 0,
+        lastCorrect: false,
+        expiresAt: room.expiresAt || new Date(Date.now() + ROOM_TTL_MS),
+      };
+    }
+    try {
+      onRoundStart?.(verse, room);
+    } catch (error) {
+      state.readyRound = 0;
+      state.startedRound = 0;
+      reportError("Could not start this round.", error);
+      return false;
+    }
+    return true;
+  }
+
+  async function prepareCurrentRound(room) {
+    const round = room.round;
+    if (room.status !== "playing" || !round || !state.roomId ||
+      state.room?.round !== round || state.preparingRound === round) return false;
+    if (state.player?.activeRound === round) {
+      return launchRound(room);
+    }
+    if (state.readyRound === round) return true;
+    if (!state.player || state.player.activeRound > round) return false;
+
+    const roomId = state.roomId;
+    state.preparingRound = round;
+    try {
+      await setDoc(playerRef(), {
+        activeRound: round,
+        guesses: 0,
+        roundCompleted: false,
+        lastRoundScore: 0,
+        lastCorrect: false,
+        expiresAt: room.expiresAt || new Date(Date.now() + ROOM_TTL_MS),
+      }, { merge: true });
+      if (state.roomId !== roomId || state.room?.round !== round ||
+        state.room?.status !== "playing") return false;
+      return launchRound(room, true);
+    } catch (error) {
+      reportError("Could not prepare your next round.", error);
+      return false;
+    } finally {
+      if (state.preparingRound === round) state.preparingRound = 0;
+    }
+  }
+
   function subscribeToRoom() {
     state.roomUnsubscribe?.();
     state.playersUnsubscribe?.();
@@ -346,51 +412,19 @@ export function createLocalGameController({
         return;
       }
       const room = snapshot.data();
-      const roundChanged = room.status === "playing" && room.round > 0 &&
-        room.round !== state.lastRound;
       state.room = room;
       if (room.status === "finished") {
         state.finalRoom = room;
         state.finalPlayers = [...state.players];
       }
-      if (roundChanged) {
-        state.lastRound = room.round;
-        const verse = verses.find((item) => item.id === room.verseId);
-        if (!verse) {
-          setMessage("This room's current puzzle could not be loaded.", true);
-        } else {
-          state.timerExpired = false;
-          state.player = {
-            ...state.player,
-            activeRound: room.round,
-            guesses: 0,
-            roundCompleted: false,
-            lastRoundScore: 0,
-            lastCorrect: false,
-            expiresAt: room.expiresAt || new Date(Date.now() + ROOM_TTL_MS),
-          };
-          try {
-            await setDoc(playerRef(), {
-              activeRound: room.round,
-              guesses: 0,
-              roundCompleted: false,
-              lastRoundScore: 0,
-              lastCorrect: false,
-              expiresAt: room.expiresAt || new Date(Date.now() + ROOM_TTL_MS),
-            }, { merge: true });
-            state.readyRound = room.round;
-            onRoundStart?.(verse, room);
-          } catch (error) {
-            reportError("Could not prepare your next round.", error);
-          }
-        }
-      }
       renderRoom();
+      await prepareCurrentRound(room);
     }, (error) => reportError("Room sync failed.", error));
     state.playersUnsubscribe = onSnapshot(playersRef(), (snapshot) => {
       state.players = snapshot.docs.map((entry) => ({ uid: entry.id, ...entry.data() }));
       state.player = state.players.find((entry) => entry.uid === getUser()?.uid) || state.player;
       renderRoom();
+      if (state.room) prepareCurrentRound(state.room);
     }, (error) => reportError("Leaderboard sync failed.", error));
     state.clockInterval = window.setInterval(updateClock, 1000);
   }
@@ -450,18 +484,14 @@ export function createLocalGameController({
     state.roomId = safeRoomId;
     state.room = room;
     state.player = player;
-    state.lastRound = room.status === "playing" && player.activeRound < room.round
-      ? 0
-      : room.status === "playing" ? room.round : 0;
     state.readyRound = player.activeRound === room.round ? room.round : 0;
+    state.preparingRound = 0;
+    state.startedRound = 0;
     state.timerExpired = false;
     state.finalRoom = null;
     state.finalPlayers = [];
     subscribeToRoom();
-    if (room.status === "playing" && state.lastRound === room.round) {
-      const verse = verses.find((item) => item.id === room.verseId);
-      if (verse) onRoundStart?.(verse, room);
-    }
+    prepareCurrentRound(room);
     const url = new URL(window.location.href);
     url.searchParams.set("room", safeRoomId);
     window.history.replaceState({}, "", url);
@@ -528,8 +558,9 @@ export function createLocalGameController({
       state.roomId = roomId;
       state.room = room;
       state.player = player;
-      state.lastRound = 0;
       state.readyRound = 0;
+      state.preparingRound = 0;
+      state.startedRound = 0;
       subscribeToRoom();
       renderRoom();
       setMessage("Room created. Share the link or QR code to invite players.");
@@ -572,7 +603,12 @@ export function createLocalGameController({
       return;
     }
     await updateDoc(roomRef(), patch);
-    setMessage(`Round ${nextRound} is starting.`);
+    const startedRoom = { ...state.room, ...patch };
+    state.room = startedRoom;
+    renderRoom();
+    if (await prepareCurrentRound(startedRoom)) {
+      setMessage(`Round ${nextRound} is starting.`);
+    }
   }
 
   async function deleteFinishedRoom(roomId, finalRoom) {
@@ -674,8 +710,9 @@ export function createLocalGameController({
     state.room = null;
     state.players = [];
     state.player = null;
-    state.lastRound = 0;
     state.readyRound = 0;
+    state.preparingRound = 0;
+    state.startedRound = 0;
     state.timerExpired = false;
     state.finalRoom = null;
     state.finalPlayers = [];

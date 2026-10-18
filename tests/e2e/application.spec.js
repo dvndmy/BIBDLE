@@ -296,6 +296,13 @@ test("creates a room, starts shared rounds, and updates the local leaderboard", 
   await page.locator("#startRoomGameBtn").click();
   await expect(page.locator("#localGameBar")).toBeVisible();
   await expect(page.locator("#localGameRound")).toHaveText("Round 1 of 3");
+  await expect(page.locator("#localGameModal")).toHaveAttribute("data-open", "false");
+  await expect(page.locator("#startRoomGameBtn")).toBeHidden();
+  await expect.poll(() => page.evaluate(() =>
+    globalThis.__firebaseMockState.documents.get(
+      "localRooms/mock-room-1/players/mock-anonymous-user",
+    )?.activeRound,
+  )).toBe(1);
   const answer = await currentAnswer(page);
   await submitBook(page, answer);
   await expect(page.locator("#localGameLeaderboard")).toContainText("10 pts");
