@@ -610,6 +610,15 @@ export function createLocalGameController({
       verseId: verse.id,
       usedBookIds,
     };
+    if (!state.room.expiresAt) {
+      const createdAt = state.room.createdAt?.toMillis?.() ??
+        new Date(state.room.createdAt).getTime();
+      const expiresAt = new Date(createdAt + ROOM_TTL_MS);
+      if (!Number.isFinite(createdAt) || expiresAt.getTime() <= Date.now()) {
+        throw new Error("This older room has expired. Create a new room to start playing.");
+      }
+      patch.expiresAt = expiresAt;
+    }
     if (state.room.gameType === "timed" && nextRound === 1) {
       patch.startedAt = Date.now();
       patch.deadlineAt = Date.now() + state.room.durationMinutes * 60_000;
