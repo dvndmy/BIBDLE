@@ -27,7 +27,6 @@ import {
   increment,
   onSnapshot,
   updateDoc,
-  deleteDoc,
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 
 import {books} from "./data/books.js";
@@ -3908,33 +3907,52 @@ function closePostGameModal() {
 }
 
 function renderPuzzleView() {
-  if (localGameController?.isActive()) {
-    puzzleSurface?.renderAfterGuessOutcome?.({
-      status: state.status,
-      message: getDefaultStatusMessage(),
-      renderPostGame: false,
-      save: false,
-    });
+  applyLanguageToDocument();
+  applyModeTheme(state.mode);
+  renderLanguageControl();
+  renderMobileLanguageToggle();
+  renderPuzzleCard();
+
+  if (state.status === "won" || state.status === "lost") {
+    syncEndStateVisibility();
+    renderGuessRows();
+    syncPreferenceControls();
+    syncActionButtons();
+    if (localGameController?.isActive()) {
+      closePostGamePanel();
+    } else {
+      renderPostGamePanel();
+    }
+
+    if (state.status === "won") {
+      renderStatus(
+        state.localGameSyncError ||
+          `Correct — ${getLocalizedValue(state.currentPuzzle.verse.book, state.currentPuzzle.verse.bookMl)} (${getLocalizedReference(state.currentPuzzle.verse, getCurrentLanguage())}).`,
+      );
+      state.localGameSyncError = null;
+      publishBootSnapshot({ renderStatus: "won" });
+      return;
+    }
+
+    renderStatus(
+      state.localGameSyncError ||
+        `Out of guesses — the answer was ${getLocalizedValue(state.currentPuzzle.verse.book, state.currentPuzzle.verse.bookMl)} (${getLocalizedReference(state.currentPuzzle.verse, getCurrentLanguage())}).`,
+    );
+    state.localGameSyncError = null;
+    publishBootSnapshot({ renderStatus: "lost" });
     return;
   }
 
-  puzzleSurface?.renderPuzzleView?.();
-}
-
-function getDefaultStatusMessage(status = state.status) {
-  const language = getCurrentLanguage();
-  const puzzle = state.currentPuzzle?.verse;
-
-  if (!puzzle) {
-    return "Guess the book from the verse above.";
-  }
-
-  if (status === "won") {
-    return `Correct! ${getLocalizedValue(puzzle.book, puzzle.bookMl)} — ${getLocalizedReference(puzzle, language)}.`;
-  }
-
-  if (status === "lost") {
-    return `Out of guesses — the answer was ${getLocalizedValue(puzzle.book, puzzle.bookMl)} — ${getLocalizedReference(puzzle, language)}.`;
+  syncEndStateVisibility();
+  renderHintBlock();
+  renderGuessRows();
+  renderProximityLine();
+  syncPreferenceControls();
+  syncActionButtons();
+  if (localGameController?.isActive()) {
+    closePostGamePanel();
+  } else {
+    renderPostGamePanel();
   }
 
   const clueState = buildClueRevealState();
@@ -3944,7 +3962,13 @@ function getDefaultStatusMessage(status = state.status) {
     return `${newHintCount} new ${newHintCount === 1 ? "clue" : "clues"} unlocked. Review the clue panel above.`;
   }
 
-  return "Guess the book from the verse above.";
+  if (state.localGameSyncError) {
+    renderStatus(state.localGameSyncError);
+  } else {
+    renderStatus();
+  }
+  state.localGameSyncError = null;
+  publishBootSnapshot({ renderStatus: "playing" });
 }
 
 function resetInput() {
@@ -4078,16 +4102,19 @@ function handleDuplicateGuess(book) {
 }
 
 function refreshAfterGuess(message) {
-  puzzleSurface?.renderAfterGuessOutcome?.({
-    status: state.status,
-    message: state.localGameSyncError || message,
-    animateLatest: true,
-    renderHints: state.status !== "won" && state.status !== "lost",
-    renderProximity: state.status !== "won" && state.status !== "lost",
-    renderPostGame: !localGameController?.isActive(),
-    save: !localGameController?.isActive(),
-  });
-  state.localGameSyncError = null;
+  syncEndStateVisibility();
+
+  if (state.status !== "won" && state.status !== "lost") {
+    renderHintBlock();
+    renderProximityLine();
+  }
+
+  renderGuessRows(true);
+  syncPreferenceControls();
+  syncActionButtons();
+  renderStatus(message);
+  if (!localGameController?.isActive()) saveProgress();
+  renderPuzzleView();
 }
 
 async function handleSolvedGuess() {
@@ -4143,18 +4170,28 @@ function handleIncorrectGuess(bookName) {
   const newHintCount = clueState.newlyUnlockedKeys.length;
   const nearestDistance = getNearestGuessDistance();
 
-  let message = `${bookName} added. Use the colors and clues for your next guess.`;
-  if (!state.localGameSyncError && newHintCount > 0) {
-    message = `${bookName} added. ${newHintCount} new ${newHintCount === 1 ? "clue" : "clues"} unlocked.`;
-  } else if (
-    !state.localGameSyncError &&
-    typeof nearestDistance === "number" &&
-    nearestDistance > 0
-  ) {
-    message = `${bookName} added. Your nearest guess so far is ${nearestDistance} ${nearestDistance === 1 ? "book" : "books"} away.`;
+  renderHintBlock();
+  renderGuessRows(true);
+  renderProximityLine();
+  syncPreferenceControls();
+  syncActionButtons();
+
+  if (state.localGameSyncError) {
+    renderStatus(state.localGameSyncError);
+    state.localGameSyncError = null;
+  } else if (newHintCount > 0) {
+    renderStatus(
+      `${bookName} added. ${newHintCount} new ${newHintCount === 1 ? "clue" : "clues"} unlocked.`,
+    );
+  } else if (typeof nearestDistance === "number" && nearestDistance > 0) {
+    renderStatus(
+      `${bookName} added. Your nearest guess so far is ${nearestDistance} ${nearestDistance === 1 ? "book" : "books"} away.`,
+    );
+  } else {
+    renderStatus(`${bookName} added. Use the colors and clues for your next guess.`);
   }
 
-  refreshAfterGuess(message);
+  if (!localGameController?.isActive()) saveProgress();
 }
 
 async function applyGuess(rawGuess) {
@@ -4189,6 +4226,22 @@ async function applyGuess(rawGuess) {
   }
 
   state.guesses.push(result);
+  if (localGameController?.isActive() && !result.solved &&
+    state.guesses.length < getMaxGuesses()) {
+    try {
+      await localGameController.recordGuess({
+        guessCount: state.guesses.length,
+        completed: false,
+        solved: false,
+      });
+    } catch (error) {
+      console.error("Local game progress sync failed:", error);
+      state.localGameSyncError = localGameController.describeError(
+        "Room progress sync failed.",
+        error,
+      );
+    }
+  }
   resetInput();
   resetSuggestionsState();
   closeSuggestions();
@@ -5085,6 +5138,58 @@ function setLocalRoomActive(active, roomStatus = "lobby") {
   }
 }
 
+function startLocalRoomRound(verse, room) {
+  state.mode = "practice";
+  elements.modeSelect.value = "practice";
+  state.currentPuzzle = {
+    id: verse.id,
+    date: null,
+    mode: "practice",
+    verse,
+  };
+  state.guesses = [];
+  state.status = "playing";
+  const clueUiState = ensureClueUiState();
+  clueUiState.lastUnlockedKeys = [];
+  clueUiState.lastRenderSignature = "";
+  syncEndStateVisibility();
+  closePostGamePanel();
+  resetInput();
+  resetSuggestionsState();
+  closeSuggestions();
+  renderPipeline.renderPuzzleReset({
+    mode: "practice",
+    source: "local-room-round",
+  });
+  elements.dateLabel.textContent = `${room.name} · Round ${room.round}`;
+  closeModal(elements.localGameModal);
+}
+
+function setLocalRoomActive(active) {
+  state.localGameActive = active;
+  elements.modeSelect.disabled = active;
+  elements.difficultySelect.disabled = active;
+  const countdownLabel = elements.countdownTimer?.closest(".countdown-label");
+  if (countdownLabel) countdownLabel.hidden = active;
+
+  if (active) {
+    if (!localPreviousMode) localPreviousMode = state.mode;
+    state.mode = "practice";
+    elements.modeSelect.value = "practice";
+    stopCountdownTimer();
+    return;
+  }
+
+  if (localPreviousMode) {
+    const previousMode = localPreviousMode;
+    localPreviousMode = null;
+    state.mode = previousMode;
+    elements.modeSelect.value = previousMode;
+    resetPuzzle(previousMode);
+    startCountdownTimer();
+  }
+}
+
 function handleAuthInitialized(context = {}) {
   firebaseApp = context.app || null;
   firebaseAuth = context.auth || null;
@@ -5097,7 +5202,6 @@ function handleAuthInitialized(context = {}) {
       auth: firebaseAuth,
       firestore: {
         collection,
-        deleteDoc,
         doc,
         getDoc,
         getDocs,

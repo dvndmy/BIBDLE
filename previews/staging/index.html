@@ -108,27 +108,6 @@
         <p class="verse-text" id="verseText"></p>
       </section>
 
-      <section class="local-game-bar" id="localGameBar" aria-label="Local game room" hidden>
-        <div class="local-game-bar__header">
-          <div>
-            <p class="subtle-label">Playing together</p>
-            <h2 class="local-game-bar__title" id="localGameName"></h2>
-            <p class="local-game-bar__round" id="localGameRound"></p>
-            <h3 class="local-game-bar__final-label" id="localGameFinalLabel" hidden>Final scoreboard</h3>
-          </div>
-          <div class="local-game-bar__stats">
-            <span class="local-game-clock" id="localGameClock" aria-live="polite"></span>
-            <strong id="localGameScore">0 pts</strong>
-          </div>
-        </div>
-        <div class="local-game-bar__actions">
-          <button type="button" class="pill-btn" id="localGameRoomBtn">Room & leaderboard</button>
-          <button type="button" class="pill-btn" id="localGameNextRoundBtn" hidden disabled>Start next book</button>
-          <button type="button" class="pill-btn" id="localGameLeaveBtn" hidden>Leave room</button>
-        </div>
-        <ol class="room-leaderboard" id="localGameLeaderboard" aria-label="Live room leaderboard"></ol>
-      </section>
-
       <section class="controls" aria-label="Guess area">
         <div id="preGuessPanel">
           <div class="attempt-line">
@@ -729,6 +708,113 @@
           <button type="button" class="pill-btn primary" id="postGamePracticeBtn" hidden>Try practice round</button>
         </div>
       </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="localGameModal" data-open="false" aria-hidden="true">
+    <div class="modal local-game-modal" role="dialog" aria-modal="true" aria-labelledby="localGameModalTitle"
+      tabindex="-1">
+      <section class="section-shell modal-section modal-layout modal-system">
+        <div class="section-shell__header modal-layout__header modal-system__header">
+          <button type="button" class="modal-close-icon-btn" data-modal-close="localGame"
+            aria-label="Close local game dialog" title="Close">
+            <span aria-hidden="true">×</span>
+          </button>
+          <h2 id="localGameModalTitle" class="section-shell__title">Play together</h2>
+          <p class="section-shell__meta">Create a room or join friends. Guests get a Catholic saint name; sign in to use your account name.</p>
+        </div>
+
+        <p class="room-action-status" id="roomActionStatus" role="status" aria-live="polite"></p>
+
+        <div class="local-game-setup" id="localGameSetup">
+          <form class="room-form" id="createRoomForm">
+            <h3>Create a room</h3>
+            <label for="roomNameInput">Room name</label>
+            <input id="roomNameInput" class="control-select" type="text" maxlength="48" value="BIBDLE room" />
+
+            <label for="roomVisibility">Who can join?</label>
+            <select id="roomVisibility" class="control-select">
+              <option value="link">Invite link only</option>
+              <option value="public">Public room</option>
+            </select>
+
+            <label for="roomGameType">Game format</label>
+            <select id="roomGameType" class="control-select">
+              <option value="timed">Timed game</option>
+              <option value="rounds">Number of rounds</option>
+            </select>
+
+            <div class="room-setting" id="timedRoomSettings">
+              <label for="roomDuration">Game time</label>
+              <select id="roomDuration" class="control-select">
+                <option value="5">5 minutes</option>
+                <option value="10">10 minutes</option>
+                <option value="15">15 minutes</option>
+                <option value="custom">Custom time</option>
+              </select>
+              <label class="sr-only" for="customDuration">Custom time in minutes</label>
+              <input id="customDuration" class="control-select" type="number" min="1" max="240" step="1"
+                placeholder="Minutes (1–240)" hidden />
+            </div>
+
+            <div class="room-setting" id="roundRoomSettings" hidden>
+              <label for="roomRounds">Number of rounds</label>
+              <input id="roomRounds" class="control-select" type="number" min="1" max="1000" step="1" value="5" />
+            </div>
+
+            <div class="room-form__actions">
+              <button type="submit" class="pill-btn primary">Create room</button>
+            </div>
+          </form>
+
+          <form class="room-form room-form--join" id="joinRoomForm">
+            <h3>Join a room</h3>
+            <label for="joinRoomCode">Invite link or room code</label>
+            <input id="joinRoomCode" class="control-select" type="text" autocomplete="url"
+              placeholder="Paste a room link or code" />
+            <label for="roomGuestName">Guest name <span>(optional)</span></label>
+            <input id="roomGuestName" class="control-select" type="text" maxlength="32"
+              placeholder="Assigned a saint name automatically" />
+            <div class="room-form__actions">
+              <button type="submit" class="pill-btn primary">Join room</button>
+              <button type="button" class="pill-btn" id="roomSignInBtn">Sign in instead</button>
+            </div>
+            <button type="button" class="pill-btn" id="browseRoomsBtn">Browse public rooms</button>
+            <ul class="public-room-list" id="publicRoomList" aria-label="Public rooms"></ul>
+          </form>
+        </div>
+
+        <section class="local-room-view" id="localRoomView" aria-label="Room lobby and leaderboard" hidden>
+          <div class="local-room-view__header">
+            <div>
+              <p class="subtle-label">Room</p>
+              <h3 id="localRoomTitle">BIBDLE room</h3>
+              <p id="localRoomStatus" class="section-shell__meta" aria-live="polite"></p>
+            </div>
+            <div class="room-qr-card">
+              <img id="roomQrCode" width="120" height="120" alt="" />
+              <label class="sr-only" for="roomInviteLink">Room invite link</label>
+              <input id="roomInviteLink" class="control-select" type="text" readonly />
+              <button type="button" class="pill-btn" id="copyRoomLinkBtn">Copy invite link</button>
+            </div>
+          </div>
+          <section class="room-section" aria-label="Players in the room">
+            <h3>Players</h3>
+            <ul class="room-player-list" id="roomPlayers"></ul>
+          </section>
+          <section class="room-section" aria-label="Room leaderboard">
+            <h3>Live leaderboard</h3>
+            <ol class="room-leaderboard" id="roomLeaderboard"></ol>
+          </section>
+          <p class="room-scoring-note">Each round scores 10 points for a first-guess answer, decreasing by one per guess. Missed rounds score 0. Ties share rank.</p>
+          <div class="room-form__actions">
+            <button type="button" class="pill-btn primary" id="startRoomGameBtn" hidden>Start game</button>
+            <button type="button" class="pill-btn" id="nextRoomRoundBtn" hidden disabled>Start next book</button>
+            <button type="button" class="pill-btn" id="finishRoomGameBtn" hidden>End game</button>
+            <button type="button" class="pill-btn" id="leaveRoomBtn">Leave room</button>
+          </div>
+        </section>
+      </section>
     </div>
   </div>
 
