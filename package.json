@@ -8,13 +8,19 @@
     "test:unit": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
+    "test:rules": "firebase emulators:exec --only firestore --project demo-bibdle-local-games \"node tests/rules/local-rooms.test.js\"",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:install": "playwright install chromium"
   },
   "devDependencies": {
+    "@firebase/rules-unit-testing": "^6.0.0",
     "@playwright/test": "^1.55.0",
     "@vitest/coverage-v8": "^5.0.5",
+    "firebase": "^13.0.0",
     "jsdom": "^26.1.0",
     "vitest": "^5.0.5"
+  },
+  "overrides": {
+    "@grpc/grpc-js": "^1.14.6"
   }
 }

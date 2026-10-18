@@ -425,18 +425,22 @@ export function createLocalGameController({
       if (!alreadyActive && (room.playerCount || 0) >= MAX_ROOM_PLAYERS) {
         throw new Error("This room has reached its 200-player limit.");
       }
+      if (alreadyActive) {
+        player = prior;
+        return;
+      }
       player = {
         uid: user.uid,
         name,
         score: Number.isFinite(prior.score) ? prior.score : 0,
-        lastRoundScore: Number.isFinite(prior.lastRoundScore) ? prior.lastRoundScore : 0,
+        lastRoundScore: 0,
         guesses: 0,
-        activeRound: room.round || 0,
+        activeRound: 0,
         roundCompleted: false,
         active: true,
         lastCorrect: false,
         joinedAt: prior.joinedAt || serverTimestamp(),
-        expiresAt: prior.expiresAt || room.expiresAt || new Date(Date.now() + ROOM_TTL_MS),
+        expiresAt: room.expiresAt || new Date(Date.now() + ROOM_TTL_MS),
       };
       transaction.set(existingRef, player, { merge: true });
       if (!alreadyActive) {
@@ -446,12 +450,18 @@ export function createLocalGameController({
     state.roomId = safeRoomId;
     state.room = room;
     state.player = player;
-    state.lastRound = 0;
-    state.readyRound = 0;
+    state.lastRound = room.status === "playing" && player.activeRound < room.round
+      ? 0
+      : room.status === "playing" ? room.round : 0;
+    state.readyRound = player.activeRound === room.round ? room.round : 0;
     state.timerExpired = false;
     state.finalRoom = null;
     state.finalPlayers = [];
     subscribeToRoom();
+    if (room.status === "playing" && state.lastRound === room.round) {
+      const verse = verses.find((item) => item.id === room.verseId);
+      if (verse) onRoundStart?.(verse, room);
+    }
     const url = new URL(window.location.href);
     url.searchParams.set("room", safeRoomId);
     window.history.replaceState({}, "", url);
@@ -492,6 +502,7 @@ export function createLocalGameController({
         hostUid: user.uid,
         status: "lobby",
         round: 0,
+        bookId: null,
         verseId: null,
         usedBookIds: [],
         createdAt: serverTimestamp(),
@@ -548,6 +559,7 @@ export function createLocalGameController({
     const patch = {
       status: "playing",
       round: nextRound,
+      bookId: verse.bookId,
       verseId: verse.id,
       usedBookIds,
     };
@@ -563,10 +575,11 @@ export function createLocalGameController({
     setMessage(`Round ${nextRound} is starting.`);
   }
 
-  async function deleteFinishedRoom(roomId, finalRoom, finalPlayers) {
+  async function deleteFinishedRoom(roomId, finalRoom) {
     if (!finalRoom || finalRoom.hostUid !== getUser()?.uid) return;
-    await Promise.all(finalPlayers.map((player) =>
-      deleteDoc(doc(db, "localRooms", roomId, "players", player.uid)),
+    const players = await getDocs(playersRef(roomId));
+    await Promise.all(players.docs.map((player) =>
+      deleteDoc(doc(db, "localRooms", roomId, "players", player.id)),
     ));
     await deleteDoc(roomRef(roomId));
   }
@@ -594,9 +607,8 @@ export function createLocalGameController({
       window.clearTimeout(state.cleanupTimeout);
       const roomId = state.roomId;
       const finalRoom = state.finalRoom;
-      const finalPlayers = [...state.finalPlayers];
       state.cleanupTimeout = window.setTimeout(() => {
-        deleteFinishedRoom(roomId, finalRoom, finalPlayers).catch((error) =>
+        deleteFinishedRoom(roomId, finalRoom).catch((error) =>
           reportError("The finished room could not be deleted yet.", error),
         );
       }, FINAL_SCOREBOARD_MS);
@@ -607,7 +619,8 @@ export function createLocalGameController({
 
   async function recordGuess({ guessCount, completed, solved }) {
     if (!state.room || state.room.status !== "playing" ||
-      state.readyRound !== state.room.round || state.timerExpired) return;
+      state.readyRound !== state.room.round || state.timerExpired ||
+      state.player?.roundCompleted) return;
     const points = completed && solved ? calculateLocalRoundPoints(guessCount) : 0;
     const previousScore = Number.isFinite(state.player?.score) ? state.player.score : 0;
     const lastRound = state.room.round;
@@ -808,7 +821,8 @@ export function createLocalGameController({
     describeError: describeLocalGameError,
     canGuess() {
       return !isActive() || !!state.room && state.room.status === "playing" &&
-        state.readyRound === state.room.round && !state.timerExpired;
+        state.readyRound === state.room.round && !state.timerExpired &&
+        !state.player?.roundCompleted;
     },
     recordGuess,
     leaveRoom,

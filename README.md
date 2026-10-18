@@ -59,7 +59,14 @@ Choose **Play with friends** to create a room or join one with an invite link or
 
 Players who join without an account receive a Catholic saint name, which they can edit. Signing in with Google before joining uses the account display name. The host starts the game and each book; each new round selects a book not yet used in that room, until all books have been used. A correct answer earns 10 points for one guess, decreasing by one point per guess through the tenth; unanswered rounds earn no points. The live leaderboard sorts by total score and gives tied scores the same rank.
 
-Local games require the provided Firestore rules and composite index. From this project folder, deploy them to the configured Firebase project with `firebase deploy --only firestore:rules,firestore:indexes --project bibdle-db7ae`. Enable **Anonymous** and **Google** under Firebase Console → Authentication → Sign-in method. A `permission-denied` room error usually means the rules were not deployed to `bibdle-db7ae` or Anonymous Authentication is disabled. The rules preserve signed-in profile sync and the daily leaderboard while restricting room membership and writes.
+Local games require the provided Firestore rules and composite indexes. From this project folder, deploy them to the configured Firebase project with `firebase deploy --only firestore:rules,firestore:indexes --project bibdle-db7ae`. Enable **Anonymous** and **Google** under Firebase Console → Authentication → Sign-in method. To automatically expire abandoned rooms and their player records after 24 hours, enable TTL for both collection groups:
+
+```sh
+gcloud firestore fields ttls update expiresAt --collection-group=localRooms --enable-ttl --project=bibdle-db7ae
+gcloud firestore fields ttls update expiresAt --collection-group=players --enable-ttl --project=bibdle-db7ae
+```
+
+Run `npm run test:rules` to exercise room creation, lobby and in-progress joins, round writes, public discovery, scoring, and host cleanup against the Firestore Emulator; this requires the Firebase CLI and Java. Firestore TTL deletion is eventual. When a game ends, the host deletes the room and player records after a short scoreboard display delay; TTL provides cleanup for abandoned rooms. A `permission-denied` room error usually means the rules were not deployed to `bibdle-db7ae` or the required Authentication provider is disabled. The rules preserve signed-in profile sync and the daily leaderboard while restricting room membership and writes.
 
 The invite QR code is rendered from the full room URL by QRServer. The unique room link grants access to anyone who receives it, including the room's public scores and player names.
 

@@ -15,6 +15,11 @@ service cloud.firestore {
       return /databases/$(database)/documents/localRooms/$(roomId)/players/$(uid);
     }
 
+    function isRoomHost(roomId) {
+      return signedIn()
+        && get(roomPath(roomId)).data.hostUid == request.auth.uid;
+    }
+
     function isRoomMember(roomId) {
       return signedIn()
         && exists(playerPath(roomId, request.auth.uid))
@@ -26,12 +31,12 @@ service cloud.firestore {
         && request.resource.data.keys().hasAll([
           'name', 'visibility', 'gameType', 'durationMinutes', 'roundsTotal',
           'maxPlayers', 'playerCount', 'hostUid', 'status', 'round',
-          'verseId', 'usedBookIds', 'createdAt'
+          'bookId', 'verseId', 'usedBookIds', 'createdAt', 'expiresAt'
         ])
         && request.resource.data.keys().hasOnly([
           'name', 'visibility', 'gameType', 'durationMinutes', 'roundsTotal',
           'maxPlayers', 'playerCount', 'hostUid', 'status', 'round',
-          'verseId', 'usedBookIds', 'createdAt'
+          'bookId', 'verseId', 'usedBookIds', 'createdAt', 'expiresAt'
         ])
         && request.resource.data.name is string
         && request.resource.data.name.size() > 0
@@ -43,10 +48,15 @@ service cloud.firestore {
         && request.resource.data.hostUid == request.auth.uid
         && request.resource.data.status == 'lobby'
         && request.resource.data.round == 0
+        && request.resource.data.bookId == null
         && request.resource.data.verseId == null
         && request.resource.data.usedBookIds is list
         && request.resource.data.usedBookIds.size() == 0
         && request.resource.data.createdAt is timestamp
+        && request.resource.data.expiresAt is timestamp
+        && request.resource.data.expiresAt > request.time
+        && request.resource.data.expiresAt
+          <= request.time + duration.value(24, 'h')
         && (request.resource.data.gameType == 'timed'
           ? request.resource.data.durationMinutes is int
             && request.resource.data.durationMinutes >= 1
@@ -63,24 +73,36 @@ service cloud.firestore {
 
       return signedIn()
         && resource.data.hostUid == request.auth.uid
+        && resource.data.expiresAt > request.time
         && changed.hasOnly([
-          'status', 'round', 'verseId', 'usedBookIds', 'startedAt',
-          'deadlineAt', 'finishedAt'
+          'status', 'round', 'bookId', 'verseId', 'usedBookIds', 'startedAt',
+          'deadlineAt', 'finishedAt', 'expiresAt'
         ])
         && (request.resource.data.status == 'finished'
           ? resource.data.status == 'playing'
-            && changed.hasOnly(['status', 'finishedAt'])
+            && changed.hasOnly(['status', 'finishedAt', 'expiresAt'])
+            && request.resource.data.finishedAt is timestamp
+            && request.resource.data.expiresAt is timestamp
             && request.resource.data.finishedAt == request.time
+            && request.resource.data.expiresAt == request.time
           : request.resource.data.status == 'playing'
             && resource.data.status in ['lobby', 'playing']
+            && resource.data.expiresAt > request.time
+            && request.resource.data.expiresAt == resource.data.expiresAt
             && request.resource.data.round == resource.data.round + 1
             && request.resource.data.round >= 1
+            && request.resource.data.bookId is string
+            && request.resource.data.bookId.size() > 0
             && request.resource.data.verseId is string
             && request.resource.data.verseId.size() > 0
-            && !(request.resource.data.verseId in resource.data.usedBookIds)
             && request.resource.data.usedBookIds is list
-            && request.resource.data.usedBookIds.size()
-              == resource.data.usedBookIds.size() + 1
+            && request.resource.data.bookId in request.resource.data.usedBookIds
+            && (resource.data.usedBookIds.size() < 73
+              ? !(request.resource.data.bookId in resource.data.usedBookIds)
+                && request.resource.data.usedBookIds.size()
+                  == resource.data.usedBookIds.size() + 1
+              : resource.data.usedBookIds.size() == 73
+                && request.resource.data.usedBookIds.size() == 73)
             && request.resource.data.usedBookIds.size() <= 73
             && (resource.data.gameType != 'rounds'
               || request.resource.data.round <= resource.data.roundsTotal)
@@ -109,7 +131,9 @@ service cloud.firestore {
       let addedMember =
         (!exists(member) || get(member).data.active == false)
         && existsAfter(member)
-        && getAfter(member).data.active == true;
+        && getAfter(member).data.active == true
+        && resource.data.status in ['lobby', 'playing']
+        && resource.data.expiresAt > request.time;
 
       let removedMember =
         exists(member)
@@ -131,12 +155,12 @@ service cloud.firestore {
       return data.keys().hasAll([
           'uid', 'name', 'score', 'lastRoundScore', 'guesses',
           'activeRound', 'roundCompleted', 'active', 'lastCorrect',
-          'joinedAt'
+          'joinedAt', 'expiresAt'
         ])
         && data.keys().hasOnly([
           'uid', 'name', 'score', 'lastRoundScore', 'guesses',
           'activeRound', 'roundCompleted', 'active', 'lastCorrect',
-          'joinedAt'
+          'joinedAt', 'expiresAt'
         ])
         && data.uid == request.auth.uid
         && data.name is string
@@ -155,7 +179,8 @@ service cloud.firestore {
         && data.roundCompleted is bool
         && data.active is bool
         && data.lastCorrect is bool
-        && data.joinedAt is timestamp;
+        && data.joinedAt is timestamp
+        && data.expiresAt is timestamp;
     }
 
     function validPlayerCreate(roomId, uid) {
@@ -173,7 +198,8 @@ service cloud.firestore {
         && request.resource.data.activeRound == 0
         && request.resource.data.roundCompleted == false
         && request.resource.data.active == true
-        && request.resource.data.lastCorrect == false;
+        && request.resource.data.lastCorrect == false
+        && request.resource.data.expiresAt == room.data.expiresAt;
     }
 
     function validPlayerJoin(roomId, uid) {
@@ -183,8 +209,11 @@ service cloud.firestore {
       return signedIn()
         && uid == request.auth.uid
         && roomBefore.status in ['lobby', 'playing']
+        && roomBefore.expiresAt > request.time
         && roomAfter.playerCount == roomBefore.playerCount + 1
         && roomAfter.playerCount <= roomAfter.maxPlayers
+        && roomAfter.status == roomBefore.status
+        && roomAfter.expiresAt == roomBefore.expiresAt
         && validPlayer(request.resource.data)
         && request.resource.data.score == 0
         && request.resource.data.lastRoundScore == 0
@@ -192,7 +221,8 @@ service cloud.firestore {
         && request.resource.data.activeRound == 0
         && request.resource.data.roundCompleted == false
         && request.resource.data.active == true
-        && request.resource.data.lastCorrect == false;
+        && request.resource.data.lastCorrect == false
+        && request.resource.data.expiresAt == roomAfter.expiresAt;
     }
 
     function validPlayerUpdate(roomId, uid) {
@@ -207,29 +237,80 @@ service cloud.firestore {
         !resource.data.roundCompleted
         && request.resource.data.roundCompleted
         && room.status == 'playing'
+        && room.expiresAt > request.time
         && request.resource.data.activeRound == room.round
-        && request.resource.data.guesses >= 0
+        && request.resource.data.guesses > resource.data.guesses
         && request.resource.data.guesses <= 10
         && request.resource.data.score == resource.data.score + earned
         && request.resource.data.lastRoundScore == earned
+        && request.resource.data.active == resource.data.active
+        && request.resource.data.expiresAt == room.expiresAt
+        && changed.hasOnly([
+          'guesses', 'roundCompleted', 'lastRoundScore', 'lastCorrect',
+          'score', 'active', 'expiresAt'
+        ])
         && (!('deadlineAt' in room)
           || request.time.toMillis() <= room.deadlineAt);
 
+      let guessProgress =
+        room.status == 'playing'
+        && room.expiresAt > request.time
+        && resource.data.active
+        && !resource.data.roundCompleted
+        && request.resource.data.activeRound == room.round
+        && request.resource.data.roundCompleted == false
+        && request.resource.data.guesses >= resource.data.guesses
+        && request.resource.data.guesses <= 10
+        && request.resource.data.score == resource.data.score
+        && request.resource.data.lastRoundScore == 0
+        && request.resource.data.lastCorrect == false
+        && request.resource.data.expiresAt == room.expiresAt
+        && changed.hasOnly([
+          'guesses', 'roundCompleted', 'lastRoundScore', 'lastCorrect',
+          'score', 'active', 'expiresAt'
+        ]);
+
       let nextRound =
         room.status == 'playing'
+        && room.expiresAt > request.time
         && request.resource.data.activeRound == room.round
         && resource.data.activeRound < room.round
         && request.resource.data.score == resource.data.score
         && request.resource.data.roundCompleted == false
         && request.resource.data.guesses == 0
         && request.resource.data.lastRoundScore == 0
-        && lastCorrect == false;
+        && lastCorrect == false
+        && request.resource.data.active == resource.data.active
+        && request.resource.data.expiresAt == room.expiresAt
+        && changed.hasOnly([
+          'activeRound', 'guesses', 'roundCompleted', 'lastRoundScore',
+          'lastCorrect', 'expiresAt'
+        ]);
 
       let rename =
         changed.hasOnly(['name'])
+        && room.status in ['lobby', 'playing']
+        && room.expiresAt > request.time
         && request.resource.data.name is string
         && request.resource.data.name.size() > 0
         && request.resource.data.name.size() <= 32;
+
+      let rejoining =
+        !resource.data.active
+        && request.resource.data.active
+        && room.status in ['lobby', 'playing']
+        && room.expiresAt > request.time
+        && roomAfter.playerCount == room.playerCount + 1
+        && roomAfter.expiresAt == room.expiresAt
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.joinedAt == resource.data.joinedAt
+        && request.resource.data.score == resource.data.score
+        && request.resource.data.lastRoundScore == 0
+        && request.resource.data.guesses == 0
+        && request.resource.data.activeRound == 0
+        && request.resource.data.roundCompleted == false
+        && request.resource.data.lastCorrect == false
+        && request.resource.data.expiresAt == room.expiresAt;
 
       let leaving =
         resource.data.active
@@ -242,7 +323,8 @@ service cloud.firestore {
         && uid == request.auth.uid
         && validPlayer(request.resource.data)
         && request.resource.data.uid == resource.data.uid
-        && (completedRound || nextRound || rename || leaving);
+        && (completedRound || guessProgress || nextRound || rename ||
+          rejoining || leaving);
     }
 
     function dailyScorePath(dateKey, uid) {
@@ -337,16 +419,20 @@ service cloud.firestore {
         || validRoomPlayerCountUpdate(roomId);
       allow delete: if signedIn()
         && resource.data.hostUid == request.auth.uid
-        && resource.data.status == 'lobby';
+        && resource.data.status in ['lobby', 'finished'];
 
       match /players/{uid} {
         allow get: if signedIn()
           && (request.auth.uid == uid || isRoomMember(roomId));
-        allow list: if isRoomMember(roomId);
+        allow list: if isRoomMember(roomId)
+          || (signedIn() && isRoomHost(roomId)
+            && get(roomPath(roomId)).data.status == 'finished');
         allow create: if validPlayerCreate(roomId, uid)
           || validPlayerJoin(roomId, uid);
         allow update: if validPlayerUpdate(roomId, uid);
-        allow delete: if false;
+        allow delete: if signedIn()
+          && isRoomHost(roomId)
+          && get(roomPath(roomId)).data.status == 'finished';
       }
     }
   }

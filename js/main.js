@@ -14,6 +14,7 @@ import {
 import {
   getFirestore,
   doc,
+  deleteDoc,
   getDoc,
   setDoc,
   serverTimestamp,
@@ -3259,6 +3260,48 @@ function renderStatus(message = "Guess the book from the verse above.") {
   elements.statusLine.textContent = message;
 }
 
+function getDefaultStatusMessage(status = state.status) {
+  const verse = state.currentPuzzle?.verse;
+  if (!verse) return "Guess the book from the verse above.";
+  const answer = getLocalizedValue(verse.book, verse.bookMl);
+  const reference = getLocalizedReference(verse, getCurrentLanguage());
+  if (status === "won") return `Correct — ${answer} (${reference}).`;
+  if (status === "lost") return `Out of guesses — the answer was ${answer} (${reference}).`;
+  return "Guess the book from the verse above.";
+}
+
+function renderGuessRows(animateLatest = false) {
+  return puzzleSurface?.renderGuessRows(animateLatest);
+}
+
+function renderPuzzleCard() {
+  return puzzleSurface?.renderPuzzleCard();
+}
+
+function renderHintBlock() {
+  return puzzleSurface?.renderHintBlock();
+}
+
+function renderProximityLine() {
+  return puzzleSurface?.renderProximityLine();
+}
+
+function syncActionButtons() {
+  return puzzleSurface?.syncActionButtons();
+}
+
+function renderPostGameNewAchievements(...args) {
+  return statsSurface?.renderPostGameNewAchievements(...args);
+}
+
+function renderPostGameClosestAchievements(...args) {
+  return statsSurface?.renderPostGameClosestAchievements(...args);
+}
+
+function loadPostGameLeaderboardRank(...args) {
+  return postGameSurface?.loadPostGameLeaderboardRank(...args);
+}
+
 function bindEmptyStateActions(container = document) {
   container.querySelectorAll("[data-empty-action]").forEach((button) => {
     if (button.dataset.emptyActionBound === "true") return;
@@ -4226,22 +4269,6 @@ async function applyGuess(rawGuess) {
   }
 
   state.guesses.push(result);
-  if (localGameController?.isActive() && !result.solved &&
-    state.guesses.length < getMaxGuesses()) {
-    try {
-      await localGameController.recordGuess({
-        guessCount: state.guesses.length,
-        completed: false,
-        solved: false,
-      });
-    } catch (error) {
-      console.error("Local game progress sync failed:", error);
-      state.localGameSyncError = localGameController.describeError(
-        "Room progress sync failed.",
-        error,
-      );
-    }
-  }
   resetInput();
   resetSuggestionsState();
   closeSuggestions();
@@ -5138,58 +5165,6 @@ function setLocalRoomActive(active, roomStatus = "lobby") {
   }
 }
 
-function startLocalRoomRound(verse, room) {
-  state.mode = "practice";
-  elements.modeSelect.value = "practice";
-  state.currentPuzzle = {
-    id: verse.id,
-    date: null,
-    mode: "practice",
-    verse,
-  };
-  state.guesses = [];
-  state.status = "playing";
-  const clueUiState = ensureClueUiState();
-  clueUiState.lastUnlockedKeys = [];
-  clueUiState.lastRenderSignature = "";
-  syncEndStateVisibility();
-  closePostGamePanel();
-  resetInput();
-  resetSuggestionsState();
-  closeSuggestions();
-  renderPipeline.renderPuzzleReset({
-    mode: "practice",
-    source: "local-room-round",
-  });
-  elements.dateLabel.textContent = `${room.name} · Round ${room.round}`;
-  closeModal(elements.localGameModal);
-}
-
-function setLocalRoomActive(active) {
-  state.localGameActive = active;
-  elements.modeSelect.disabled = active;
-  elements.difficultySelect.disabled = active;
-  const countdownLabel = elements.countdownTimer?.closest(".countdown-label");
-  if (countdownLabel) countdownLabel.hidden = active;
-
-  if (active) {
-    if (!localPreviousMode) localPreviousMode = state.mode;
-    state.mode = "practice";
-    elements.modeSelect.value = "practice";
-    stopCountdownTimer();
-    return;
-  }
-
-  if (localPreviousMode) {
-    const previousMode = localPreviousMode;
-    localPreviousMode = null;
-    state.mode = previousMode;
-    elements.modeSelect.value = previousMode;
-    resetPuzzle(previousMode);
-    startCountdownTimer();
-  }
-}
-
 function handleAuthInitialized(context = {}) {
   firebaseApp = context.app || null;
   firebaseAuth = context.auth || null;
@@ -5202,6 +5177,7 @@ function handleAuthInitialized(context = {}) {
       auth: firebaseAuth,
       firestore: {
         collection,
+        deleteDoc,
         doc,
         getDoc,
         getDocs,

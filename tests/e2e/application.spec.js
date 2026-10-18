@@ -284,6 +284,14 @@ test("creates a room, starts shared rounds, and updates the local leaderboard", 
     lastCorrect: false,
     roundCompleted: false,
   });
+  const room = await page.evaluate(() =>
+    globalThis.__firebaseMockState.documents.get("localRooms/mock-room-1"),
+  );
+  expect(room).toMatchObject({
+    bookId: null,
+    status: "lobby",
+  });
+  expect(room.expiresAt.getTime()).toBeGreaterThan(Date.now());
 
   await page.locator("#startRoomGameBtn").click();
   await expect(page.locator("#localGameBar")).toBeVisible();
@@ -307,6 +315,19 @@ test("creates a room, starts shared rounds, and updates the local leaderboard", 
   const calls = await page.evaluate(() => globalThis.__firebaseMockState.calls);
   expect(calls.some((call) => call.method === "onSnapshot" && call.path === "localRooms/mock-room-1")).toBe(true);
   expect(pageErrors).toEqual([]);
+
+  await page.locator("#localGameRoomBtn").click();
+  await page.locator("#finishRoomGameBtn").click();
+  await expect(page.locator("#localGameFinalLabel")).toBeVisible();
+  await expect(page.locator("#localGameLeaderboard .is-final.is-you")).toBeVisible();
+  await expect.poll(() => page.evaluate(() =>
+    globalThis.__firebaseMockState.documents.has("localRooms/mock-room-1"),
+  ), { timeout: 10_000 }).toBe(false);
+  await expect.poll(() => page.evaluate(() =>
+    globalThis.__firebaseMockState.documents.has(
+      "localRooms/mock-room-1/players/mock-anonymous-user",
+    ),
+  )).toBe(false);
 });
 
 test("supports custom timed rooms and signed-in player names", async ({ page }) => {
