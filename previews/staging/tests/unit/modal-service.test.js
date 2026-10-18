@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createModalService } from "../../js/modal-service.js";
+import { createModalService } from "../../js/core/dom/modal-controller.js";
 
 describe("modal service", () => {
   let help;

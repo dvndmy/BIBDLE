@@ -3,7 +3,7 @@ import {
   createAppShell,
   createBootLogger,
   createBootStateSnapshot,
-} from "../../js/app-shell.js";
+} from "../../js/app/bootstrap.js";
 
 describe("application boot shell", () => {
   beforeEach(() => {

@@ -36,11 +36,69 @@ import {
   createAppShell,
   createBootLogger,
   createBootStateSnapshot,
-} from "./app-shell.js";
-import { createRenderPipeline } from "./render-pipeline.js";
-import { createModalService } from "./modal-service.js";
-import { createBindings } from "./bindings.js";
-import { createAuthService } from "./auth-service.js";
+} from "./app/bootstrap.js";
+import { createRenderPipeline } from "./core/dom/render-orchestrator.js";
+import { createModalService } from "./core/dom/modal-controller.js";
+import { createBindings } from "./core/dom/bindings-registry.js";
+import { createAuthService } from "./core/auth/auth-client.js";
+import {
+  clearBusyState,
+  escapeHtml,
+  hasRenderableMarkup,
+  hasTextContent,
+  isNonEmptyArray,
+  renderBusyInto,
+  renderEmptyState,
+  renderInto,
+  renderLoadingBlock,
+  renderRetryButtonMarkup,
+  renderSurfaceEmptyState,
+  renderSurfaceLoadingState,
+  renderWhen,
+  setHidden,
+  showWhen,
+  showWhenHasItems,
+  showWhenHasText,
+} from "./core/dom/ui-render-utils.js";
+import {
+  createModalHelpers,
+  createPreferenceUpdater,
+  createToggleHandler,
+  renderPlacementCard,
+} from "./shared/ui-refactor-helpers.js";
+import { createGameTransitions } from "./shared/game-transitions.js";
+import {
+  computeModeStatsSummary as buildModeStatsSummary,
+} from "./features/stats/stats-read-models.js";
+import {
+  computeArchiveSummary as buildArchiveSummary,
+  formatArchiveAverage as formatArchiveAverageValue,
+  buildArchiveBarsViewModel,
+  buildArchiveGridViewModel,
+  buildArchiveDetailsViewModel,
+} from "./features/archive/archive-read-models.js";
+import {
+  clampAchievementProgress as clampAchievementProgressValue,
+  getAchievementCategoryLabel as getAchievementCategoryLabelValue,
+  getAchievementCategoryDescription as getAchievementCategoryDescriptionValue,
+  getAchievementCategoryOrder as getAchievementCategoryOrderValue,
+  getAchievementDescriptionForUi as getAchievementDescriptionForUiValue,
+  formatAchievementProgressText as formatAchievementProgressTextValue,
+  getAchievementStatusCopy as getAchievementStatusCopyValue,
+  buildAchievementCardViewModel,
+  getClosestIncompleteAchievements as getClosestIncompleteAchievementsValue,
+  buildAchievementCategoryGroups,
+} from "./features/achievements/achievement-read-models.js";
+import {
+  formatTriviaLabel as formatTriviaLabelValue,
+  buildTriviaContent as buildTriviaContentValue,
+  buildPostGameContent,
+} from "./features/postgame/postgame-read-models.js";
+import { createPuzzleSurface } from "./features/puzzle/puzzle-surface.js";
+import { createStatsSurface } from "./features/stats/stats-surface.js";
+import { createPostGameSurface } from "./features/postgame/postgame-surface.js";
+import { createArchiveSurface } from "./features/archive/archive-surface.js";
+import { createLeaderboardSurface } from "./features/leaderboard/leaderboard-surface.js";
 import { createLocalizationService } from "./localization-service.js";
 import { createPreferencesStorage } from "./preferences-storage.js";
 import { createProgressStorage } from "./progress-storage.js";
@@ -3848,77 +3906,44 @@ function closePostGameModal() {
   modalService?.close("postGame") ?? closeModal(elements.postGameModal);
 }
 
-function closePostGamePanel() {
-  closePostGameModal();
-}
-
 function renderPuzzleView() {
-  applyLanguageToDocument();
-  applyModeTheme(state.mode);
-  renderLanguageControl();
-  renderMobileLanguageToggle();
-  renderPuzzleCard();
-
-  if (state.status === "won" || state.status === "lost") {
-    syncEndStateVisibility();
-    renderGuessRows();
-    syncPreferenceControls();
-    syncActionButtons();
-    if (localGameController?.isActive()) {
-      closePostGamePanel();
-    } else {
-      renderPostGamePanel();
-    }
-
-    if (state.status === "won") {
-      renderStatus(
-        state.localGameSyncError ||
-          `Correct — ${getLocalizedValue(state.currentPuzzle.verse.book, state.currentPuzzle.verse.bookMl)} (${getLocalizedReference(state.currentPuzzle.verse, getCurrentLanguage())}).`,
-      );
-      state.localGameSyncError = null;
-      publishBootSnapshot({ renderStatus: "won" });
-      return;
-    }
-
-    renderStatus(
-      state.localGameSyncError ||
-        `Out of guesses — the answer was ${getLocalizedValue(state.currentPuzzle.verse.book, state.currentPuzzle.verse.bookMl)} (${getLocalizedReference(state.currentPuzzle.verse, getCurrentLanguage())}).`,
-    );
-    state.localGameSyncError = null;
-    publishBootSnapshot({ renderStatus: "lost" });
+  if (localGameController?.isActive()) {
+    puzzleSurface?.renderAfterGuessOutcome?.({
+      status: state.status,
+      message: getDefaultStatusMessage(),
+      renderPostGame: false,
+      save: false,
+    });
     return;
   }
 
-  syncEndStateVisibility();
-  renderHintBlock();
-  renderGuessRows();
-  renderProximityLine();
-  syncPreferenceControls();
-  syncActionButtons();
-  if (localGameController?.isActive()) {
-    closePostGamePanel();
-  } else {
-    renderPostGamePanel();
+  puzzleSurface?.renderPuzzleView?.();
+}
+
+function getDefaultStatusMessage(status = state.status) {
+  const language = getCurrentLanguage();
+  const puzzle = state.currentPuzzle?.verse;
+
+  if (!puzzle) {
+    return "Guess the book from the verse above.";
+  }
+
+  if (status === "won") {
+    return `Correct! ${getLocalizedValue(puzzle.book, puzzle.bookMl)} — ${getLocalizedReference(puzzle, language)}.`;
+  }
+
+  if (status === "lost") {
+    return `Out of guesses — the answer was ${getLocalizedValue(puzzle.book, puzzle.bookMl)} — ${getLocalizedReference(puzzle, language)}.`;
   }
 
   const clueState = buildClueRevealState();
   const newHintCount = clueState.newlyUnlockedKeys.length;
 
   if (newHintCount > 0 && state.guesses.length > 0) {
-    renderStatus(
-      `${newHintCount} new ${newHintCount === 1 ? "clue" : "clues"} unlocked. Review the clue panel above.`,
-    );
-    publishBootSnapshot({ renderStatus: "new-clues" });
-    return;
+    return `${newHintCount} new ${newHintCount === 1 ? "clue" : "clues"} unlocked. Review the clue panel above.`;
   }
 
-  if (state.localGameSyncError) {
-    renderStatus(state.localGameSyncError);
-  } else {
-    renderStatus();
-  }
-  state.localGameSyncError = null;
-  publishBootSnapshot({ renderStatus: "playing" });
+  return "Guess the book from the verse above.";
 }
 
 function resetInput() {
@@ -4052,19 +4077,16 @@ function handleDuplicateGuess(book) {
 }
 
 function refreshAfterGuess(message) {
-  syncEndStateVisibility();
-
-  if (state.status !== "won" && state.status !== "lost") {
-    renderHintBlock();
-    renderProximityLine();
-  }
-
-  renderGuessRows(true);
-  syncPreferenceControls();
-  syncActionButtons();
-  renderStatus(message);
-  if (!localGameController?.isActive()) saveProgress();
-  renderPuzzleView();
+  puzzleSurface?.renderAfterGuessOutcome?.({
+    status: state.status,
+    message: state.localGameSyncError || message,
+    animateLatest: true,
+    renderHints: state.status !== "won" && state.status !== "lost",
+    renderProximity: state.status !== "won" && state.status !== "lost",
+    renderPostGame: !localGameController?.isActive(),
+    save: !localGameController?.isActive(),
+  });
+  state.localGameSyncError = null;
 }
 
 async function handleSolvedGuess() {
@@ -4120,28 +4142,18 @@ function handleIncorrectGuess(bookName) {
   const newHintCount = clueState.newlyUnlockedKeys.length;
   const nearestDistance = getNearestGuessDistance();
 
-  renderHintBlock();
-  renderGuessRows(true);
-  renderProximityLine();
-  syncPreferenceControls();
-  syncActionButtons();
-
-  if (state.localGameSyncError) {
-    renderStatus(state.localGameSyncError);
-    state.localGameSyncError = null;
-  } else if (newHintCount > 0) {
-    renderStatus(
-      `${bookName} added. ${newHintCount} new ${newHintCount === 1 ? "clue" : "clues"} unlocked.`,
-    );
-  } else if (typeof nearestDistance === "number" && nearestDistance > 0) {
-    renderStatus(
-      `${bookName} added. Your nearest guess so far is ${nearestDistance} ${nearestDistance === 1 ? "book" : "books"} away.`,
-    );
-  } else {
-    renderStatus(`${bookName} added. Use the colors and clues for your next guess.`);
+  let message = `${bookName} added. Use the colors and clues for your next guess.`;
+  if (!state.localGameSyncError && newHintCount > 0) {
+    message = `${bookName} added. ${newHintCount} new ${newHintCount === 1 ? "clue" : "clues"} unlocked.`;
+  } else if (
+    !state.localGameSyncError &&
+    typeof nearestDistance === "number" &&
+    nearestDistance > 0
+  ) {
+    message = `${bookName} added. Your nearest guess so far is ${nearestDistance} ${nearestDistance === 1 ? "book" : "books"} away.`;
   }
 
-  if (!localGameController?.isActive()) saveProgress();
+  refreshAfterGuess(message);
 }
 
 async function applyGuess(rawGuess) {
@@ -4155,34 +4167,27 @@ async function applyGuess(rawGuess) {
     return;
   }
 
-    if (result.reason === "duplicate") {
-      handleDuplicateGuess(result.match);
-      return;
-    }
+  const match = typeof rawGuess === "object" ? rawGuess : getBookByName(rawGuess);
+  if (!match) {
+    handleInvalidGuess();
+    return;
+  }
 
+  if (isBookAlreadyGuessed(match.id)) {
+    handleDuplicateGuess(match);
     return;
   }
 
   const result = compareGuess(match);
-  if (!result) return;
+  if (!result) {
+    console.error("Could not compare the selected Bible book guess.", {
+      bookId: match.id,
+    });
+    renderStatus("Could not evaluate that guess. Please try again.");
+    return;
+  }
 
   state.guesses.push(result);
-  if (localGameController?.isActive() && !result.solved &&
-    state.guesses.length < getMaxGuesses()) {
-    try {
-      await localGameController.recordGuess({
-        guessCount: state.guesses.length,
-        completed: false,
-        solved: false,
-      });
-    } catch (error) {
-      console.error("Local game progress sync failed:", error);
-      state.localGameSyncError = localGameController.describeError(
-        "Room progress sync failed.",
-        error,
-      );
-    }
-  }
   resetInput();
   resetSuggestionsState();
   closeSuggestions();
@@ -4197,8 +4202,23 @@ async function applyGuess(rawGuess) {
     return;
   }
 
-  const result = await gameTransitions.applyGuess(rawGuess);
-  renderGuessTransitionResult(result);
+  if (localGameController?.isActive()) {
+    try {
+      await localGameController.recordGuess({
+        guessCount: state.guesses.length,
+        completed: false,
+        solved: false,
+      });
+    } catch (error) {
+      console.error("Local game progress sync failed:", error);
+      state.localGameSyncError = localGameController.describeError(
+        "Room progress sync failed.",
+        error,
+      );
+    }
+  }
+
+  handleIncorrectGuess(getLocalizedBookName(match, getCurrentLanguage()));
 }
 
 function buildShareSummary() {
@@ -4488,7 +4508,25 @@ async function handleGuessKeydown(event) {
       await applyGuess(getBookById(picked.bookId));
       return;
     }
-  }
+
+    if (localGameController?.isActive()) {
+      try {
+        await localGameController.recordGuess({
+          guessCount: state.guesses.length,
+          completed: false,
+          solved: false,
+        });
+      } catch (error) {
+        console.error("Local game progress sync failed:", error);
+        state.localGameSyncError = localGameController.describeError(
+          "Room progress sync failed.",
+          error,
+        );
+      }
+    }
+
+    handleIncorrectGuess(getLocalizedBookName(match, getCurrentLanguage()));
+    }
 }
 
 async function handleSuggestionClick(event) {
@@ -5457,11 +5495,6 @@ function initializeGameTransitions() {
     saveProgress,
     clearSavedProgress,
     loadProgress,
-    restoreProgressPayload,
-    canRestoreSavedPracticePuzzle,
-    readStoredProgressBuckets,
-    writeStoredProgressBuckets,
-    getProgressStorageKey,
     applyModeTheme,
     resetInput,
     resetSuggestionsState,

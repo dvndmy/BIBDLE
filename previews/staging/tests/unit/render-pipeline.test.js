@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { describe, expect, it, vi } from "vitest";
-import { createRenderPipeline } from "../../js/render-pipeline.js";
+import { createRenderPipeline } from "../../js/core/dom/render-orchestrator.js";
 
 describe("render pipeline", () => {
   it("coordinates boot rendering in dependency order and publishes readiness", () => {

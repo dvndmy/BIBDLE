@@ -146,6 +146,7 @@ function renderAfterGuessOutcome({
   renderHints = status !== "won" && status !== "lost",
   renderProximity = status !== "won" && status !== "lost",
   renderPostGame = true,
+  save = true,
 }) {
   syncEndStateVisibility();
 
@@ -167,7 +168,7 @@ function renderAfterGuessOutcome({
   }
 
   renderStatus(message);
-  saveProgress();
+  if (save) saveProgress();
 }
 
 function renderPuzzleView() {
