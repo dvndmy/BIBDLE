@@ -101,6 +101,52 @@ test("room creation, lobby and mid-game joins, scoring, listing, and host cleanu
     expiresAt: Timestamp.fromMillis(legacyExpiry.toMillis() + 60 * 60 * 1000),
   }));
 
+  const legacyStartId = "legacy-start-001";
+  const legacyStartPath = `localRooms/${legacyStartId}`;
+  const legacyStartCreatedAt = Timestamp.fromMillis(Date.now() - 1000);
+  const legacyStartExpiry = Timestamp.fromMillis(
+    legacyStartCreatedAt.toMillis() + 24 * 60 * 60 * 1000,
+  );
+  await environment.withSecurityRulesDisabled(async (context) => {
+    const legacyDb = context.firestore();
+    await setDoc(doc(legacyDb, legacyStartPath), {
+      name: "Legacy Start Room",
+      visibility: "link",
+      gameType: "rounds",
+      durationMinutes: null,
+      roundsTotal: 3,
+      maxPlayers: 200,
+      playerCount: 1,
+      hostUid: "host-user",
+      status: "lobby",
+      round: 0,
+      bookId: null,
+      verseId: null,
+      usedBookIds: [],
+      createdAt: legacyStartCreatedAt,
+    });
+    await setDoc(doc(legacyDb, `${legacyStartPath}/players/host-user`), player(
+      "host-user",
+      { joinedAt: legacyStartCreatedAt, expiresAt: legacyStartCreatedAt },
+    ));
+  });
+  await assertSucceeds(updateDoc(doc(host, legacyStartPath), {
+    status: "playing",
+    round: 1,
+    bookId: "genesis",
+    verseId: "verse-genesis",
+    usedBookIds: ["genesis"],
+    expiresAt: legacyStartExpiry,
+  }));
+  await assertSucceeds(updateDoc(doc(host, `${legacyStartPath}/players/host-user`), {
+    activeRound: 1,
+    guesses: 0,
+    roundCompleted: false,
+    lastRoundScore: 0,
+    lastCorrect: false,
+    expiresAt: legacyStartExpiry,
+  }));
+
   batch.set(hostRoom, {
     name: "Rule Test",
     visibility: "public",

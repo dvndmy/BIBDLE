@@ -84,16 +84,24 @@ service cloud.firestore {
 
     function validRoomGameUpdate() {
       let changed = request.resource.data.diff(resource.data).affectedKeys();
+      let legacyExpiryMigration =
+        !('expiresAt' in resource.data)
+        && resource.data.createdAt is timestamp
+        && request.resource.data.expiresAt is timestamp
+        && request.resource.data.expiresAt > request.time
+        && request.resource.data.expiresAt
+          <= resource.data.createdAt + duration.value(24, 'h');
 
       return signedIn()
         && resource.data.hostUid == request.auth.uid
-        && resource.data.expiresAt > request.time
         && changed.hasOnly([
           'status', 'round', 'bookId', 'verseId', 'usedBookIds', 'startedAt',
           'deadlineAt', 'finishedAt', 'expiresAt'
         ])
         && (request.resource.data.status == 'finished'
           ? resource.data.status == 'playing'
+            && ('expiresAt' in resource.data)
+            && resource.data.expiresAt > request.time
             && changed.hasOnly(['status', 'finishedAt', 'expiresAt'])
             && request.resource.data.finishedAt is timestamp
             && request.resource.data.expiresAt is timestamp
@@ -101,8 +109,10 @@ service cloud.firestore {
             && request.resource.data.expiresAt == request.time
           : request.resource.data.status == 'playing'
             && resource.data.status in ['lobby', 'playing']
-            && resource.data.expiresAt > request.time
-            && request.resource.data.expiresAt == resource.data.expiresAt
+            && (legacyExpiryMigration
+              || ('expiresAt' in resource.data
+                && resource.data.expiresAt > request.time
+                && request.resource.data.expiresAt == resource.data.expiresAt))
             && request.resource.data.round == resource.data.round + 1
             && request.resource.data.round >= 1
             && request.resource.data.bookId is string
