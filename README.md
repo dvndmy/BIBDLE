@@ -57,16 +57,9 @@ When English mode is active:
 
 Choose **Play with friends** to create a room or join one with an invite link or room code. Hosts can choose a room name, whether the room is public or invite-only, a 5-, 10-, or 15-minute game (or a custom 1–240 minute duration), or a custom number of rounds (1–1,000). Public rooms can be discovered from the join form. Rooms support up to 200 players.
 
-Players who join without an account receive a Catholic saint name, which they can edit. Signing in with Google before joining uses the account display name. When the host starts or advances a round, every connected room member loads the same book and can submit guesses. Each new round selects a book not yet used in that room, until all books have been used. A correct answer earns 10 points for one guess, decreasing by one point per guess through the tenth; unanswered rounds earn no points. The live leaderboard sorts by total score and gives tied scores the same rank. When a game ends, the final scoreboard stays visible to each player, with their own result highlighted.
+Players who join without an account receive a Catholic saint name, which they can edit. Signing in with Google before joining uses the account display name. The host starts the game and each book; each new round selects a book not yet used in that room, until all books have been used. A correct answer earns 10 points for one guess, decreasing by one point per guess through the tenth; unanswered rounds earn no points. The live leaderboard sorts by total score and gives tied scores the same rank.
 
-Local games require the provided Firestore rules and composite index. From this project folder, deploy them to the configured Firebase project with `firebase deploy --only firestore:rules,firestore:indexes --project bibdle-db7ae`. Enable **Anonymous** and **Google** under Firebase Console → Authentication → Sign-in method. To automatically expire abandoned rooms and player records after 24 hours, enable Firestore TTL policies for both collections. Firestore TTL deletion is eventual, not an exact timer:
-
-```sh
-gcloud firestore fields ttls update expiresAt --collection-group=localRooms --enable-ttl --project=bibdle-db7ae
-gcloud firestore fields ttls update expiresAt --collection-group=players --enable-ttl --project=bibdle-db7ae
-```
-
-When a game ends, the host removes the room and player records after a short delay so all connected players can receive and view the final scoreboard; the TTL policies clean up rooms if the host disconnects before that cleanup runs. A `permission-denied` room error usually means the rules were not deployed to `bibdle-db7ae` or the required authentication provider is disabled. Missing TTL policies affect abandoned-room cleanup, not room access. The rules preserve signed-in profile sync and the daily leaderboard while restricting room membership and writes.
+Local games require the provided Firestore rules and composite index. From this project folder, deploy them to the configured Firebase project with `firebase deploy --only firestore:rules,firestore:indexes --project bibdle-db7ae`. Enable **Anonymous** and **Google** under Firebase Console → Authentication → Sign-in method. A `permission-denied` room error usually means the rules were not deployed to `bibdle-db7ae` or Anonymous Authentication is disabled. The rules preserve signed-in profile sync and the daily leaderboard while restricting room membership and writes.
 
 The invite QR code is rendered from the full room URL by QRServer. The unique room link grants access to anyone who receives it, including the room's public scores and player names.
 
@@ -187,6 +180,7 @@ Bibdle stores the following in the browser:
 │   ├── game-rules.js
 │   ├── localization-service.js
 │   ├── local-game.js
+│   ├── modal-service.js
 │   ├── preferences-storage.js
 │   ├── progress-storage.js
 │   └── data/
@@ -216,7 +210,7 @@ Bibdle stores the following in the browser:
     └── achievements/
 ```
 
-`main.js` coordinates startup and application state. Authentication, modal behavior, DOM bindings, rendering, game transitions, and feature surfaces are organized into focused modules. Configuration, localization, persistence, and Firestore-backed local room play remain at the top level of `js/`.
+`bibdle.js` is the browser entry point and coordinates application state and startup. Configuration, localization and autocomplete, authentication, modal behavior, event binding, render transitions, and Firestore-backed local room play live in focused modules. The book and verse datasets stay under `js/data/`.
 
 ## Verification
 
