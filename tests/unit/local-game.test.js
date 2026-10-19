@@ -20,7 +20,7 @@ describe("local game scoring", () => {
   it("explains Firestore permission and configuration errors", () => {
     expect(describeLocalGameError("Could not join.", {
       code: "permission-denied",
-    })).toContain("Deploy this project's firestore.rules");
+    })).toContain("[LocalGame] console diagnostics");
     expect(describeLocalGameError("Could not join.", {
       code: "auth/operation-not-allowed",
     })).toContain("Enable Anonymous Authentication");

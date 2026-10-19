@@ -45,7 +45,7 @@ export function calculateLocalRoundPoints(guessCount) {
 export function describeLocalGameError(action, error) {
   if (error?.code === "permission-denied" ||
     /missing or insufficient permissions/i.test(error?.message || "")) {
-    return `${action} Firebase denied access. Deploy this project's firestore.rules, then enable Anonymous Authentication in Firebase Console.`;
+    return `${action} Firebase denied access. Check the [LocalGame] console diagnostics, then verify the deployed Firestore rules and enabled sign-in provider.`;
   }
   if (error?.code === "auth/operation-not-allowed") {
     return `${action} Enable Anonymous Authentication in Firebase Console, or sign in before joining.`;
@@ -202,8 +202,8 @@ export function createLocalGameController({
     elements.statusMessage.dataset.error = String(isError);
   }
 
-  function reportError(action, error) {
-    logLocalGame(action, {}, error);
+  function reportError(action, error, details = {}) {
+    logLocalGame(action, details, error);
     setMessage(describeLocalGameError(action, error), true);
   }
 
@@ -434,11 +434,10 @@ export function createLocalGameController({
       logLocalGame("Player round record updated", { targetRound: round });
       return launchRound(room, true);
     } catch (error) {
-      logLocalGame("Player round preparation failed", {
+      reportError("Could not prepare your next round.", error, {
         targetRound: round,
         roomExpiryMillis: timestampMillis(room.expiresAt),
-      }, error);
-      reportError("Could not prepare your next round.", error);
+      });
       return false;
     } finally {
       if (state.preparingRound === round) state.preparingRound = 0;
