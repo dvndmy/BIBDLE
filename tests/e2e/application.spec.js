@@ -15,7 +15,7 @@ async function openApp(page) {
 
 async function currentAnswer(page) {
   const verseText = await page.locator("#verseText").innerText();
-  const verse = verses.find((entry) => entry.text === verseText);
+  const verse = verses.find((entry) => entry.text.trim() === verseText.trim());
   expect(verse, `Rendered verse should match a data record: ${verseText}`).toBeTruthy();
   return books.find((book) => book.id === verse.bookId);
 }
@@ -263,6 +263,10 @@ test("traps focus in modals and restores focus after Escape", async ({ page }) =
 
 test("creates a room, starts shared rounds, and updates the local leaderboard", async ({ page }) => {
   const pageErrors = await openApp(page);
+  const localGameLogs = [];
+  page.on("console", (message) => {
+    if (message.text().startsWith("[LocalGame]")) localGameLogs.push(message.text());
+  });
   await page.locator("#localGameBtn").click();
   await expect(page.locator("#localGameModal")).toHaveAttribute("data-open", "true");
   await page.locator("#roomVisibility").selectOption("public");
@@ -303,6 +307,9 @@ test("creates a room, starts shared rounds, and updates the local leaderboard", 
       "localRooms/mock-room-1/players/mock-anonymous-user",
     )?.activeRound,
   )).toBe(1);
+  expect(localGameLogs.some((message) => message.includes("Start-game button clicked"))).toBe(true);
+  expect(localGameLogs.some((message) => message.includes("Room round update succeeded"))).toBe(true);
+  expect(localGameLogs.some((message) => message.includes("Player round record updated"))).toBe(true);
   const answer = await currentAnswer(page);
   await submitBook(page, answer);
   await expect(page.locator("#localGameLeaderboard")).toContainText("10 pts");
