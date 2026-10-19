@@ -131,7 +131,7 @@ service cloud.firestore {
             && (resource.data.gameType != 'rounds'
               || request.resource.data.round <= resource.data.roundsTotal)
             && (resource.data.gameType != 'timed'
-              || resource.data.deadlineAt == null
+              || !('deadlineAt' in resource.data)
               || request.resource.data.deadlineAt == resource.data.deadlineAt)
             && (request.resource.data.round == 1
               ? resource.data.gameType != 'timed'

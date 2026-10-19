@@ -147,6 +147,39 @@ test("room creation, lobby and mid-game joins, scoring, listing, and host cleanu
     expiresAt: legacyStartExpiry,
   }));
 
+  const timedRoomPath = "localRooms/timed-start-001";
+  const timedDeadline = Date.now() + 2 * 60 * 1000;
+  await environment.withSecurityRulesDisabled(async (context) => {
+    const adminDb = context.firestore();
+    await setDoc(doc(adminDb, timedRoomPath), {
+      name: "Timed Start Room",
+      visibility: "link",
+      gameType: "timed",
+      durationMinutes: 2,
+      roundsTotal: null,
+      maxPlayers: 200,
+      playerCount: 1,
+      hostUid: "host-user",
+      status: "lobby",
+      round: 0,
+      bookId: null,
+      verseId: null,
+      usedBookIds: [],
+      createdAt: serverTimestamp(),
+      expiresAt,
+    });
+    await setDoc(doc(adminDb, `${timedRoomPath}/players/host-user`), player("host-user"));
+  });
+  await assertSucceeds(updateDoc(doc(host, timedRoomPath), {
+    status: "playing",
+    round: 1,
+    bookId: "genesis",
+    verseId: "verse-genesis",
+    usedBookIds: ["genesis"],
+    startedAt: Date.now(),
+    deadlineAt: timedDeadline,
+  }));
+
   batch.set(hostRoom, {
     name: "Rule Test",
     visibility: "public",
