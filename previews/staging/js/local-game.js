@@ -173,6 +173,29 @@ export function createLocalGameController({
     return !!state.roomId;
   }
 
+  function timestampMillis(value) {
+    if (typeof value?.toMillis === "function") return value.toMillis();
+    if (value instanceof Date) return value.getTime();
+    const millis = new Date(value).getTime();
+    return Number.isFinite(millis) ? millis : null;
+  }
+
+  function logLocalGame(action, details = {}, error = null) {
+    const context = {
+      roomStatus: state.room?.status || null,
+      roomRound: state.room?.round ?? null,
+      playerActiveRound: state.player?.activeRound ?? null,
+      ...details,
+    };
+    if (error) {
+      context.errorCode = error.code || null;
+      context.errorMessage = error.message || String(error);
+      console.error(`[LocalGame] ${action}`, context);
+      return;
+    }
+    console.info(`[LocalGame] ${action}`, context);
+  }
+
   function setMessage(message, isError = false) {
     if (!elements.statusMessage) return;
     elements.statusMessage.textContent = message;
@@ -180,6 +203,7 @@ export function createLocalGameController({
   }
 
   function reportError(action, error) {
+    logLocalGame(action, {}, error);
     setMessage(describeLocalGameError(action, error), true);
   }
 
@@ -373,6 +397,30 @@ export function createLocalGameController({
     const roomId = state.roomId;
     state.preparingRound = round;
     try {
+      const playerSnapshot = await getDoc(playerRef());
+      if (!playerSnapshot.exists()) {
+        throw new Error("Your room player record is missing. Leave and rejoin the room.");
+      }
+      const playerData = playerSnapshot.data();
+      state.player = { ...state.player, ...playerData };
+      const roomExpiry = timestampMillis(room.expiresAt);
+      const playerExpiry = timestampMillis(playerData.expiresAt);
+      logLocalGame("Preparing player round", {
+        targetRound: round,
+        playerRecordExists: true,
+        playerActive: playerData.active === true,
+        playerRoundCompleted: playerData.roundCompleted === true,
+        playerExpiryMatchesRoom: playerExpiry !== null && playerExpiry === roomExpiry,
+        roomExpiryMillis: roomExpiry,
+        roomIsUnexpired: roomExpiry !== null && roomExpiry > Date.now(),
+      });
+      if (playerData.activeRound === round) {
+        logLocalGame("Player already prepared for round", { targetRound: round });
+        return launchRound(room);
+      }
+      if (playerData.activeRound > round) {
+        throw new Error("Your room player record is ahead of the current round. Leave and rejoin the room.");
+      }
       await setDoc(playerRef(), {
         activeRound: round,
         guesses: 0,
@@ -383,8 +431,13 @@ export function createLocalGameController({
       }, { merge: true });
       if (state.roomId !== roomId || state.room?.round !== round ||
         state.room?.status !== "playing") return false;
+      logLocalGame("Player round record updated", { targetRound: round });
       return launchRound(room, true);
     } catch (error) {
+      logLocalGame("Player round preparation failed", {
+        targetRound: round,
+        roomExpiryMillis: timestampMillis(room.expiresAt),
+      }, error);
       reportError("Could not prepare your next round.", error);
       return false;
     } finally {
@@ -598,7 +651,15 @@ export function createLocalGameController({
   }
 
   async function startNextRound() {
+    logLocalGame("Start-game action received", {
+      isHost: isHost(),
+      authenticated: !!getUser()?.uid,
+    });
     if (!isHost() || !state.room || state.room.status !== "playing" && state.room.status !== "lobby") {
+      logLocalGame("Start-game action ignored", {
+        isHost: isHost(),
+        hasRoom: !!state.room,
+      });
       return;
     }
     const nextRound = state.room.round + 1;
@@ -627,9 +688,14 @@ export function createLocalGameController({
       await finishGame();
       return;
     }
+    logLocalGame("Updating room for next round", {
+      targetRound: nextRound,
+      roomExpiryPresent: !!state.room.expiresAt,
+    });
     await updateDoc(roomRef(), patch);
     const startedRoom = { ...state.room, ...patch };
     state.room = startedRoom;
+    logLocalGame("Room round update succeeded", { targetRound: nextRound });
     renderRoom();
     if (await prepareCurrentRound(startedRoom)) {
       setMessage(`Round ${nextRound} is starting.`);
@@ -846,12 +912,24 @@ export function createLocalGameController({
   elements.gameType?.addEventListener("change", updateGameTypeSettings);
   elements.copyLink?.addEventListener("click", copyInviteLink);
   elements.start?.addEventListener("click", () => {
+    logLocalGame("Start-game button clicked", {
+      isHost: isHost(),
+      hasRoom: !!state.room,
+    });
     startNextRound().catch((error) => reportError("Could not start the game.", error));
   });
   elements.nextRound?.addEventListener("click", () => {
+    logLocalGame("Start-next-round button clicked", {
+      isHost: isHost(),
+      hasRoom: !!state.room,
+    });
     startNextRound().catch((error) => reportError("Could not start the next round.", error));
   });
   elements.gameNextRound?.addEventListener("click", () => {
+    logLocalGame("Game-bar next-round button clicked", {
+      isHost: isHost(),
+      hasRoom: !!state.room,
+    });
     startNextRound().catch((error) => reportError("Could not start the next round.", error));
   });
   elements.finish?.addEventListener("click", () => {
