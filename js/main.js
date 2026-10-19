@@ -1778,7 +1778,6 @@ const elements = {
   statsBtn: document.getElementById("statsBtn"),
   tryPracticeBtn: document.getElementById("tryPracticeBtn"),
   todayBibdleBtn: document.getElementById("todayBibdleBtn"),
-  localGameBtn: document.getElementById("localGameBtn"),
   localGameModal: document.getElementById("localGameModal"),
 
   difficultySelect: document.getElementById("difficultySelect"),
@@ -4239,7 +4238,7 @@ function handleIncorrectGuess(bookName) {
 
 async function applyGuess(rawGuess) {
   if (localGameController?.isActive() && !localGameController.canGuess()) {
-    renderStatus("Wait for the host to start the next book.");
+    renderStatus("Wait for your current book to finish, then choose Next book.");
     return;
   }
 
@@ -4726,6 +4725,11 @@ function handleModeChange(event) {
     return;
   }
   const value = event.target.value;
+  if (value === "friends") {
+    event.target.value = state.mode;
+    localGameController?.openRoomModal();
+    return;
+  }
   if (value !== "daily" && value !== "practice") return;
 
   markLifecycleStage("mode-switch", { from: state.mode, to: value });
@@ -5135,15 +5139,21 @@ function startLocalRoomRound(verse, room) {
   closeModal(elements.localGameModal);
 }
 
-function setLocalRoomActive(active, roomStatus = "lobby") {
+function setLocalRoomActive(active, roomStatus = "lobby", playerComplete = false) {
   state.localGameActive = active;
   elements.modeSelect.disabled = active;
   elements.difficultySelect.disabled = active;
   const guessSubmit = elements.guessForm?.querySelector('button[type="submit"]');
-  if (elements.guessInput) elements.guessInput.disabled = active && roomStatus === "finished";
-  if (guessSubmit) guessSubmit.disabled = active && roomStatus === "finished";
+  const gameplayLocked = active && (roomStatus === "finished" || playerComplete);
+  if (elements.guessInput) elements.guessInput.disabled = gameplayLocked;
+  if (guessSubmit) guessSubmit.disabled = gameplayLocked;
   const countdownLabel = elements.countdownTimer?.closest(".countdown-label");
   if (countdownLabel) countdownLabel.hidden = active;
+  document.body.classList.toggle("local-game-active", active);
+  document.body.classList.toggle(
+    "local-game-summary",
+    active && (roomStatus === "finished" || playerComplete),
+  );
 
   if (active) {
     if (!localPreviousMode) localPreviousMode = state.mode;
@@ -5204,8 +5214,9 @@ function handleAuthInitialized(context = {}) {
         if (state.status === "playing") {
           state.status = "lost";
           renderPuzzleView();
-          renderStatus("Time is up. Your score is on the room leaderboard.");
+          renderStatus("Time is up. Waiting for the final room scoreboard.");
         }
+        setLocalRoomActive(true, "playing", true);
       },
       onActiveChange: setLocalRoomActive,
       openModal: (...args) => modalService?.open(...args),
