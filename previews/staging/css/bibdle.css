@@ -503,6 +503,54 @@ input::placeholder {
     height: 100%;
 }
 
+body.local-game-active .topbar-group--selectors,
+body.local-game-active .topbar-row--account,
+body.local-game-active #settingsBtn,
+body.local-game-active .countdown-label,
+body.local-game-active .controls-panel--secondary,
+body.local-game-active .footer-note {
+    display: none !important;
+}
+
+body.local-game-summary .title-wrap,
+body.local-game-summary .verse-card,
+body.local-game-summary .controls,
+body.local-game-summary .local-game-bar {
+    display: none !important;
+}
+
+.local-game-summary {
+    display: grid;
+    justify-items: center;
+    gap: var(--space-3);
+    width: min(100%, 42rem);
+    margin: var(--space-6) auto;
+    padding: var(--card-padding-md);
+    background: var(--surface-panel);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-card);
+    text-align: center;
+}
+
+.local-game-summary h2,
+.local-game-summary p {
+    margin: 0;
+}
+
+.local-game-summary .room-leaderboard {
+    width: 100%;
+    text-align: left;
+}
+
+.room-code {
+    margin: 0;
+    font-family: var(--font-ui);
+    font-size: var(--text-lg);
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    overflow-wrap: anywhere;
+}
+
 .topbar-language-glyph {
     font-family: var(--font-ui);
     font-size: 1rem;

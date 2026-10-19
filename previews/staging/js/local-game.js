@@ -101,7 +101,7 @@ export function createLocalGameController({
     where,
   } = firestore || {};
   const elements = {
-    button: document.getElementById("localGameBtn"),
+    button: document.getElementById("modeSelect"),
     modal: document.getElementById("localGameModal"),
     setup: document.getElementById("localGameSetup"),
     createForm: document.getElementById("createRoomForm"),
@@ -123,12 +123,12 @@ export function createLocalGameController({
     playerName: document.getElementById("roomGuestName"),
     roomStatus: document.getElementById("localRoomStatus"),
     inviteLink: document.getElementById("roomInviteLink"),
+    roomCode: document.getElementById("roomCode"),
     qrCode: document.getElementById("roomQrCode"),
     copyLink: document.getElementById("copyRoomLinkBtn"),
     players: document.getElementById("roomPlayers"),
     leaderboard: document.getElementById("roomLeaderboard"),
     start: document.getElementById("startRoomGameBtn"),
-    nextRound: document.getElementById("nextRoomRoundBtn"),
     finish: document.getElementById("finishRoomGameBtn"),
     leave: document.getElementById("leaveRoomBtn"),
     gameBar: document.getElementById("localGameBar"),
@@ -136,6 +136,11 @@ export function createLocalGameController({
     gameClock: document.getElementById("localGameClock"),
     gameScore: document.getElementById("localGameScore"),
     gameLeaderboard: document.getElementById("localGameLeaderboard"),
+    finalLeaderboard: document.getElementById("localGameFinalLeaderboard"),
+    summary: document.getElementById("localGameSummary"),
+    summaryTitle: document.getElementById("localGameSummaryTitle"),
+    summaryMessage: document.getElementById("localGameSummaryMessage"),
+    summaryLeave: document.getElementById("localGameSummaryLeaveBtn"),
     gameRound: document.getElementById("localGameRound"),
     gameNextRound: document.getElementById("localGameNextRoundBtn"),
     gameRoom: document.getElementById("localGameRoomBtn"),
@@ -151,13 +156,14 @@ export function createLocalGameController({
     playersUnsubscribe: null,
     clockInterval: null,
     readyRound: 0,
-    preparingRound: 0,
+    preparingRound: false,
     startedRound: 0,
     timerExpired: false,
     finalRoom: null,
     finalPlayers: [],
     cleanupTimeout: null,
     finishing: false,
+    finalizing: false,
   };
 
   function isReady() {
@@ -237,7 +243,7 @@ export function createLocalGameController({
       </li>
       `;
     }).join("");
-    [elements.leaderboard, elements.gameLeaderboard].forEach((list) => {
+    [elements.leaderboard, elements.gameLeaderboard, elements.finalLeaderboard].forEach((list) => {
       if (list) list.innerHTML = markup || '<li class="room-empty">No players yet.</li>';
     });
     const roomPlayers = state.players.map((player) => `
@@ -246,25 +252,16 @@ export function createLocalGameController({
     if (elements.players) {
       elements.players.innerHTML = roomPlayers || '<li class="room-empty">Waiting for players to join.</li>';
     }
-    const everybodyFinished = state.players.length > 0 &&
-      state.players.filter((player) => player.active !== false)
-        .every((player) => player.roundCompleted && player.activeRound === state.room?.round);
-    const hostFinished = state.players.some((player) =>
-      player.uid === state.room?.hostUid &&
-      player.activeRound === state.room?.round &&
-      player.roundCompleted,
-    );
-    if (elements.nextRound) {
-      elements.nextRound.disabled = !(everybodyFinished || hostFinished) ||
-        state.room?.status !== "playing";
-    }
     if (elements.gameNextRound) {
-      elements.gameNextRound.hidden = !isHost() || state.room?.status !== "playing";
-      elements.gameNextRound.disabled = !(everybodyFinished || hostFinished) ||
-        state.room?.status !== "playing";
+      const canAdvance = state.room?.status === "playing" &&
+        state.player?.roundCompleted && !state.player?.gameCompleted &&
+        !state.timerExpired;
+      elements.gameNextRound.hidden = !canAdvance;
+      elements.gameNextRound.disabled = !canAdvance;
     }
-    if (state.room?.gameType === "rounds" && state.room.round >= state.room.roundsTotal &&
-      everybodyFinished && isHost()) {
+    const activePlayers = state.players.filter((player) => player.active !== false);
+    if (state.room?.gameType === "rounds" && activePlayers.length > 0 &&
+      activePlayers.every((player) => player.gameCompleted) && isHost()) {
       finishGame().catch((error) => reportError("Could not finish the game.", error));
     }
   }
@@ -278,6 +275,7 @@ export function createLocalGameController({
     inviteUrl.searchParams.set("room", state.roomId);
     elements.roomTitle.textContent = room.name;
     elements.inviteLink.value = inviteUrl.toString();
+    if (elements.roomCode) elements.roomCode.textContent = state.roomId;
     elements.qrCode.src = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(inviteUrl.toString())}`;
     elements.qrCode.alt = `QR code to join ${room.name}`;
     elements.roomStatus.textContent = room.status === "lobby"
@@ -285,23 +283,28 @@ export function createLocalGameController({
       : room.status === "finished"
         ? "Final scoreboard"
         : room.gameType === "rounds"
-          ? `Round ${room.round} of ${room.roundsTotal}`
-          : `Round ${room.round} · timed game`;
+          ? `${room.roundsTotal} rounds · in progress`
+          : "Timed game · in progress";
     elements.setup.hidden = true;
     elements.roomView.hidden = false;
     elements.start.hidden = !(isHost() && room.status === "lobby");
-    elements.nextRound.hidden = !(isHost() && room.status === "playing");
     elements.finish.hidden = !(isHost() && room.status === "playing");
     elements.roomName.textContent = room.name;
-    elements.gameBar.hidden = room.status === "lobby";
+    elements.gameBar.hidden = room.status !== "playing";
     elements.gameName.textContent = room.name;
     elements.gameRoom.hidden = false;
     elements.gameLeave.hidden = false;
     if (elements.gameRound) {
       elements.gameRound.textContent = room.status === "playing"
-        ? room.gameType === "rounds"
-          ? `Round ${room.round} of ${room.roundsTotal}`
-          : `Round ${room.round}`
+        ? state.player?.gameCompleted
+          ? "All rounds complete"
+          : state.player?.roundCompleted
+            ? `Round ${state.player.activeRound} complete`
+            : state.player?.activeRound
+              ? room.gameType === "rounds"
+                ? `Round ${state.player.activeRound} of ${room.roundsTotal}`
+                : `Round ${state.player.activeRound} · timed game`
+              : "Preparing your first book"
         : room.status === "finished" ? "Game finished" : "Waiting for host";
     }
     if (elements.gameScore) {
@@ -317,9 +320,27 @@ export function createLocalGameController({
         ? `${currentPlayer.score} pts · Rank ${rank}`
         : `${currentPlayer?.score ?? state.player?.score ?? 0} pts`;
     }
-    const finalLabel = document.getElementById("localGameFinalLabel");
-    if (finalLabel) {
-      finalLabel.hidden = room.status !== "finished";
+    const playerComplete = !!state.player?.gameCompleted || state.timerExpired;
+    if (elements.summary) elements.summary.hidden =
+      room.status !== "finished" && !playerComplete;
+    if (elements.summaryTitle) {
+      elements.summaryTitle.textContent = room.status === "finished"
+        ? "Final scoreboard"
+        : state.timerExpired
+          ? "Time is up"
+          : "You finished your rounds";
+    }
+    if (elements.summaryMessage) {
+      elements.summaryMessage.textContent = room.status === "finished"
+        ? `${room.name} · Final results`
+        : state.timerExpired
+          ? "Waiting for the host to publish the final standings."
+          : "Your score is final. The leaderboard will update as the other players finish.";
+    }
+    if (elements.summaryLeave) {
+      elements.summaryLeave.textContent = room.status === "finished"
+        ? "Close scoreboard"
+        : "Leave room";
     }
     if (elements.gameLeave) {
       elements.gameLeave.textContent = room.status === "finished"
@@ -328,7 +349,7 @@ export function createLocalGameController({
     }
     renderLeaderboard();
     updateClock();
-    onActiveChange?.(isActive(), room.status);
+    onActiveChange?.(isActive(), room.status, playerComplete);
   }
 
   function updateClock() {
@@ -348,33 +369,30 @@ export function createLocalGameController({
         finishGame().catch((error) => reportError("Could not finish the timed game.", error));
       }
       onTimeExpired?.();
+      renderRoom();
     }
   }
 
-  function launchRound(room, resetPlayer = false) {
-    if (!state.roomId || state.room?.round !== room.round ||
-      state.room?.status !== "playing" || state.startedRound === room.round) return;
-    const verse = verses.find((item) => item.id === room.verseId);
+  function launchRound(room) {
+    const player = state.player;
+    if (!state.roomId || state.room?.status !== "playing" ||
+      !player?.activeRound || !player.currentVerseId ||
+      state.startedRound === player.activeRound) return;
+    const verse = verses.find((item) => item.id === player.currentVerseId);
     if (!verse) {
       setMessage("This room's current puzzle could not be loaded.", true);
       return;
     }
-    state.readyRound = room.round;
-    state.startedRound = room.round;
+    state.readyRound = player.activeRound;
+    state.startedRound = player.activeRound;
     state.timerExpired = false;
-    if (resetPlayer) {
-      state.player = {
-        ...state.player,
-        activeRound: room.round,
-        guesses: 0,
-        roundCompleted: false,
-        lastRoundScore: 0,
-        lastCorrect: false,
-        expiresAt: room.expiresAt || new Date(Date.now() + ROOM_TTL_MS),
-      };
-    }
     try {
-      onRoundStart?.(verse, room);
+      onRoundStart?.(verse, {
+        ...room,
+        round: player.activeRound,
+        bookId: player.currentBookId,
+        verseId: player.currentVerseId,
+      });
     } catch (error) {
       state.readyRound = 0;
       state.startedRound = 0;
@@ -384,18 +402,26 @@ export function createLocalGameController({
     return true;
   }
 
-  async function prepareCurrentRound(room) {
-    const round = room.round;
-    if (room.status !== "playing" || !round || !state.roomId ||
-      state.room?.round !== round || state.preparingRound === round) return false;
-    if (state.player?.activeRound === round) {
+  async function prepareCurrentRound(room, advance = false) {
+    if (room.status !== "playing" || !state.roomId || state.preparingRound ||
+      !state.player || state.timerExpired) return false;
+    const player = state.player;
+    const hasLegacySharedPuzzle = player.activeRound > 0 &&
+      player.activeRound === room.round && room.bookId && room.verseId;
+    if (!advance && player.activeRound > 0 && player.currentVerseId &&
+      !player.roundCompleted) {
       return launchRound(room);
     }
-    if (state.readyRound === round) return true;
-    if (!state.player || state.player.activeRound > round) return false;
-
+    if (!advance && player.activeRound > 0 && !hasLegacySharedPuzzle) {
+      return false;
+    }
+    if (advance && (!player.roundCompleted || player.gameCompleted)) return false;
+    if (state.room.gameType === "timed" && room.deadlineAt &&
+      room.deadlineAt <= Date.now()) return false;
     const roomId = state.roomId;
-    state.preparingRound = round;
+    const round = advance ? player.activeRound + 1 : Math.max(1, player.activeRound);
+    if (room.gameType === "rounds" && round > room.roundsTotal) return false;
+    state.preparingRound = true;
     try {
       const playerSnapshot = await getDoc(playerRef());
       if (!playerSnapshot.exists()) {
@@ -414,25 +440,67 @@ export function createLocalGameController({
         roomExpiryMillis: roomExpiry,
         roomIsUnexpired: roomExpiry !== null && roomExpiry > Date.now(),
       });
-      if (playerData.activeRound === round) {
-        logLocalGame("Player already prepared for round", { targetRound: round });
+      if (!advance && playerData.activeRound > 0 &&
+        playerData.currentVerseId && !playerData.roundCompleted) {
+        logLocalGame("Player already prepared for round", {
+          targetRound: playerData.activeRound,
+        });
         return launchRound(room);
       }
-      if (playerData.activeRound > round) {
-        throw new Error("Your room player record is ahead of the current round. Leave and rejoin the room.");
+      if (!advance && playerData.activeRound > 0 &&
+        !playerData.currentVerseId && playerData.activeRound === room.round &&
+        room.bookId && room.verseId && !playerData.roundCompleted) {
+        const usedBookIds = room.usedBookIds || [room.bookId];
+        await setDoc(playerRef(), {
+          currentBookId: room.bookId,
+          currentVerseId: room.verseId,
+          usedBookIds,
+          gameCompleted: false,
+        }, { merge: true });
+        state.player = {
+          ...state.player,
+          ...playerData,
+          currentBookId: room.bookId,
+          currentVerseId: room.verseId,
+          usedBookIds,
+          gameCompleted: false,
+        };
+        return launchRound(room);
       }
+      if (advance && (!playerData.roundCompleted || playerData.gameCompleted)) {
+        return false;
+      }
+      const priorUsedBooks = Array.isArray(playerData.usedBookIds)
+        ? playerData.usedBookIds
+        : playerData.activeRound > 0 ? room.usedBookIds || [] : [];
+      const { verse, usedBookIds } = chooseNextVerse(priorUsedBooks);
       await setDoc(playerRef(), {
+        currentBookId: verse.bookId,
+        currentVerseId: verse.id,
+        usedBookIds,
         activeRound: round,
         guesses: 0,
         roundCompleted: false,
         lastRoundScore: 0,
         lastCorrect: false,
+        gameCompleted: false,
         expiresAt: room.expiresAt || new Date(Date.now() + ROOM_TTL_MS),
       }, { merge: true });
-      if (state.roomId !== roomId || state.room?.round !== round ||
-        state.room?.status !== "playing") return false;
+      if (state.roomId !== roomId || state.room?.status !== "playing") return false;
+      state.player = {
+        ...state.player,
+        currentBookId: verse.bookId,
+        currentVerseId: verse.id,
+        usedBookIds,
+        activeRound: round,
+        guesses: 0,
+        roundCompleted: false,
+        lastRoundScore: 0,
+        lastCorrect: false,
+        gameCompleted: false,
+      };
       logLocalGame("Player round record updated", { targetRound: round });
-      return launchRound(room, true);
+      return launchRound(room);
     } catch (error) {
       reportError("Could not prepare your next round.", error, {
         targetRound: round,
@@ -440,7 +508,7 @@ export function createLocalGameController({
       });
       return false;
     } finally {
-      if (state.preparingRound === round) state.preparingRound = 0;
+      state.preparingRound = false;
     }
   }
 
@@ -467,7 +535,16 @@ export function createLocalGameController({
       state.room = room;
       if (room.status === "finished") {
         state.finalRoom = room;
-        state.finalPlayers = [...state.players];
+        try {
+          const playerSnapshot = await getDocs(playersRef());
+          state.finalPlayers = playerSnapshot.docs.map((entry) => ({
+            uid: entry.id,
+            ...entry.data(),
+          }));
+        } catch (error) {
+          reportError("Final leaderboard sync failed.", error);
+          state.finalPlayers = [...state.players];
+        }
       }
       renderRoom();
       await prepareCurrentRound(room);
@@ -530,20 +607,30 @@ export function createLocalGameController({
         }
         return;
       }
-      player = {
-        uid: user.uid,
-        name,
-        score: Number.isFinite(prior.score) ? prior.score : 0,
-        lastRoundScore: 0,
-        guesses: 0,
-        activeRound: 0,
-        roundCompleted: false,
-        active: true,
-        lastCorrect: false,
-        joinedAt: prior.joinedAt || serverTimestamp(),
-        expiresAt: room.expiresAt || new Date(Date.now() + ROOM_TTL_MS),
-      };
-      transaction.set(existingRef, player, { merge: true });
+      player = existing.exists()
+        ? {
+          ...prior,
+          active: true,
+          expiresAt: room.expiresAt || new Date(Date.now() + ROOM_TTL_MS),
+        }
+        : {
+          uid: user.uid,
+          name,
+          score: 0,
+          lastRoundScore: 0,
+          guesses: 0,
+          activeRound: 0,
+          currentBookId: null,
+          currentVerseId: null,
+          usedBookIds: [],
+          roundCompleted: false,
+          gameCompleted: false,
+          active: true,
+          lastCorrect: false,
+          joinedAt: serverTimestamp(),
+          expiresAt: room.expiresAt || new Date(Date.now() + ROOM_TTL_MS),
+        };
+      transaction.set(existingRef, player);
       transaction.update(roomDocument, {
         playerCount: (room.playerCount || 0) + 1,
         ...(roomExpiryMigration ? { expiresAt: roomExpiryMigration } : {}),
@@ -552,7 +639,7 @@ export function createLocalGameController({
     state.roomId = safeRoomId;
     state.room = room;
     state.player = player;
-    state.readyRound = player.activeRound === room.round ? room.round : 0;
+    state.readyRound = player.activeRound || 0;
     state.preparingRound = 0;
     state.startedRound = 0;
     state.timerExpired = false;
@@ -613,7 +700,11 @@ export function createLocalGameController({
         lastRoundScore: 0,
         guesses: 0,
         activeRound: 0,
+        currentBookId: null,
+        currentVerseId: null,
+        usedBookIds: [],
         roundCompleted: false,
+        gameCompleted: false,
         active: true,
         lastCorrect: false,
         joinedAt: serverTimestamp(),
@@ -649,26 +740,20 @@ export function createLocalGameController({
     return { verse, usedBookIds: [...usedBookIds.filter((id) => id !== bookId), bookId] };
   }
 
-  async function startNextRound() {
+  async function startGame() {
     logLocalGame("Start-game action received", {
       isHost: isHost(),
       authenticated: !!getUser()?.uid,
     });
-    if (!isHost() || !state.room || state.room.status !== "playing" && state.room.status !== "lobby") {
+    if (!isHost() || !state.room || state.room.status !== "lobby") {
       logLocalGame("Start-game action ignored", {
         isHost: isHost(),
         hasRoom: !!state.room,
       });
       return;
     }
-    const nextRound = state.room.round + 1;
-    const { verse, usedBookIds } = chooseNextVerse(state.room.usedBookIds || []);
     const patch = {
       status: "playing",
-      round: nextRound,
-      bookId: verse.bookId,
-      verseId: verse.id,
-      usedBookIds,
     };
     if (!state.room.expiresAt) {
       const createdAt = state.room.createdAt?.toMillis?.() ??
@@ -679,25 +764,28 @@ export function createLocalGameController({
       }
       patch.expiresAt = expiresAt;
     }
-    if (state.room.gameType === "timed" && nextRound === 1) {
+    if (state.room.gameType === "timed") {
       patch.startedAt = Date.now();
-      patch.deadlineAt = Date.now() + state.room.durationMinutes * 60_000;
+      patch.deadlineAt = patch.startedAt + state.room.durationMinutes * 60_000;
     }
-    if (state.room.gameType === "rounds" && nextRound > state.room.roundsTotal) {
-      await finishGame();
-      return;
-    }
-    logLocalGame("Updating room for next round", {
-      targetRound: nextRound,
+    logLocalGame("Updating room to start the game", {
       roomExpiryPresent: !!state.room.expiresAt,
     });
     await updateDoc(roomRef(), patch);
     const startedRoom = { ...state.room, ...patch };
     state.room = startedRoom;
-    logLocalGame("Room round update succeeded", { targetRound: nextRound });
+    logLocalGame("Room start update succeeded");
     renderRoom();
     if (await prepareCurrentRound(startedRoom)) {
-      setMessage(`Round ${nextRound} is starting.`);
+      setMessage("Your first book is ready.");
+    }
+  }
+
+  async function startPlayerNextRound() {
+    if (!state.room || state.room.status !== "playing" ||
+      !state.player?.roundCompleted || state.player.gameCompleted) return;
+    if (await prepareCurrentRound(state.room, true)) {
+      setMessage(`Round ${state.player.activeRound} is ready.`);
     }
   }
 
@@ -715,6 +803,11 @@ export function createLocalGameController({
     if (!isHost()) return;
     state.finishing = true;
     try {
+      const currentPlayers = await getDocs(playersRef());
+      state.finalPlayers = currentPlayers.docs.map((entry) => ({
+        uid: entry.id,
+        ...entry.data(),
+      }));
       await updateDoc(roomRef(), {
         status: "finished",
         finishedAt: serverTimestamp(),
@@ -727,7 +820,6 @@ export function createLocalGameController({
         expiresAt: new Date(),
       };
       state.finalRoom = state.room;
-      state.finalPlayers = [...state.players];
       renderRoom();
       setMessage("Game finished. View the final scoreboard.");
       window.clearTimeout(state.cleanupTimeout);
@@ -745,25 +837,28 @@ export function createLocalGameController({
 
   async function recordGuess({ guessCount, completed, solved }) {
     if (!state.room || state.room.status !== "playing" ||
-      state.readyRound !== state.room.round || state.timerExpired ||
-      state.player?.roundCompleted) return;
+      !state.player?.activeRound || state.readyRound !== state.player.activeRound ||
+      state.timerExpired || state.player?.roundCompleted || state.player?.gameCompleted) return;
     const points = completed && solved ? calculateLocalRoundPoints(guessCount) : 0;
     const previousScore = Number.isFinite(state.player?.score) ? state.player.score : 0;
-    const lastRound = state.room.round;
-    await setDoc(playerRef(), {
+    const patch = {
       guesses: guessCount,
-      activeRound: lastRound,
       roundCompleted: completed,
       lastRoundScore: completed ? points : 0,
       lastCorrect: completed && solved,
       score: completed ? previousScore + points : previousScore,
+      gameCompleted: completed && state.room.gameType === "rounds" &&
+        state.player.activeRound >= state.room.roundsTotal,
       active: true,
       expiresAt: state.room.expiresAt || new Date(Date.now() + ROOM_TTL_MS),
-    }, { merge: true });
+    };
+    await setDoc(playerRef(), patch, { merge: true });
+    state.player = { ...state.player, ...patch };
+    renderRoom();
     if (completed) {
       setMessage(solved
         ? `You earned ${points} point${points === 1 ? "" : "s"} this round.`
-        : "No points this round. Wait for the host to start the next book.");
+        : "No points this round. Start your next book when you're ready.");
     }
   }
 
@@ -810,6 +905,7 @@ export function createLocalGameController({
     elements.setup.hidden = false;
     elements.roomView.hidden = true;
     elements.gameBar.hidden = true;
+    elements.summary.hidden = true;
     elements.gameRoom.hidden = true;
     elements.gameLeave.hidden = true;
     const url = new URL(window.location.href);
@@ -881,13 +977,11 @@ export function createLocalGameController({
     try {
       await navigator.clipboard.writeText(elements.inviteLink.value);
       setMessage("Invite link copied.");
-    } catch {
-      elements.inviteLink.select();
-      setMessage("Select and copy the invite link.");
+    } catch (error) {
+      setMessage("Could not copy the invite link. Share the room code instead.", true);
     }
   }
 
-  elements.button?.addEventListener("click", openRoomModal);
   elements.createForm?.addEventListener("submit", createRoom);
   elements.joinForm?.addEventListener("submit", (event) => {
     event.preventDefault();
@@ -915,21 +1009,12 @@ export function createLocalGameController({
       isHost: isHost(),
       hasRoom: !!state.room,
     });
-    startNextRound().catch((error) => reportError("Could not start the game.", error));
-  });
-  elements.nextRound?.addEventListener("click", () => {
-    logLocalGame("Start-next-round button clicked", {
-      isHost: isHost(),
-      hasRoom: !!state.room,
-    });
-    startNextRound().catch((error) => reportError("Could not start the next round.", error));
+    startGame().catch((error) => reportError("Could not start the game.", error));
   });
   elements.gameNextRound?.addEventListener("click", () => {
-    logLocalGame("Game-bar next-round button clicked", {
-      isHost: isHost(),
-      hasRoom: !!state.room,
-    });
-    startNextRound().catch((error) => reportError("Could not start the next round.", error));
+    startPlayerNextRound().catch((error) =>
+      reportError("Could not prepare your next book.", error),
+    );
   });
   elements.finish?.addEventListener("click", () => {
     finishGame().catch((error) => reportError("Could not finish the game.", error));
@@ -943,8 +1028,14 @@ export function createLocalGameController({
     }),
   );
   elements.gameRoom?.addEventListener("click", openRoomModal);
+  elements.summaryLeave?.addEventListener("click", () => {
+    leaveRoom().then(() => {
+      closeModal?.("localGame");
+      setMessage("You left the room.");
+    });
+  });
   elements.qrCode?.addEventListener("error", () => {
-    setMessage("The QR code could not load. Share the invite link instead.", true);
+    setMessage("The QR code could not load. Copy and share the invite link instead.", true);
   });
   if (elements.customDuration) elements.customDuration.hidden = true;
   updateGameTypeSettings();
@@ -960,11 +1051,13 @@ export function createLocalGameController({
     describeError: describeLocalGameError,
     canGuess() {
       return !isActive() || !!state.room && state.room.status === "playing" &&
-        state.readyRound === state.room.round && !state.timerExpired &&
-        !state.player?.roundCompleted;
+        state.readyRound === state.player?.activeRound && !state.timerExpired &&
+        !!state.player?.currentVerseId && !state.player?.roundCompleted &&
+        !state.player?.gameCompleted;
     },
     recordGuess,
     leaveRoom,
+    openRoomModal,
     setUser() {},
   };
 }

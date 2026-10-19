@@ -38,7 +38,11 @@ function player(uid, values = {}) {
     lastRoundScore: 0,
     guesses: 0,
     activeRound: 0,
+    currentBookId: null,
+    currentVerseId: null,
+    usedBookIds: [],
     roundCompleted: false,
+    gameCompleted: false,
     active: true,
     lastCorrect: false,
     joinedAt: serverTimestamp(),
@@ -132,23 +136,22 @@ test("room creation, lobby and mid-game joins, scoring, listing, and host cleanu
   });
   await assertSucceeds(updateDoc(doc(host, legacyStartPath), {
     status: "playing",
-    round: 1,
-    bookId: "genesis",
-    verseId: "verse-genesis",
-    usedBookIds: ["genesis"],
     expiresAt: legacyStartExpiry,
   }));
   await assertSucceeds(updateDoc(doc(host, `${legacyStartPath}/players/host-user`), {
+    currentBookId: "genesis",
+    currentVerseId: "verse-genesis",
+    usedBookIds: ["genesis"],
     activeRound: 1,
     guesses: 0,
     roundCompleted: false,
     lastRoundScore: 0,
     lastCorrect: false,
+    gameCompleted: false,
     expiresAt: legacyStartExpiry,
   }));
 
   const timedRoomPath = "localRooms/timed-start-001";
-  const timedDeadline = Date.now() + 2 * 60 * 1000;
   await environment.withSecurityRulesDisabled(async (context) => {
     const adminDb = context.firestore();
     await setDoc(doc(adminDb, timedRoomPath), {
@@ -170,14 +173,52 @@ test("room creation, lobby and mid-game joins, scoring, listing, and host cleanu
     });
     await setDoc(doc(adminDb, `${timedRoomPath}/players/host-user`), player("host-user"));
   });
+  const timedStartedAt = Date.now();
   await assertSucceeds(updateDoc(doc(host, timedRoomPath), {
     status: "playing",
-    round: 1,
-    bookId: "genesis",
-    verseId: "verse-genesis",
+    startedAt: timedStartedAt,
+    deadlineAt: timedStartedAt + 2 * 60 * 1000,
+  }));
+
+  const legacySharedPath = "localRooms/legacy-shared-001";
+  await environment.withSecurityRulesDisabled(async (context) => {
+    const adminDb = context.firestore();
+    await setDoc(doc(adminDb, legacySharedPath), {
+      name: "Legacy Shared Room",
+      visibility: "link",
+      gameType: "rounds",
+      durationMinutes: null,
+      roundsTotal: 3,
+      maxPlayers: 200,
+      playerCount: 1,
+      hostUid: "host-user",
+      status: "playing",
+      round: 1,
+      bookId: "genesis",
+      verseId: "verse-genesis",
+      usedBookIds: ["genesis"],
+      createdAt: serverTimestamp(),
+      expiresAt,
+    });
+    await setDoc(doc(adminDb, `${legacySharedPath}/players/host-user`), {
+      uid: "host-user",
+      name: "St. host-user",
+      score: 0,
+      lastRoundScore: 0,
+      guesses: 0,
+      activeRound: 1,
+      roundCompleted: false,
+      active: true,
+      lastCorrect: false,
+      joinedAt: serverTimestamp(),
+      expiresAt,
+    });
+  });
+  await assertSucceeds(updateDoc(doc(host, `${legacySharedPath}/players/host-user`), {
+    currentBookId: "genesis",
+    currentVerseId: "verse-genesis",
     usedBookIds: ["genesis"],
-    startedAt: Date.now(),
-    deadlineAt: timedDeadline,
+    gameCompleted: false,
   }));
 
   batch.set(hostRoom, {
@@ -227,26 +268,38 @@ test("room creation, lobby and mid-game joins, scoring, listing, and host cleanu
 
   await assertSucceeds(updateDoc(hostRoom, {
     status: "playing",
-    round: 1,
-    bookId: "genesis",
-    verseId: "verse-genesis",
-    usedBookIds: ["genesis"],
   }));
   await assertSucceeds(updateDoc(hostPlayer, {
+    currentBookId: "genesis",
+    currentVerseId: "verse-genesis-host",
+    usedBookIds: ["genesis"],
     activeRound: 1,
     guesses: 0,
     roundCompleted: false,
     lastRoundScore: 0,
     lastCorrect: false,
+    gameCompleted: false,
     expiresAt,
   }));
   await assertSucceeds(updateDoc(guestPlayer, {
+    currentBookId: "exodus",
+    currentVerseId: "verse-exodus-guest",
+    usedBookIds: ["exodus"],
     activeRound: 1,
     guesses: 0,
     roundCompleted: false,
     lastRoundScore: 0,
     lastCorrect: false,
+    gameCompleted: false,
     expiresAt,
+  }));
+  assert.notEqual(
+    (await getDoc(hostPlayer)).data().currentVerseId,
+    (await getDoc(guestPlayer)).data().currentVerseId,
+  );
+  await assertFails(updateDoc(guestPlayer, {
+    guesses: 1,
+    active: false,
   }));
 
   await assertSucceeds(setDoc(guestPlayer, {
@@ -266,20 +319,71 @@ test("room creation, lobby and mid-game joins, scoring, listing, and host cleanu
     lastRoundScore: 8,
     lastCorrect: true,
     score: 8,
+    gameCompleted: false,
     active: true,
     expiresAt,
   }, { merge: true }));
+  assert.equal((await getDoc(hostPlayer)).data().roundCompleted, false);
+  assert.equal((await getDoc(hostRoom)).data().round, 0);
+
+  await assertSucceeds(updateDoc(guestPlayer, {
+    currentBookId: "john",
+    currentVerseId: "verse-john-guest",
+    usedBookIds: ["exodus", "john"],
+    activeRound: 2,
+    guesses: 0,
+    roundCompleted: false,
+    lastRoundScore: 0,
+    lastCorrect: false,
+    gameCompleted: false,
+  }));
+  await assertSucceeds(updateDoc(guestPlayer, {
+    guesses: 2,
+    roundCompleted: true,
+    lastRoundScore: 9,
+    lastCorrect: true,
+    score: 17,
+  }));
+  await assertSucceeds(updateDoc(guestPlayer, {
+    currentBookId: "luke",
+    currentVerseId: "verse-luke-guest",
+    usedBookIds: ["exodus", "john", "luke"],
+    activeRound: 3,
+    guesses: 0,
+    roundCompleted: false,
+    lastRoundScore: 0,
+    lastCorrect: false,
+    gameCompleted: false,
+  }));
+  await assertSucceeds(updateDoc(guestPlayer, {
+    guesses: 3,
+    roundCompleted: true,
+    lastRoundScore: 0,
+    lastCorrect: false,
+    score: 17,
+    gameCompleted: true,
+  }));
+  await assertFails(updateDoc(guestPlayer, {
+    currentBookId: "mark",
+    currentVerseId: "verse-mark-guest",
+    usedBookIds: ["exodus", "john", "luke", "mark"],
+    activeRound: 4,
+  }));
 
   const lateJoin = writeBatch(lateGuest);
   lateJoin.set(doc(lateGuest, `${roomPath}/players/late-user`), player("late-user"));
   lateJoin.update(doc(lateGuest, roomPath), { playerCount: 3 });
   await assertSucceeds(lateJoin.commit());
   await assertSucceeds(updateDoc(doc(lateGuest, `${roomPath}/players/late-user`), {
+    currentBookId: "john",
+    currentVerseId: "verse-john-late",
+    usedBookIds: ["john"],
     activeRound: 1,
     guesses: 0,
     roundCompleted: false,
     lastRoundScore: 0,
     lastCorrect: false,
+    gameCompleted: false,
     expiresAt,
   }));
 

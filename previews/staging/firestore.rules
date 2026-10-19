@@ -92,60 +92,38 @@ service cloud.firestore {
         && request.resource.data.expiresAt
           <= resource.data.createdAt + duration.value(24, 'h');
 
+      let startedGame =
+        resource.data.status == 'lobby'
+        && request.resource.data.status == 'playing'
+        && changed.hasOnly(['status', 'startedAt', 'deadlineAt', 'expiresAt'])
+        && (legacyExpiryMigration
+          || ('expiresAt' in resource.data
+            && resource.data.expiresAt > request.time
+            && request.resource.data.expiresAt == resource.data.expiresAt))
+        && (resource.data.gameType == 'timed'
+          ? request.resource.data.startedAt is int
+            && request.resource.data.deadlineAt is int
+            && request.resource.data.startedAt <= request.time.toMillis()
+            && request.resource.data.deadlineAt > request.time.toMillis()
+            && request.resource.data.deadlineAt
+              == request.resource.data.startedAt
+                + resource.data.durationMinutes * 60 * 1000
+          : !changed.hasAny(['startedAt', 'deadlineAt']));
+
+      let finishedGame =
+        resource.data.status == 'playing'
+        && request.resource.data.status == 'finished'
+        && ('expiresAt' in resource.data)
+        && resource.data.expiresAt > request.time
+        && changed.hasOnly(['status', 'finishedAt', 'expiresAt'])
+        && request.resource.data.finishedAt is timestamp
+        && request.resource.data.expiresAt is timestamp
+        && request.resource.data.finishedAt == request.time
+        && request.resource.data.expiresAt == request.time;
+
       return signedIn()
         && resource.data.hostUid == request.auth.uid
-        && changed.hasOnly([
-          'status', 'round', 'bookId', 'verseId', 'usedBookIds', 'startedAt',
-          'deadlineAt', 'finishedAt', 'expiresAt'
-        ])
-        && (request.resource.data.status == 'finished'
-          ? resource.data.status == 'playing'
-            && ('expiresAt' in resource.data)
-            && resource.data.expiresAt > request.time
-            && changed.hasOnly(['status', 'finishedAt', 'expiresAt'])
-            && request.resource.data.finishedAt is timestamp
-            && request.resource.data.expiresAt is timestamp
-            && request.resource.data.finishedAt == request.time
-            && request.resource.data.expiresAt == request.time
-          : request.resource.data.status == 'playing'
-            && resource.data.status in ['lobby', 'playing']
-            && (legacyExpiryMigration
-              || ('expiresAt' in resource.data
-                && resource.data.expiresAt > request.time
-                && request.resource.data.expiresAt == resource.data.expiresAt))
-            && request.resource.data.round == resource.data.round + 1
-            && request.resource.data.round >= 1
-            && request.resource.data.bookId is string
-            && request.resource.data.bookId.size() > 0
-            && request.resource.data.verseId is string
-            && request.resource.data.verseId.size() > 0
-            && request.resource.data.usedBookIds is list
-            && request.resource.data.bookId in request.resource.data.usedBookIds
-            && (resource.data.usedBookIds.size() < 73
-              ? !(request.resource.data.bookId in resource.data.usedBookIds)
-                && request.resource.data.usedBookIds.size()
-                  == resource.data.usedBookIds.size() + 1
-              : resource.data.usedBookIds.size() == 73
-                && request.resource.data.usedBookIds.size() == 73)
-            && request.resource.data.usedBookIds.size() <= 73
-            && (resource.data.gameType != 'rounds'
-              || request.resource.data.round <= resource.data.roundsTotal)
-            && (resource.data.gameType != 'timed'
-              || !('deadlineAt' in resource.data)
-              || request.resource.data.deadlineAt == resource.data.deadlineAt)
-            && (request.resource.data.round == 1
-              ? resource.data.gameType != 'timed'
-                || (
-                  request.resource.data.startedAt is int
-                  && request.resource.data.deadlineAt is int
-                  && request.resource.data.startedAt
-                    <= request.time.toMillis()
-                  && request.resource.data.deadlineAt
-                    > request.time.toMillis()
-                  && request.resource.data.deadlineAt
-                    <= request.time.toMillis() + (24 * 60 * 60 * 1000)
-                )
-              : !changed.hasAny(['startedAt', 'deadlineAt'])));
+        && (startedGame || finishedGame);
     }
 
     function validRoomPlayerCountUpdate(roomId) {
@@ -188,14 +166,32 @@ service cloud.firestore {
     }
 
     function validPlayer(data) {
+      let canonicalBooks = [
+        'genesis', 'exodus', 'leviticus', 'numbers', 'deuteronomy', 'joshua',
+        'judges', 'ruth', '1-samuel', '2-samuel', '1-kings', '2-kings',
+        '1-chronicles', '2-chronicles', 'ezra', 'nehemiah', 'tobit', 'judith',
+        'esther', '1-maccabees', '2-maccabees', 'job', 'psalms', 'proverbs',
+        'ecclesiastes', 'song-of-solomon', 'wisdom', 'sirach', 'isaiah',
+        'jeremiah', 'lamentations', 'baruch', 'ezekiel', 'daniel', 'hosea',
+        'joel', 'amos', 'obadiah', 'jonah', 'micah', 'nahum', 'habakkuk',
+        'zephaniah', 'haggai', 'zechariah', 'malachi', 'matthew', 'mark',
+        'luke', 'john', 'acts', 'romans', '1-corinthians', '2-corinthians',
+        'galatians', 'ephesians', 'philippians', 'colossians',
+        '1-thessalonians', '2-thessalonians', '1-timothy', '2-timothy',
+        'titus', 'philemon', 'hebrews', 'james', '1-peter', '2-peter',
+        '1-john', '2-john', '3-john', 'jude', 'revelation'
+      ];
+
       return data.keys().hasAll([
           'uid', 'name', 'score', 'lastRoundScore', 'guesses',
-          'activeRound', 'roundCompleted', 'active', 'lastCorrect',
+          'activeRound', 'currentBookId', 'currentVerseId', 'usedBookIds',
+          'roundCompleted', 'gameCompleted', 'active', 'lastCorrect',
           'joinedAt', 'expiresAt'
         ])
         && data.keys().hasOnly([
           'uid', 'name', 'score', 'lastRoundScore', 'guesses',
-          'activeRound', 'roundCompleted', 'active', 'lastCorrect',
+          'activeRound', 'currentBookId', 'currentVerseId', 'usedBookIds',
+          'roundCompleted', 'gameCompleted', 'active', 'lastCorrect',
           'joinedAt', 'expiresAt'
         ])
         && data.uid == request.auth.uid
@@ -212,7 +208,24 @@ service cloud.firestore {
         && data.guesses <= 10
         && data.activeRound is int
         && data.activeRound >= 0
+        && (data.currentBookId == null
+          || data.currentBookId is string
+            && data.currentBookId in canonicalBooks)
+        && (data.currentVerseId == null
+          || data.currentVerseId is string
+            && data.currentVerseId.size() > 0
+            && data.currentVerseId.size() <= 80)
+        && data.usedBookIds is list
+        && data.usedBookIds.size() <= 73
+        && data.usedBookIds.hasOnly(canonicalBooks)
+        && (data.activeRound == 0
+          ? data.currentBookId == null && data.currentVerseId == null
+            && data.usedBookIds.size() == 0
+          : data.currentBookId is string
+            && data.currentVerseId is string
+            && data.currentBookId in data.usedBookIds)
         && data.roundCompleted is bool
+        && data.gameCompleted is bool
         && data.active is bool
         && data.lastCorrect is bool
         && data.joinedAt is timestamp
@@ -232,7 +245,11 @@ service cloud.firestore {
         && request.resource.data.lastRoundScore == 0
         && request.resource.data.guesses == 0
         && request.resource.data.activeRound == 0
+        && request.resource.data.currentBookId == null
+        && request.resource.data.currentVerseId == null
+        && request.resource.data.usedBookIds.size() == 0
         && request.resource.data.roundCompleted == false
+        && request.resource.data.gameCompleted == false
         && request.resource.data.active == true
         && request.resource.data.lastCorrect == false
         && request.resource.data.expiresAt == room.data.expiresAt;
@@ -255,83 +272,157 @@ service cloud.firestore {
         && request.resource.data.lastRoundScore == 0
         && request.resource.data.guesses == 0
         && request.resource.data.activeRound == 0
+        && request.resource.data.currentBookId == null
+        && request.resource.data.currentVerseId == null
+        && request.resource.data.usedBookIds.size() == 0
         && request.resource.data.roundCompleted == false
+        && request.resource.data.gameCompleted == false
         && request.resource.data.active == true
         && request.resource.data.lastCorrect == false
         && request.resource.data.expiresAt == roomAfter.expiresAt;
     }
 
-    function validPlayerUpdate(roomId, uid) {
-      let changed = request.resource.data.diff(resource.data).affectedKeys();
-      let room = get(roomPath(roomId)).data;
-      let roomAfter = getAfter(roomPath(roomId)).data;
+    function validPlayerRoundStart(room, changed) {
+      let priorUsedBooks = resource.data.get(
+        'usedBookIds',
+        resource.data.activeRound > 0 ? room.usedBookIds : []
+      );
+      let changedBooks =
+        priorUsedBooks.size() < 73
+          ? !(request.resource.data.currentBookId in priorUsedBooks)
+            && request.resource.data.usedBookIds.size()
+              == priorUsedBooks.size() + 1
+            && request.resource.data.usedBookIds.hasAll(
+              priorUsedBooks)
+          : priorUsedBooks.size() == 73
+            && request.resource.data.usedBookIds.size() == 73;
 
-      let lastCorrect = request.resource.data.get('lastCorrect', false);
-      let earned = lastCorrect ? 11 - request.resource.data.guesses : 0;
+      let validRoundStart =
+        (resource.data.activeRound == 0
+          && request.resource.data.activeRound == 1
+          && !resource.data.roundCompleted)
+        || (resource.data.activeRound > 0
+          && resource.data.roundCompleted
+          && !resource.data.get('gameCompleted', false)
+          && request.resource.data.activeRound == resource.data.activeRound + 1);
 
-      let completedRound =
+      return
+        room.status == 'playing'
+        && room.expiresAt > request.time
+        && resource.data.active
+        && !resource.data.get('gameCompleted', false)
+        && validRoundStart
+        && (room.gameType != 'rounds'
+          || request.resource.data.activeRound <= room.roundsTotal)
+        && (!('deadlineAt' in room)
+          || request.time.toMillis() <= room.deadlineAt)
+        && request.resource.data.score == resource.data.score
+        && request.resource.data.guesses == 0
+        && request.resource.data.roundCompleted == false
+        && request.resource.data.gameCompleted == false
+        && request.resource.data.lastRoundScore == 0
+        && request.resource.data.lastCorrect == false
+        && request.resource.data.currentBookId is string
+        && request.resource.data.currentVerseId is string
+        && request.resource.data.currentBookId
+          in request.resource.data.usedBookIds
+        && (priorUsedBooks.size() == 0
+          ? request.resource.data.usedBookIds.size() == 1
+          : changedBooks)
+        && request.resource.data.active == resource.data.active
+        && request.resource.data.expiresAt == room.expiresAt
+        && changed.hasOnly([
+          'currentBookId', 'currentVerseId', 'usedBookIds', 'activeRound',
+          'guesses', 'roundCompleted', 'gameCompleted', 'lastRoundScore',
+          'lastCorrect', 'expiresAt'
+        ]);
+    }
+
+    function validLegacyPlayerRoundMigration(room, changed) {
+      return room.status == 'playing'
+        && room.round >= 1
+        && room.round == resource.data.activeRound
+        && resource.data.get('currentVerseId', null) == null
+        && resource.data.get('currentBookId', null) == null
+        && room.bookId is string
+        && room.verseId is string
+        && room.usedBookIds is list
+        && !resource.data.roundCompleted
+        && request.resource.data.currentBookId == room.bookId
+        && request.resource.data.currentVerseId == room.verseId
+        && request.resource.data.usedBookIds == room.usedBookIds
+        && request.resource.data.gameCompleted == false
+        && request.resource.data.score == resource.data.score
+        && request.resource.data.guesses == resource.data.guesses
+        && request.resource.data.lastRoundScore == resource.data.lastRoundScore
+        && request.resource.data.lastCorrect == resource.data.lastCorrect
+        && request.resource.data.active == resource.data.active
+        && request.resource.data.expiresAt == room.expiresAt
+        && changed.hasOnly([
+          'currentBookId', 'currentVerseId', 'usedBookIds', 'gameCompleted'
+        ]);
+    }
+
+    function validPlayerRoundCompletion(room, changed) {
+      let earned = request.resource.data.lastCorrect
+        ? 11 - request.resource.data.guesses
+        : 0;
+
+      return
         !resource.data.roundCompleted
         && request.resource.data.roundCompleted
+        && !resource.data.gameCompleted
         && room.status == 'playing'
         && room.expiresAt > request.time
-        && request.resource.data.activeRound == room.round
+        && request.resource.data.activeRound == resource.data.activeRound
         && request.resource.data.guesses > resource.data.guesses
         && request.resource.data.guesses <= 10
         && request.resource.data.score == resource.data.score + earned
         && request.resource.data.lastRoundScore == earned
+        && request.resource.data.gameCompleted
+          == (room.gameType == 'rounds'
+            && request.resource.data.activeRound >= room.roundsTotal)
+        && request.resource.data.currentBookId == resource.data.currentBookId
+        && request.resource.data.currentVerseId == resource.data.currentVerseId
+        && request.resource.data.usedBookIds == resource.data.usedBookIds
         && request.resource.data.active == resource.data.active
         && request.resource.data.expiresAt == room.expiresAt
         && changed.hasOnly([
           'guesses', 'roundCompleted', 'lastRoundScore', 'lastCorrect',
-          'score', 'active', 'expiresAt'
+          'score', 'gameCompleted', 'expiresAt'
         ])
         && (!('deadlineAt' in room)
           || request.time.toMillis() <= room.deadlineAt);
+    }
 
-      let guessProgress =
+    function validPlayerGuessProgress(room, changed) {
+      return
         room.status == 'playing'
         && room.expiresAt > request.time
         && resource.data.active
         && !resource.data.roundCompleted
-        && request.resource.data.activeRound == room.round
+        && !resource.data.gameCompleted
+        && request.resource.data.activeRound == resource.data.activeRound
         && request.resource.data.roundCompleted == false
         && request.resource.data.guesses >= resource.data.guesses
         && request.resource.data.guesses <= 10
         && request.resource.data.score == resource.data.score
         && request.resource.data.lastRoundScore == 0
         && request.resource.data.lastCorrect == false
-        && request.resource.data.expiresAt == room.expiresAt
-        && changed.hasOnly([
-          'guesses', 'roundCompleted', 'lastRoundScore', 'lastCorrect',
-          'score', 'active', 'expiresAt'
-        ]);
-
-      let nextRound =
-        room.status == 'playing'
-        && room.expiresAt > request.time
-        && request.resource.data.activeRound == room.round
-        && resource.data.activeRound < room.round
-        && request.resource.data.score == resource.data.score
-        && request.resource.data.roundCompleted == false
-        && request.resource.data.guesses == 0
-        && request.resource.data.lastRoundScore == 0
-        && lastCorrect == false
+        && request.resource.data.gameCompleted == false
+        && request.resource.data.currentBookId == resource.data.currentBookId
+        && request.resource.data.currentVerseId == resource.data.currentVerseId
+        && request.resource.data.usedBookIds == resource.data.usedBookIds
         && request.resource.data.active == resource.data.active
         && request.resource.data.expiresAt == room.expiresAt
         && changed.hasOnly([
-          'activeRound', 'guesses', 'roundCompleted', 'lastRoundScore',
-          'lastCorrect', 'expiresAt'
+          'guesses', 'roundCompleted', 'lastRoundScore', 'lastCorrect',
+          'score', 'expiresAt'
         ]);
+    }
 
-      let rename =
-        changed.hasOnly(['name'])
-        && room.status in ['lobby', 'playing']
-        && room.expiresAt > request.time
-        && request.resource.data.name is string
-        && request.resource.data.name.size() > 0
-        && request.resource.data.name.size() <= 32;
-
-      let rejoining =
+    function validPlayerRejoin(room, roomAfter, changed) {
+      return
         !resource.data.active
         && request.resource.data.active
         && room.status in ['lobby', 'playing']
@@ -348,26 +439,43 @@ service cloud.firestore {
         && request.resource.data.uid == resource.data.uid
         && request.resource.data.joinedAt == resource.data.joinedAt
         && request.resource.data.score == resource.data.score
-        && request.resource.data.lastRoundScore == 0
-        && request.resource.data.guesses == 0
-        && request.resource.data.activeRound == 0
-        && request.resource.data.roundCompleted == false
-        && request.resource.data.lastCorrect == false
-        && request.resource.data.expiresAt == roomAfter.expiresAt;
+        && request.resource.data.expiresAt == roomAfter.expiresAt
+        && changed.hasOnly(['active', 'expiresAt']);
+    }
 
+    function validPlayerUpdate(roomId, uid) {
+      let changed = request.resource.data.diff(resource.data).affectedKeys();
+      let room = get(roomPath(roomId)).data;
+      let roomAfter = getAfter(roomPath(roomId)).data;
+      let rename =
+        changed.hasOnly(['name'])
+        && room.status in ['lobby', 'playing']
+        && room.expiresAt > request.time
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 32;
       let leaving =
         resource.data.active
         && !request.resource.data.active
         && changed.hasOnly(['active'])
         && request.resource.data.score == resource.data.score
         && roomAfter.playerCount == room.playerCount - 1;
+      let validUpdate = changed.hasAny([
+          'currentBookId', 'currentVerseId', 'usedBookIds'
+        ])
+          ? validLegacyPlayerRoundMigration(room, changed)
+            || validPlayerRoundStart(room, changed)
+          : changed.hasAny(['roundCompleted', 'score', 'gameCompleted'])
+            ? validPlayerRoundCompletion(room, changed)
+            : changed.hasAny(['guesses'])
+              ? validPlayerGuessProgress(room, changed)
+              : rename || validPlayerRejoin(room, roomAfter, changed) || leaving;
 
       return signedIn()
         && uid == request.auth.uid
         && validPlayer(request.resource.data)
         && request.resource.data.uid == resource.data.uid
-        && (completedRound || guessProgress || nextRound || rename ||
-          rejoining || leaving);
+        && validUpdate;
     }
 
     function dailyScorePath(dateKey, uid) {

@@ -60,6 +60,7 @@
                 <select id="modeSelect" class="control-select" aria-label="Select puzzle mode">
                   <option value="daily">Daily</option>
                   <option value="practice">Practice</option>
+                  <option value="friends">Play with friends</option>
                 </select>
               </div>
 
@@ -71,7 +72,6 @@
                   <option value="hard">Hard</option>
                 </select>
               </div>
-              <button type="button" class="pill-btn primary" id="localGameBtn">Play with friends</button>
             </div>
           </div>
 
@@ -106,13 +106,20 @@
             <strong id="localGameScore">0 pts</strong>
           </div>
           <div class="local-game-bar__actions">
-            <button type="button" class="pill-btn" id="localGameNextRoundBtn" hidden disabled>Start next book</button>
+            <button type="button" class="pill-btn" id="localGameNextRoundBtn" hidden disabled>Next book</button>
             <button type="button" class="pill-btn" id="localGameRoomBtn">Room and scores</button>
             <button type="button" class="pill-btn" id="localGameLeaveBtn">Leave room</button>
           </div>
         </div>
-        <p class="subtle-label" id="localGameFinalLabel" hidden>Final scoreboard</p>
         <ol class="room-leaderboard" id="localGameLeaderboard" aria-label="Local game leaderboard"></ol>
+      </section>
+
+      <section class="local-game-summary" id="localGameSummary" aria-live="polite" hidden>
+        <p class="subtle-label">Play together</p>
+        <h2 id="localGameSummaryTitle">Final scoreboard</h2>
+        <p id="localGameSummaryMessage"></p>
+        <ol class="room-leaderboard" id="localGameFinalLeaderboard" aria-label="Final local game leaderboard"></ol>
+        <button type="button" class="pill-btn primary" id="localGameSummaryLeaveBtn">Leave room</button>
       </section>
 
       <header class="title-wrap">
@@ -814,8 +821,9 @@
             </div>
             <div class="room-qr-card">
               <img id="roomQrCode" width="120" height="120" alt="" />
+              <p class="room-code" id="roomCode" aria-label="Room code"></p>
               <label class="sr-only" for="roomInviteLink">Room invite link</label>
-              <input id="roomInviteLink" class="control-select" type="text" readonly />
+              <input id="roomInviteLink" class="sr-only" type="text" readonly />
               <button type="button" class="pill-btn" id="copyRoomLinkBtn">Copy invite link</button>
             </div>
           </div>
@@ -830,7 +838,6 @@
           <p class="room-scoring-note">Each round scores 10 points for a first-guess answer, decreasing by one per guess. Missed rounds score 0. Ties share rank.</p>
           <div class="room-form__actions">
             <button type="button" class="pill-btn primary" id="startRoomGameBtn" hidden>Start game</button>
-            <button type="button" class="pill-btn" id="nextRoomRoundBtn" hidden disabled>Start next book</button>
             <button type="button" class="pill-btn" id="finishRoomGameBtn" hidden>End game</button>
             <button type="button" class="pill-btn" id="leaveRoomBtn">Leave room</button>
           </div>
